@@ -5,7 +5,7 @@ tags:
   - K-POP
   - 音楽
 description: ビジュアルとパフォーマンスの両方で話題を集める、K-POP 第4世代以降の女性アイドルを紹介します。
-draft: true
+draft: false
 ---
 
 K-POP の女性アイドルは、ビジュアルの美しさだけでなく、パフォーマンス・コンセプト・セルフプロデュース力まで含めて注目されるようになっています。この記事では、いわゆる「第4世代」以降のグループを中心に、話題のメンバーを紹介します。
@@ -25,6 +25,8 @@ K-POP の女性アイドルは、ビジュアルの美しさだけでなく、�
 - **ウィンター**: 透明感のあるビジュアルと安定したボーカルで、グループの歌の中心を担っています。
 
 ## LE SSERAFIM（ル・セラフィム）
+
+![LE SSERAFIM のメンバー](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQdn1ywzdu1u_d0j812BH2HZYv-4P61y67DgyvXU7E_FrhFLZ9a9Cywe8TTNgMD2akGHF_MM191zwGkD7nMHsnrSll1gpTRQOxGxZfizjI&s=10)
 
 2022年5月に HYBE 傘下の SOURCE MUSIC からデビュー。「ANTIFRAGILE」「EASY」など、強さと自信をテーマにした楽曲が特徴です。日本人メンバーが2人在籍していることでも、日本での人気が高いグループです。
 
