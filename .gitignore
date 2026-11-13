@@ -71,4 +71,5 @@ desktop.ini
 # OCR 環境変数設定バッチ（APIキーを含む）
 set-ocr-env.bat
 
-logs/
+logs/*
+docs/specs/*

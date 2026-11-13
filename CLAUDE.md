@@ -14,6 +14,7 @@
 
 - [docs/prompt-guidelines.md](docs/prompt-guidelines.md) — プロンプト・Markdownファイル作成の指針
 - [docs/requirements-best-practices.md](docs/requirements-best-practices.md) — 要件定義（requirements.md）を書く際のベストプラクティス
+- [docs/skills.md](docs/skills.md) — プロジェクトスキル（`.claude/skills/`）の一覧・使い分けと、スキル追加・修正のルール
 - [docs/design-doc-best-practices.md](docs/design-doc-best-practices.md) — 設計ドキュメント（design.md）を書く際のベストプラクティス
 
 ## Issueの作成
