@@ -54,6 +54,24 @@ def test_process_top_source_follows_latest(db):
     assert fetcher.calls == ["https://billboard.mryogaku.com/", LATEST_URL]
 
 
+def test_process_other_page_with_same_table(db):
+    page_url = "https://billboard.mryogaku.com/php/other.php?page=1"
+    sid = db.add_source(page_url + "#top")
+    fetcher = FakeFetcher({page_url: _hot100()})
+    entries = process_source(db, sid, fetcher)
+    assert [e.rank for e in entries] == [1, 2, 99]
+    assert fetcher.calls == [page_url]
+    assert db.get_source(sid)["status"] == "done"
+
+
+def test_other_page_without_table_marked_failed(db):
+    page_url = "https://billboard.mryogaku.com/php/other.php"
+    sid = db.add_source(page_url)
+    with pytest.raises(ParseError):
+        process_source(db, sid, FakeFetcher({page_url: "<html><body>no chart</body></html>"}))
+    assert db.get_source(sid)["status"] == "failed"
+
+
 def test_invalid_url_marked_failed(db):
     sid = db.add_source("https://example.com/")
     with pytest.raises(InvalidChartUrl):

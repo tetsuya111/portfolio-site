@@ -64,7 +64,11 @@ cd backend
 .venv/Scripts/python -m app.batch --add "https://billboard.mryogaku.com/php/chart.php?date=2025-11-15"
 ```
 
-受け付けるURLは `billboard.mryogaku.com` のトップページ・`chart.php?date=YYYY-MM-DD`・`dispHot100.php?date=YYYY-MM-DD`（スマホ版 `/s/…` を含む）のみ。どれも同じ日付の Hot 100 全順位ページ（100曲）に置き換えて取得する。
+受け付けるURLは `billboard.mryogaku.com` のページのみ。
+
+- トップページは、最新週の Hot 100 全順位ページをたどって取得する。
+- `chart.php?date=YYYY-MM-DD`・`dispHot100.php?date=YYYY-MM-DD`（スマホ版 `/s/…` を含む）は、同じ日付の Hot 100 全順位ページ（100曲）に置き換えて取得する。
+- それ以外のページはそのまま取得し、Hot 100 全順位ページと同じ表の形で曲が並んでいれば使う。曲が見つからなければエラーになる。100曲を超える場合は、先頭の100曲だけがプレイリストの対象になる。
 
 ## テスト・lint・ビルド
 

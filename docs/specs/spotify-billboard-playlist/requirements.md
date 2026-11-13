@@ -50,6 +50,7 @@
 - **R1** WHEN 受け付け可能なチャートURLがDBに登録されている THE SYSTEM SHALL そのURLのページを取得し、順位・曲名・アーティスト名の一覧をDBに保存する。
 - **R2** WHEN トップページのURLが登録されている THE SYSTEM SHALL ページ内の最新週の Hot 100 全順位ページを特定し、その曲一覧を取得する。
 - **R3** WHEN `chart.php?date=YYYY-MM-DD` 形式のURLが登録されている THE SYSTEM SHALL 同じ日付の Hot 100 全順位（最大100曲）を取得する。
+- **R3a** WHEN 上記以外の `billboard.mryogaku.com` のページのURLが登録されている THE SYSTEM SHALL そのページを取得し、Hot 100 全順位ページと同じ表構造から曲一覧を取り出せればそれを使い、取り出せなければ失敗として扱う。
 - **R4** IF 登録されたURLのホストが `billboard.mryogaku.com` でない THEN THE SYSTEM SHALL 取得を行わず、そのURLを不正として扱う。
 - **R5** IF ページの取得または解析に失敗した THEN THE SYSTEM SHALL そのURLを失敗状態としてDBに記録し、失敗理由を保存する。
 - **R6** THE SYSTEM SHALL DB上の未処理URLをまとめて処理するバッチを、コマンド1つで実行できるようにする。

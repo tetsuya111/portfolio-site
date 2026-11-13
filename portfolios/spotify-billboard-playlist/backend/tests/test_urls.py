@@ -46,12 +46,35 @@ def test_chart_php_normalized(url):
         "https://billboard.mryogaku.com/php/chart.php?date=x",
         "https://billboard.mryogaku.com/php/chart.php",
         "https://billboard.mryogaku.com/php/chart.php?date=2025-13-40",
-        "https://billboard.mryogaku.com/php/artist.php?artist=Taylor",
+        "https://billboard.mryogaku.com/php/dispHot100.php",
     ],
 )
-def test_rejects_bad_date_or_path(url):
+def test_rejects_bad_date_on_chart_pages(url):
     with pytest.raises(InvalidChartUrl):
         resolve_chart_url(url)
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        (
+            "https://billboard.mryogaku.com/php/artist.php?artist=Taylor",
+            "https://billboard.mryogaku.com/php/artist.php?artist=Taylor",
+        ),
+        (
+            "http://BILLBOARD.mryogaku.com/php/no1weeks.php?page=2#top",
+            "https://billboard.mryogaku.com/php/no1weeks.php?page=2",
+        ),
+        (
+            "https://billboard.mryogaku.com/s/php/alltime.php",
+            "https://billboard.mryogaku.com/s/php/alltime.php",
+        ),
+    ],
+)
+def test_other_pages_on_host_fetched_as_is(url, expected):
+    target = resolve_chart_url(url)
+    assert target.kind == "page"
+    assert target.url == expected
 
 
 @pytest.mark.parametrize(

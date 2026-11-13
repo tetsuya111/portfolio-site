@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from datetime import date
 from typing import Literal
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 HOST = "billboard.mryogaku.com"
 TOP_URL = f"https://{HOST}/"
@@ -29,7 +29,9 @@ class InvalidChartUrl(ValueError):
 
 @dataclass(frozen=True)
 class ChartTarget:
-    kind: Literal["top", "hot100"]
+    # top: トップページ（最新週のリンクをたどる）／hot100: 全順位ページに正規化済み／
+    # page: その他の同一ホストのページ（そのまま取得し、同じセレクターで解析できれば使う）
+    kind: Literal["top", "hot100", "page"]
     url: str
 
 
@@ -57,9 +59,8 @@ def resolve_chart_url(url: str) -> ChartTarget:
         if len(dates) != 1 or not _is_valid_date(dates[0]):
             raise InvalidChartUrl("date=YYYY-MM-DD の指定が必要です")
         return ChartTarget("hot100", HOT100_URL.format(date=dates[0]))
-    raise InvalidChartUrl(
-        "チャートページ（トップ / chart.php / dispHot100.php）のURLを指定してください"
-    )
+    # スキームは https に揃え、ホストは固定値で組み立て直す（フラグメントは送らない）
+    return ChartTarget("page", urlunsplit(("https", HOST, parts.path, parts.query, "")))
 
 
 def _is_valid_date(value: str) -> bool:
