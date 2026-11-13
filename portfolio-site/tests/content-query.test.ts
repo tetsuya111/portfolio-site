@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { publishedArticles, sortPortfolios } from "../src/lib/content-query";
+import { formatDisplayDate, publishedArticles, sortPortfolios } from "../src/lib/content-query";
+
+describe("formatDisplayDate", () => {
+  it("shows the authored calendar day regardless of the host timezone", () => {
+    // frontmatter の `date: 2026-11-13` は UTC の 0 時として読み込まれる
+    expect(formatDisplayDate(new Date("2026-11-13"))).toBe("2026/11/13");
+    expect(formatDisplayDate(new Date("2026-01-01T00:00:00Z"))).toBe("2026/01/01");
+  });
+});
 
 const p = (title: string, date?: string) => ({ data: { title, date: date ? new Date(date) : undefined } });
 const a = (id: string, date: string, draft = false) => ({ id, data: { date: new Date(date), draft } });

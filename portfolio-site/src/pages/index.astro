@@ -2,7 +2,7 @@
 import { getCollection, getEntry } from "astro:content";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import PortfolioTile from "../components/PortfolioTile.astro";
-import { publishedArticles, sortPortfolios } from "../lib/content-query";
+import { formatDisplayDate, publishedArticles, sortPortfolios } from "../lib/content-query";
 
 const profile = await getEntry("profile", "profile");
 if (!profile) throw new Error("src/content/profile/profile.md がありません");
@@ -41,7 +41,7 @@ const latestArticles = publishedArticles(await getCollection("articles")).slice(
         latestArticles.map((a) => (
           <li>
             <time class="mr-3 text-sm text-slate-500" datetime={a.data.date.toISOString()}>
-              {a.data.date.toLocaleDateString("ja-JP")}
+              {formatDisplayDate(a.data.date)}
             </time>
             <a href={`/articles/${a.id}/`} class="hover:text-sky-700 hover:underline">
               {a.data.title}

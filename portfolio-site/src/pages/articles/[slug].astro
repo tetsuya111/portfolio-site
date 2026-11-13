@@ -2,7 +2,7 @@
 import { getCollection, render } from "astro:content";
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import TagList from "../../components/TagList.astro";
-import { publishedArticles } from "../../lib/content-query";
+import { formatDisplayDate, publishedArticles } from "../../lib/content-query";
 
 export async function getStaticPaths() {
   // 下書き（draft: true）はページを生成しない
@@ -18,7 +18,7 @@ const { Content } = await render(entry);
   <a href="/articles/" class="text-sm text-sky-700 hover:underline">← 記事一覧</a>
   <h1 class="mt-4 text-3xl font-bold">{entry.data.title}</h1>
   <time class="mt-2 block text-sm text-slate-500" datetime={entry.data.date.toISOString()}>
-    {entry.data.date.toLocaleDateString("ja-JP")}
+    {formatDisplayDate(entry.data.date)}
   </time>
   <div class="mt-3"><TagList tags={entry.data.tags} /></div>
   <article class="prose prose-slate mt-8 max-w-none">

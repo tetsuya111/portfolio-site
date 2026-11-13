@@ -23,8 +23,8 @@ function tagsFor(name: string): (ScalarTag | CollectionTag)[] {
   const tag = `!${name}`;
   return [
     { tag, resolve: (v: string) => toObject(name, v) } as ScalarTag,
+    // 短縮形はスカラーかシーケンスだけ。マッピングは誤ったテンプレートとして YAML エラーにする
     { tag, collection: "seq", resolve: (v: { toJSON(): unknown }) => toObject(name, v.toJSON()) } as unknown as CollectionTag,
-    { tag, collection: "map", resolve: (v: { toJSON(): unknown }) => toObject(name, v.toJSON()) } as unknown as CollectionTag,
   ];
 }
 
