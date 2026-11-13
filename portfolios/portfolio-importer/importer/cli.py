@@ -48,7 +48,7 @@ def run_import(args: argparse.Namespace, repo_root: Path, run, today: date) -> d
     frontend_out = None
     registered = False
     if frontend is not None:
-        registered, w = register_frontend(frontend, target.slug, repo_root)
+        registered, w = register_frontend(frontend, target.slug, repo_root, project)
         warnings += w
         frontend_out = {"dir": _rel(frontend.dir, repo_root), "kind": frontend.kind, "registered": registered}
 

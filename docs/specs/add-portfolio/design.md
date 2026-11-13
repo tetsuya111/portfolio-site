@@ -53,7 +53,10 @@ portfolio-site/
 
   | 判定 | 種類 | 出力先 | ビルド引数 |
   |---|---|---|---|
-  | `next` あり、`next.config.*` に `output: "export"` | next-export | `out` | なし（basePath は警告で案内） |
+  | `next` あり、`next.config.*` に `output: "export"` と `basePath: "/apps/<スラッグ>"` | next-export | `out` | なし |
+  | `next` あり、basePath なし | 配信不可（警告） | — | — |
+  | `astro` で `output: "server"/"hybrid"` か adapter あり | 配信不可（警告） | — | — |
+  | SvelteKit・Nuxt・Remix などの Vite メタフレームワーク | 配信不可（警告） | — | — |
   | `next` あり、上記以外 | 配信不可（警告） | — | — |
   | `astro` | astro | `dist` | `--base /apps/<スラッグ>/` |
   | `vite` | vite | `dist` | `--base=/apps/<スラッグ>/` |

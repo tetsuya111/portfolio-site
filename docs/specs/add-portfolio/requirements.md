@@ -48,7 +48,7 @@
 - **R1-1**: WHEN `portfolios/` 外のディレクトリが指定された, THE SYSTEM SHALL その内容を `portfolios/<スラッグ>/` にコピーする。
 - **R1-2**: WHEN `portfolios/` 配下のディレクトリが指定された, THE SYSTEM SHALL コピーせず、そのプロジェクトをそのまま使う。
 - **R1-3**: THE SYSTEM SHALL 指定プロジェクト内の `.gitignore`（各階層のもの）に一致するファイル・ディレクトリをコピーしない。
-- **R1-4**: THE SYSTEM SHALL 非初期データ（`*.sqlite`・`*.sqlite3`・`*.db` とその付随ファイル）、`.git/`、`.env`・`.env.*`（`.env.example` を除く）、シンボリックリンクをコピーしない。
+- **R1-4**: THE SYSTEM SHALL 非初期データ（`*.sqlite`・`*.sqlite3`・`*.db` とその付随ファイル）、`.git/`、依存・キャッシュ（`node_modules/`・`.venv/`・`venv/`・`__pycache__/`・`*.pyc`）、秘密情報（`.env`・`.env.*`（`.env.example` を除く）・`*.pem`・`*.key`・`*.p12`・`*.pfx`・`.npmrc`・`credentials*.json`）、シンボリックリンクをコピーしない。
 - **R1-5**: IF コピー先 `portfolios/<スラッグ>/` が既に存在する, THEN THE SYSTEM SHALL 何もコピーせずエラー終了する。
 - **R1-6**: IF 指定パスがディレクトリでない、リポジトリ自体を含む、またはリポジトリ内の `portfolios/` 外にある, THEN THE SYSTEM SHALL エラー終了する。
 - **R1-7**: THE SYSTEM SHALL スラッグを指定ディレクトリ名から英小文字 kebab-case で作り、オプションで上書きできるようにする。スラッグが `^[a-z0-9]+(?:-[a-z0-9]+)*$` に合わない、または予約名（`docs`・`docker-images`・`portfolio-importer`）の場合はエラー終了する。

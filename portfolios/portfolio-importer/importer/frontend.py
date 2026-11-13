@@ -26,7 +26,7 @@ def _load_manifest(path: Path) -> dict:
     return data
 
 
-def register_frontend(frontend: Frontend, slug: str, repo_root: Path) -> tuple[bool, list[str]]:
+def register_frontend(frontend: Frontend, slug: str, repo_root: Path, project: Path) -> tuple[bool, list[str]]:
     """配信登録したか（既に登録済みも True）と、警告を返す。"""
     if frontend.kind is None:
         return False, [f"フロントエンドを配信登録しませんでした: {frontend.reason}"]
@@ -39,7 +39,7 @@ def register_frontend(frontend: Frontend, slug: str, repo_root: Path) -> tuple[b
     if dest.exists():
         warnings.append(f"portfolio-site/apps/{slug} が既にあるため、フロントエンドをコピーしませんでした")
     else:
-        copy_tree(frontend.dir, dest)
+        copy_tree(frontend.dir, dest, root=project)
 
     if any(isinstance(a, dict) and a.get("slug") == slug for a in manifest["apps"]):
         warnings.append(f"apps.json に {slug} が既に登録されているため、登録内容を変更しませんでした")
@@ -48,6 +48,4 @@ def register_frontend(frontend: Frontend, slug: str, repo_root: Path) -> tuple[b
         apps.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
                                  encoding="utf-8", newline="\n")
-    if frontend.kind == "next-export":
-        warnings.append(f"Next.js は basePath に /apps/{slug} を設定しないと、配信時にリソースのパスがずれます")
     return True, warnings

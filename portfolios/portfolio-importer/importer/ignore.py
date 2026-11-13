@@ -8,13 +8,17 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
-# .gitignore に関係なく常に除く（非初期データ・秘密情報・VCS）
-_ALWAYS_EXCLUDED_DIRS = {".git"}
+# .gitignore に関係なく常に除く（VCS・依存パッケージ・キャッシュ・非初期データ・秘密情報）
+_ALWAYS_EXCLUDED_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__"}
 _ALWAYS_EXCLUDED_FILE = re.compile(
     r"""^(?:
         .*\.(?:sqlite3?|db)(?:-(?:journal|wal|shm))?   # 非初期データ（DB）
+      | .*\.pyc
       | \.env
       | \.env\.(?!example$).+                          # .env.example は残す
+      | .*\.(?:pem|key|p12|pfx)                         # 鍵・証明書
+      | \.npmrc
+      | credentials.*\.json
     )$""",
     re.VERBOSE,
 )
@@ -126,10 +130,19 @@ class IgnoreMatcher:
         return excluded
 
 
-def iter_files(root: Path) -> Iterator[Path]:
-    """除外を適用した、root からの相対ファイルパスを返す（シンボリックリンクは返さない）。"""
+def iter_files(root: Path, sub: str = "") -> Iterator[Path]:
+    """除外を適用したファイルの相対パスを返す（シンボリックリンクは返さない）。
+
+    sub を指定すると root/sub 配下だけを走査し、sub からの相対パスを返す。root から sub までの
+    各階層の .gitignore も適用する（プロジェクトのルートの .gitignore をサブディレクトリにも効かせるため）。
+    """
     matcher = IgnoreMatcher(root)
-    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+    sub = sub.strip("/")
+    parts = sub.split("/") if sub else []
+    for i in range(len(parts)):
+        matcher.add_gitignore("/".join(parts[:i]))
+    start = root / sub if sub else root
+    for dirpath, dirnames, filenames in os.walk(start, followlinks=False):
         rel_dir = Path(dirpath).relative_to(root).as_posix()
         rel_dir = "" if rel_dir == "." else rel_dir
         matcher.add_gitignore(rel_dir)
@@ -150,4 +163,4 @@ def iter_files(root: Path) -> Iterator[Path]:
                 continue
             if matcher.is_excluded(rel(f), False):
                 continue
-            yield Path(rel(f))
+            yield Path(rel(f)).relative_to(sub) if sub else Path(rel(f))

@@ -60,14 +60,29 @@ def _drop_leading_h1(body: str) -> str:
     return body.lstrip("\r\n")
 
 
+def _split_title(text: str) -> tuple[str | None, str]:
+    """コードブロック外の最初の `# 見出し` をタイトルとして取り出し、本文からその行を除く。"""
+    lines = text.splitlines(keepends=True)
+    fence: str | None = None
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if s.startswith(("```", "~~~")):
+            if fence is None:
+                fence = s[:3]
+            elif s.startswith(fence):
+                fence = None
+            continue
+        if fence is None and line.startswith("# "):
+            body = "".join(lines[:i] + lines[i + 1 :])
+            return line[2:].strip() or None, body.lstrip("\r\n")
+    return None, text
+
+
 def _readme(project: Path) -> tuple[str | None, str]:
     for name in ("README.md", "readme.md", "Readme.md"):
         p = project / name
         if p.is_file():
-            text = p.read_text(encoding="utf-8", errors="replace")
-            m = re.search(r"^# (.+)$", text, re.MULTILINE)
-            title = m.group(1).strip() if m else None
-            return title, _drop_leading_h1(text)
+            return _split_title(p.read_text(encoding="utf-8", errors="replace"))
     return None, ""
 
 

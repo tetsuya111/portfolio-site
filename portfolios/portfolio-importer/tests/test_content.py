@@ -44,6 +44,14 @@ class WritePortfolioMdTest(TempDirMixin, unittest.TestCase):
         self.assertTrue(text.startswith('---\ntitle: "Readme Title"\ntags:\n  - "Python"\n  - "Docker"\n'))
         self.assertTrue(text.endswith("---\n\n本文\n"))
 
+    def test_readme_title_ignores_code_blocks_and_removes_real_h1(self):
+        write(self.project / "README.md", "[![badge](x)](y)\n\n# Real Title\n\n```bash\n# install deps\n```\n")
+        self.call()
+        text = self.out.read_text(encoding="utf-8")
+        self.assertIn('title: "Real Title"', text)
+        self.assertNotIn("# Real Title", text)
+        self.assertIn("# install deps", text)
+
     def test_falls_back_to_slug_with_overview_template(self):
         self.call()
         text = self.out.read_text(encoding="utf-8")

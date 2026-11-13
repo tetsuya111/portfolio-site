@@ -14,6 +14,14 @@ FRONTEND_TAG_DEPS = {"react": "React", "vue": "Vue", "svelte": "Svelte", "next":
                      "vite": "Vite", "typescript": "TypeScript"}
 PYTHON_TAG_DEPS = {"fastapi": "FastAPI", "flask": "Flask", "django": "Django"}
 _NEXT_EXPORT = re.compile(r"""output\s*:\s*["']export["']""")
+_ASTRO_SERVER = re.compile(r"""output\s*:\s*["'](?:server|hybrid)["']|adapter\s*:""")
+# Vite を使うが dist に静的ファイルを出さない（または --base を受け付けない）フレームワーク
+VITE_META_FRAMEWORKS = ["@sveltejs/kit", "nuxt", "@remix-run/dev", "@react-router/dev", "@builder.io/qwik-city",
+                        "@analogjs/platform", "vike", "@solidjs/start", "@tanstack/react-start"]
+
+
+def _read_configs(d: Path, pattern: str) -> list[str]:
+    return [p.read_text(encoding="utf-8", errors="replace") for p in d.glob(pattern) if p.is_file()]
 
 
 @dataclass
@@ -69,12 +77,22 @@ def detect_frontend(project: Path, slug: str) -> Frontend | None:
         deps = _deps(pkg)
         tags = _tags(deps, FRONTEND_TAG_DEPS)
         if "next" in deps:
-            configs = [p.read_text(encoding="utf-8", errors="replace") for p in d.glob("next.config.*") if p.is_file()]
-            if any(_NEXT_EXPORT.search(c) for c in configs):
-                return Frontend(d, "next-export", "out", [], None, tags)
-            return Frontend(d, None, None, [], 'Next.js に output: "export" の設定がなく、静的ファイルを出力できません', tags)
+            configs = _read_configs(d, "next.config.*")
+            if not any(_NEXT_EXPORT.search(c) for c in configs):
+                return Frontend(d, None, None, [], 'Next.js に output: "export" の設定がなく、静的ファイルを出力できません', tags)
+            base_path = re.compile(rf"""basePath\s*:\s*["']{re.escape(base.rstrip("/"))}/?["']""")
+            if not any(base_path.search(c) for c in configs):
+                return Frontend(d, None, None, [],
+                                f'Next.js の next.config に basePath: "{base.rstrip("/")}" がなく、配信時にリソースのパスがずれます',
+                                tags)
+            return Frontend(d, "next-export", "out", [], None, tags)
         if "astro" in deps:
+            if any(_ASTRO_SERVER.search(c) for c in _read_configs(d, "astro.config.*")):
+                return Frontend(d, None, None, [], "Astro がサーバー出力（output: server/hybrid または adapter）の設定で、静的配信できません", tags)
             return Frontend(d, "astro", "dist", ["--base", base], None, tags)
+        meta = next((m for m in VITE_META_FRAMEWORKS if m in deps), None)
+        if meta:
+            return Frontend(d, None, None, [], f"{meta} は dist に静的ファイルを出力する構成として扱えないため、配信登録しません", tags)
         if "vite" in deps:
             return Frontend(d, "vite", "dist", [f"--base={base}"], None, tags)
         if name == ".":

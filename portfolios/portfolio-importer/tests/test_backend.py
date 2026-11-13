@@ -74,6 +74,23 @@ class WriteDockerFilesTest(TempDirMixin, unittest.TestCase):
         self.assertTrue(write_docker_files(Backend(self.tmp, "python")).has_cmd)
 
 
+class WriteDockerFilesReviewTest(TempDirMixin, unittest.TestCase):
+    def test_app_files_are_owned_by_runtime_user(self):
+        write(self.tmp / "requirements.txt", "")
+        write(self.tmp / "main.py", "")
+        write_docker_files(Backend(self.tmp, "python"))
+        text = (self.tmp / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn("COPY --chown=appuser:appuser . .", text)
+        self.assertLess(text.index("useradd"), text.index("COPY"))
+
+    def test_uvicorn_mentions_in_tests_are_ignored(self):
+        write(self.tmp / "requirements.txt", "fastapi\n")
+        write(self.tmp / "tests/conftest.py", "# uvicorn fake.module:app\n")
+        write(self.tmp / "app/main.py", "app = FastAPI()\n")
+        write_docker_files(Backend(self.tmp, "python"))
+        self.assertIn('"app.main:app"', (self.tmp / "Dockerfile").read_text(encoding="utf-8"))
+
+
 class BuildImageTest(TempDirMixin, unittest.TestCase):
     def test_runs_docker_build_and_save(self):
         calls = []

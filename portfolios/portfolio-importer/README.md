@@ -23,8 +23,8 @@ python portfolios/portfolio-importer/add_portfolio.py <プロジェクトのパ�
 
 | 順 | 内容 | 作成・変更するもの |
 |---|---|---|
-| 1 | プロジェクトのコピー。各階層の `.gitignore` に一致するもの、`.git/`、DB（`*.sqlite`・`*.sqlite3`・`*.db` など）、`.env`・`.env.*`（`.env.example` を除く）、シンボリックリンクはコピーしない | `portfolios/<スラッグ>/` |
-| 2 | node 製フロントエンド（`frontend/`・`web/`・`client/`・ルート）の検出。Vite・Astro・`output: "export"` の Next.js だけを配信登録する | `portfolio-site/apps/<スラッグ>/`、`portfolio-site/apps/apps.json`（[配信の仕組み](../../portfolio-site/docs/apps.md)） |
+| 1 | プロジェクトのコピー。各階層の `.gitignore` に一致するもの、`.git/`・`node_modules/`・`.venv/`・`venv/`・`__pycache__/`、DB（`*.sqlite`・`*.sqlite3`・`*.db` など）、`*.pyc`、`.env`・`.env.*`（`.env.example` を除く）、鍵・証明書（`*.pem`・`*.key`・`*.p12`・`*.pfx`）、`.npmrc`、`credentials*.json`、シンボリックリンクはコピーしない。フロントエンドを `apps/` にコピーするときも、プロジェクトのルートの `.gitignore` を適用する | `portfolios/<スラッグ>/` |
+| 2 | node 製フロントエンド（`frontend/`・`web/`・`client/`・ルート）の検出。Vite（SvelteKit・Nuxt などのメタフレームワークを除く）・静的出力の Astro・`output: "export"` と `basePath: "/apps/<スラッグ>"` を設定した Next.js だけを配信登録する | `portfolio-site/apps/<スラッグ>/`、`portfolio-site/apps/apps.json`（[配信の仕組み](../../portfolio-site/docs/apps.md)） |
 | 3 | バックエンド（`backend/`・`server/`・`api/`・ルート。Python / node）の Dockerfile 生成。起動コマンドは uvicorn の記載・`FastAPI(` の代入・`main.py`・`npm start` から判定する | `<バックエンド>/Dockerfile`、`<バックエンド>/.dockerignore` |
 | 4 | `--build-image` 時のイメージ作成 | `portfolios/docker-images/<スラッグ>-backend.tar`（git 管理外） |
 | 5 | 掲載 md の作成。`portfolios/docs/<スラッグ>.md` → README → スラッグの順で情報を使う | `portfolio-site/src/content/portfolios/<スラッグ>.md` |

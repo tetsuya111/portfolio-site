@@ -25,9 +25,29 @@ class DetectFrontendTest(TempDirMixin, unittest.TestCase):
 
     def test_next_with_static_export(self):
         write_json(self.tmp / "web/package.json", pkg({"next": "1"}))
-        write(self.tmp / "web/next.config.ts", 'const c = { output: "export" };')
+        write(self.tmp / "web/next.config.ts", 'const c = { output: "export", basePath: "/apps/s" };')
         f = detect_frontend(self.tmp, "s")
         self.assertEqual((f.kind, f.output_dir, f.build_args), ("next-export", "out", []))
+
+    def test_next_export_without_base_path_is_not_deliverable(self):
+        write_json(self.tmp / "web/package.json", pkg({"next": "1"}))
+        write(self.tmp / "web/next.config.ts", 'const c = { output: "export" };')
+        f = detect_frontend(self.tmp, "s")
+        self.assertIsNone(f.kind)
+        self.assertIn("basePath", f.reason)
+
+    def test_vite_meta_frameworks_are_not_deliverable(self):
+        for dep in ["@sveltejs/kit", "nuxt", "@remix-run/dev", "@react-router/dev"]:
+            with self.subTest(dep=dep):
+                write_json(self.tmp / "frontend/package.json", pkg({dep: "1"}, {"vite": "1"}))
+                f = detect_frontend(self.tmp, "s")
+                self.assertIsNone(f.kind)
+                self.assertIn(dep, f.reason)
+
+    def test_astro_server_output_is_not_deliverable(self):
+        write_json(self.tmp / "package.json", pkg({"astro": "1"}))
+        write(self.tmp / "astro.config.mjs", 'export default defineConfig({ output: "server" });')
+        self.assertIsNone(detect_frontend(self.tmp, "s").kind)
 
     def test_next_without_export_is_not_deliverable(self):
         write_json(self.tmp / "frontend/package.json", pkg({"next": "1"}))

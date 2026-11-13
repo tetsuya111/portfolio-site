@@ -64,6 +64,20 @@ class IterFilesTest(TempDirMixin, unittest.TestCase):
         write(self.tmp / "z.db")
         self.assertEqual(self.files(), [".gitignore"])
 
+    def test_always_excludes_dependency_dirs_and_secret_files(self):
+        for name in ["node_modules/a.js", ".venv/lib/x.py", "venv/x", "be/__pycache__/x.pyc", "key.pem", "k.key",
+                     ".npmrc", "credentials.json", "credentials-prod.json", "x.pyc"]:
+            write(self.tmp / name)
+        write(self.tmp / "src/keep.txt")
+        self.assertEqual(self.files(), ["src/keep.txt"])
+
+    def test_subdirectory_walk_applies_parent_gitignore(self):
+        write(self.tmp / ".gitignore", ".next/\n*.log\n")
+        write(self.tmp / "frontend/.next/x.js")
+        write(self.tmp / "frontend/a.log")
+        write(self.tmp / "frontend/index.html")
+        self.assertEqual([p.as_posix() for p in iter_files(self.tmp, "frontend")], ["index.html"])
+
     def test_skips_symlinks(self):
         write(self.tmp / "real.txt")
         try:

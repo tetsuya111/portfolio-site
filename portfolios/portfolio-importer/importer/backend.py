@@ -46,21 +46,30 @@ class DockerResult:
     warnings: list[str] = field(default_factory=list)
 
 
+def _command_sources(d: Path):
+    """起動コマンドを探すファイル（テストは .dockerignore でイメージから除くため対象外）を順に返す。"""
+    for rel in iter_files(d):
+        if rel.parts[0] in ("tests", "test") or rel.name.startswith("test_"):
+            continue
+        if rel.suffix == ".py" or rel.name.lower() == "readme.md":
+            yield rel
+
+
 def _python_command(d: Path) -> list[str] | None:
-    sources = [rel for rel in iter_files(d) if rel.suffix == ".py" or rel.name.lower() == "readme.md"]
-    texts = {rel: (d / rel).read_text(encoding="utf-8", errors="replace") for rel in sources}
     host = ["--host", "0.0.0.0", "--port", str(PYTHON_PORT)]
-    for text in texts.values():
+    assign: list[str] | None = None
+    for rel in _command_sources(d):
+        text = (d / rel).read_text(encoding="utf-8", errors="replace")
         m = _UVICORN.search(text)
         if m:
+            # 記載された起動方法を最優先する（見つかった時点で探索をやめる）
             return ["uvicorn", m.group(1)] + (["--factory"] if m.group(2) else []) + host
-    for rel, text in texts.items():
-        if rel.suffix != ".py":
-            continue
-        m = _FASTAPI_ASSIGN.search(text)
-        if m:
-            module = ".".join(rel.with_suffix("").parts)
-            return ["uvicorn", f"{module}:{m.group(1)}"] + host
+        if assign is None and rel.suffix == ".py":
+            a = _FASTAPI_ASSIGN.search(text)
+            if a:
+                assign = ["uvicorn", f"{'.'.join(rel.with_suffix('').parts)}:{a.group(1)}"] + host
+    if assign is not None:
+        return assign
     if (d / "main.py").is_file():
         return ["python", "main.py"]
     return None
@@ -82,8 +91,10 @@ def _python_dockerfile(d: Path) -> tuple[str, bool]:
         "FROM python:3.12-slim\n"
         "ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1\n"
         "WORKDIR /app\n"
-        "COPY . .\n"
-        f"RUN {install} && useradd --create-home appuser\n"
+        # 実行ユーザーがアプリのディレクトリ（SQLite などのデータ）に書き込めるよう、所有者を合わせる
+        "RUN useradd --create-home appuser\n"
+        "COPY --chown=appuser:appuser . .\n"
+        f"RUN {install}\n"
         "USER appuser\n"
         f"EXPOSE {PYTHON_PORT}\n"
         + _cmd_line(cmd)
@@ -101,10 +112,12 @@ def _node_dockerfile(d: Path) -> tuple[str, bool]:
         "FROM node:22-slim\n"
         "ENV NODE_ENV=production\n"
         "WORKDIR /app\n"
-        "COPY package*.json ./\n"
-        f"RUN {install}\n"
-        "COPY . .\n"
+        # 実行ユーザー（node）がアプリのディレクトリに書き込めるよう、所有者を合わせてから依存を入れる
+        "RUN chown node:node /app\n"
         "USER node\n"
+        "COPY --chown=node:node package*.json ./\n"
+        f"RUN {install}\n"
+        "COPY --chown=node:node . .\n"
         f"EXPOSE {NODE_PORT}\n"
         + _cmd_line(cmd)
     )
