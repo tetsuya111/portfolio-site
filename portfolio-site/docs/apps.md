@@ -1,6 +1,6 @@
 # ポートフォリオのフロントエンドの配信（apps/）
 
-ポートフォリオとして取り込んだプロジェクトのフロントエンドを、このサイトと同じ S3 バケット・CloudFront から `https://<ドメイン>/apps/<スラッグ>/` で配信する仕組み。取り込みはリポジトリの `/add-portfolio` スキル（[portfolio-importer](../../portfolios/portfolio-importer/README.md)）が行う。
+ポートフォリオとして取り込んだプロジェクトのフロントエンドを、このサイトと同じ S3 バケット・CloudFront から `https://<ドメイン>/apps/<スラッグ>/` で配信する仕組み。取り込みはリポジトリの `/add-portfolio` スキル（[portfolio-importer](../../portfolios/portfolio-importer/README.md)）が行い、`--register-frontend` を明示したときだけ登録する。
 
 ## 構成
 
