@@ -26,10 +26,10 @@ const { slug, title, tags, url } = Astro.props;
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        aria-label={`${title} のURLを開く（新しいタブ）`}
         class="relative z-10 mt-auto self-start rounded border border-sky-600 px-2 py-0.5 text-xs text-sky-700 hover:bg-sky-50"
       >
-        ポートフォリオのURL ↗
+        {/* 読み上げ名は見える文字を含める（WCAG 2.5.3）。どのポートフォリオか・別タブで開くことは読み上げ用に補う */}
+        ポートフォリオのURL ↗<span class="sr-only">（{title}、新しいタブで開く）</span>
       </a>
     )
   }

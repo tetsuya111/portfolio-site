@@ -16,11 +16,40 @@ export async function sendJson(method: "PUT" | "POST", path: string, body: unkno
   return showResult(res, successMessage);
 }
 
-function showStatus(ok: boolean, message: string): void {
+// 保存で md が変わると、開発サーバーが管理画面を再読み込みすることがある。
+// 結果のメッセージが消えないよう sessionStorage にも残し、読み込み直後に表示し直す。
+const STATUS_KEY = "admin-status";
+const STATUS_TTL_MS = 10_000;
+
+function renderStatus(ok: boolean, message: string): void {
   const status = document.getElementById("status");
   if (!status) return;
   status.className = `mt-4 whitespace-pre-wrap text-sm ${ok ? "text-green-700" : "text-red-700"}`;
   status.textContent = message;
+}
+
+function showStatus(ok: boolean, message: string): void {
+  renderStatus(ok, message);
+  try {
+    sessionStorage.setItem(STATUS_KEY, JSON.stringify({ ok, message, at: Date.now(), path: location.pathname }));
+  } catch {
+    // 保存できなくても表示はできているので続ける
+  }
+}
+
+/** 直前（10秒以内）に同じ画面で表示した結果のメッセージがあれば表示し直す。各管理画面の読み込み時に呼ぶ。 */
+export function restoreStatus(): void {
+  try {
+    const raw = sessionStorage.getItem(STATUS_KEY);
+    sessionStorage.removeItem(STATUS_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw) as { ok: boolean; message: string; at: number; path: string };
+    if (saved.path === location.pathname && Date.now() - saved.at < STATUS_TTL_MS) {
+      renderStatus(saved.ok, saved.message);
+    }
+  } catch {
+    // 読み出せない場合は表示しないだけ
+  }
 }
 
 /** API の応答を #status に表示する。 */
