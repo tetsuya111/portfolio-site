@@ -144,7 +144,7 @@
 
 **Interfaces:**
 - `PlaylistForm` props `{ authenticated: boolean }`。URL 入力欄（ラベル「チャートURL」、初期値 `https://billboard.mryogaku.com/`）、ボタン「プレイリストを作成」。
-- プレイリスト名: `Billboard Hot 100 (<URLのdate、なければ今日の日付 YYYY-MM-DD>)`
+- プレイリスト名: `ビルボード Hot 100-yyyy/mm/dd`（日付はURLのdate、なければ今日の日付）
 
 - [ ] Step 1: テスト: `disabled_when_unauthenticated`、`creates_playlist_and_shows_result`（リンク・「95曲」・見つからなかった曲）、`shows_backend_error_detail`、`disabled_while_loading`（「作成中…」表示）
 - [ ] Step 2: 失敗確認 → 実装 → 成功確認 → `npm run build` 成功確認 → コミット

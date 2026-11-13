@@ -38,7 +38,7 @@ describe("PlaylistForm", () => {
     await userEvent.click(screen.getByRole("button", { name: "プレイリストを作成" }));
 
     expect(fetchChart).toHaveBeenCalledWith(chart.url);
-    expect(createPlaylist).toHaveBeenCalledWith("Billboard Hot 100 (2025-11-15)", [
+    expect(createPlaylist).toHaveBeenCalledWith("ビルボード Hot 100-2025/11/15", [
       { title: "The Fate Of Ophelia", artist: "Taylor Swift" },
       { title: "Golden", artist: "HUNTR/X" },
     ]);
@@ -47,6 +47,23 @@ describe("PlaylistForm", () => {
     expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
     expect(screen.getByText(/95曲/)).toBeInTheDocument();
     expect(screen.getByText("Golden / HUNTR/X")).toBeInTheDocument();
+  });
+
+  it("sends_only_first_100_tracks_and_notes_it", async () => {
+    const many: api.Chart = {
+      ...chart,
+      tracks: Array.from({ length: 150 }, (_, i) => ({ rank: i + 1, title: `T${i + 1}`, artist: "A" })),
+    };
+    vi.spyOn(api, "fetchChart").mockResolvedValue(many);
+    const createPlaylist = vi.spyOn(api, "createPlaylist").mockResolvedValue(result);
+    render(<PlaylistForm authenticated />);
+    await userEvent.click(screen.getByRole("button", { name: "プレイリストを作成" }));
+
+    await screen.findByRole("link", { name: /Spotifyで開く/ });
+    const sent = createPlaylist.mock.calls[0][1];
+    expect(sent).toHaveLength(100);
+    expect(sent[99]).toEqual({ title: "T100", artist: "A" });
+    expect(screen.getByText(/150曲.*先頭の100曲/)).toBeInTheDocument();
   });
 
   it("shows_backend_error_detail", async () => {
@@ -97,23 +114,23 @@ describe("PlaylistForm", () => {
 describe("playlistName", () => {
   it("uses the date query parameter", () => {
     expect(playlistName("https://billboard.mryogaku.com/php/chart.php?date=2025-11-15")).toBe(
-      "Billboard Hot 100 (2025-11-15)",
+      "ビルボード Hot 100-2025/11/15",
     );
   });
 
   it("falls back to today's date", () => {
     expect(playlistName("https://billboard.mryogaku.com/", new Date(2026, 10, 13))).toBe(
-      "Billboard Hot 100 (2026-11-13)",
+      "ビルボード Hot 100-2026/11/13",
     );
   });
 
   it("ignores a malformed date", () => {
     expect(playlistName("https://x/?date=<script>", new Date(2026, 0, 2))).toBe(
-      "Billboard Hot 100 (2026-01-02)",
+      "ビルボード Hot 100-2026/01/02",
     );
   });
 
   it("tolerates an unparsable url", () => {
-    expect(playlistName("not a url", new Date(2026, 0, 2))).toBe("Billboard Hot 100 (2026-01-02)");
+    expect(playlistName("not a url", new Date(2026, 0, 2))).toBe("ビルボード Hot 100-2026/01/02");
   });
 });

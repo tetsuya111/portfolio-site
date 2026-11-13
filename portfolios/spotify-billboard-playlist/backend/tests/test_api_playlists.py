@@ -12,7 +12,7 @@ TRACKS = [
 def test_create_playlist_201(client, logged_in, spotify):
     res = client.post(
         "/api/playlists",
-        json={"name": "Billboard Hot 100 (2025-11-15)", "tracks": TRACKS},
+        json={"name": "ビルボード Hot 100-2025/11/15", "tracks": TRACKS},
         headers={"Origin": ORIGIN},
     )
     assert res.status_code == 201
@@ -23,7 +23,7 @@ def test_create_playlist_201(client, logged_in, spotify):
         "not_found": [{"title": "Golden", "artist": "HUNTR/X"}],
     }
     name, tracks = spotify.built[0]
-    assert name == "Billboard Hot 100 (2025-11-15)"
+    assert name == "ビルボード Hot 100-2025/11/15"
     assert tracks[0] == TrackQuery("The Fate Of Ophelia", "Taylor Swift")
 
 

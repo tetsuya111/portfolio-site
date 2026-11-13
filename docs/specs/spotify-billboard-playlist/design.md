@@ -61,15 +61,18 @@ portfolios/spotify-billboard-playlist/
 
 ### URL の検証・正規化（`urls.py`、R2〜R4・N2）
 
-`resolve_chart_url(url) -> ChartTarget` を返す。`ChartTarget` は「トップページ」か「日付付き Hot 100 ページ」のどちらか。
+`resolve_chart_url(url) -> ChartTarget` を返す。`ChartTarget` は「トップページ」「日付付き Hot 100 ページ」「その他の同一ホストのページ」のいずれか。
 
 | 入力パス（スキームは https/http、ホストは `billboard.mryogaku.com` 固定） | 結果 |
 |---|---|
 | `/`、`/index.php`、`/s/`（フラグメント `#…` は無視） | トップページ |
 | `/php/chart.php?date=D`、`/php/dispHot100.php?date=D`、`/s/php/…` の同名 | `https://billboard.mryogaku.com/php/dispHot100.php?date=D` |
-| 上記以外、`D` が `YYYY-MM-DD` でない、ホスト不一致、ユーザー情報・ポート指定付き | `InvalidChartUrl` |
+| 上記以外の同一ホストのパス（例: `/php/artist.php?artist=…`） | `https://billboard.mryogaku.com<パス>?<クエリ>`（フラグメントは除く）をそのまま取得し、Hot 100 と同じセレクター（`table tbody tr` の順位・曲名 `<b>`）で解析する。曲が1件も取れなければ `ParseError` |
+| `chart.php`・`dispHot100.php` で `D` が `YYYY-MM-DD` でない、ホスト不一致、ユーザー情報・ポート指定付き | `InvalidChartUrl` |
 
-取得は常に `https://` で行う。`chart.php` は曲データをJavaScript文字列で埋め込み上位40曲しか持たないため、同日付の `dispHot100.php`（素直な `<table>` で100曲）に寄せる（2026-11-13 に実ページで構造を確認）。
+取得は常に `https://` で行う。`chart.php` は曲データをJavaScript文字列で埋め込み上位40曲しか持たないため、同日付の `dispHot100.php`（素直な `<table>` で100曲）に寄せる（2026-11-13 に実ページで構造を確認）。その他のページは同じ表構造であれば使える。2026-11-13 時点では、トップページからリンクされたランキング系ページ（`alltime.php`・`no1weeks.php` など）はこの構造ではなく、解析に失敗する。
+
+曲数が100を超えるページでは、フロントエンドが先頭100曲だけを `POST /api/playlists` に送り、その旨を結果に表示する。
 
 ### 取得（`fetcher.py`、N2・N4）
 
@@ -145,7 +148,7 @@ chart_tracks(source_id INTEGER REFERENCES chart_sources(id), rank INTEGER, title
 ```
 
 - `AuthStatus`: マウント時に `GET /api/me`。ログインは `<a href="/auth/login">`（ページ遷移）、ログアウトは `POST /auth/logout` 後に再取得。
-- `PlaylistForm`: 送信で `POST /api/charts` → 成功なら `POST /api/playlists`（名前は `Billboard Hot 100 (<日付またはURL>)` を自動生成）。各段階の失敗時はバックエンドの `detail` を表示（R23）。
+- `PlaylistForm`: 送信で `POST /api/charts` → 成功なら `POST /api/playlists`（名前は `ビルボード Hot 100-yyyy/mm/dd` 形式で自動生成。日付はURLの `date`、なければ今日）。各段階の失敗時はバックエンドの `detail` を表示（R23）。
 - `lib/api.ts`: `fetch` の薄いラッパー。エラー時は `ApiError(status, detail)` を投げる。
 - `next.config.ts` の `rewrites` で `/api/:path*`・`/auth/:path*` を `BACKEND_URL`（既定 `http://127.0.0.1:8000`）へ。
 
