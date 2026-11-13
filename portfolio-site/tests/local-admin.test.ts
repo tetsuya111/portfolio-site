@@ -1,21 +1,26 @@
 import { Readable } from "node:stream";
 import type { IncomingMessage } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
-import { BodyTooLargeError, localAdmin, readBodyWithLimit } from "../integrations/local-admin";
+import { BodyTooLargeError, CONTENT_ROOT_DEFINE, localAdmin, readBodyWithLimit } from "../integrations/local-admin";
 
 type SetupOptions = Parameters<NonNullable<ReturnType<typeof localAdmin>["hooks"]["astro:config:setup"]>>[0];
 
 function runConfigSetup(command: "dev" | "build" | "preview" | "sync") {
   const injectRoute = vi.fn();
-  const hook = localAdmin({ contentRoot: "./src/content" }).hooks["astro:config:setup"];
+  const updateConfig = vi.fn();
+  const hook = localAdmin({ contentRoot: "./content" }).hooks["astro:config:setup"];
   if (!hook) throw new Error("astro:config:setup がありません");
-  hook({ command, injectRoute } as unknown as SetupOptions);
-  return injectRoute;
+  const config = { root: pathToFileURL(join(tmpdir(), "site") + "/") };
+  hook({ command, injectRoute, updateConfig, config } as unknown as SetupOptions);
+  return { injectRoute, updateConfig };
 }
 
 describe("localAdmin", () => {
   it("injects admin routes in dev", () => {
-    const injectRoute = runConfigSetup("dev");
+    const { injectRoute } = runConfigSetup("dev");
     expect(injectRoute.mock.calls.map((c) => c[0].pattern)).toEqual([
       "/admin",
       "/admin/profile",
@@ -23,8 +28,17 @@ describe("localAdmin", () => {
     ]);
   });
 
+  it("exposes the resolved content root to admin pages in dev", () => {
+    const { updateConfig } = runConfigSetup("dev");
+    expect(updateConfig).toHaveBeenCalledWith({
+      vite: { define: { [CONTENT_ROOT_DEFINE]: JSON.stringify(join(tmpdir(), "site", "content")) } },
+    });
+  });
+
   it.each(["build", "preview", "sync"] as const)("injects nothing for %s", (command) => {
-    expect(runConfigSetup(command)).not.toHaveBeenCalled();
+    const { injectRoute, updateConfig } = runConfigSetup(command);
+    expect(injectRoute).not.toHaveBeenCalled();
+    expect(updateConfig).not.toHaveBeenCalled();
   });
 });
 

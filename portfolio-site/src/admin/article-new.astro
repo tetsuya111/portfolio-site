@@ -47,15 +47,12 @@ const input = "w-full rounded border border-slate-300 bg-white p-2";
 </AdminLayout>
 
 <script>
-  import { buildArticleMarkdown, showResult } from "./admin-client";
+  import { buildArticleMarkdown, sendJson } from "./admin-client";
 
   async function post(slug: string, markdown: string, form: HTMLFormElement) {
-    const res = await fetch("/__admin/api/articles", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slug, markdown }),
-    });
-    if (await showResult(res, `保存しました: /articles/${slug}/`)) form.reset();
+    if (await sendJson("POST", "/__admin/api/articles", { slug, markdown }, `保存しました: /articles/${slug}/`)) {
+      form.reset();
+    }
   }
 
   const articleForm = document.getElementById("article-form") as HTMLFormElement;

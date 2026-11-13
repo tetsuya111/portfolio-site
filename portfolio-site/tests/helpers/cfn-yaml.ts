@@ -13,6 +13,7 @@ function toObject(name: string, value: unknown): unknown {
   if (name === "Ref") return { Ref: value };
   if (name === "GetAtt" && typeof value === "string") {
     const i = value.indexOf(".");
+    if (i === -1) throw new Error(`!GetAtt は「リソース名.属性名」の形式が必要です: ${value}`);
     return { "Fn::GetAtt": [value.slice(0, i), value.slice(i + 1)] };
   }
   return { [`Fn::${name}`]: value };

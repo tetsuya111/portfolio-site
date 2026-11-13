@@ -13,7 +13,8 @@ phases:
     commands:
       - npm test
       - npm run lint
-      - npm run build
+      # astro build と、成果物に管理画面が含まれないことなどの検証
+      - npm run test:build
   post_build:
     commands:
       - |

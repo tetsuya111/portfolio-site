@@ -12,6 +12,9 @@ export const ADMIN_ROUTES = [
   { pattern: "/admin/articles/new", entrypoint: "../src/admin/article-new.astro" },
 ] as const;
 
+/** 管理画面のページ（src/admin/*.astro）から保存先ディレクトリを参照するための定数名 */
+export const CONTENT_ROOT_DEFINE = "__ADMIN_CONTENT_ROOT__";
+
 export class BodyTooLargeError extends Error {
   constructor(limit: number) {
     super(`リクエスト本文が上限（${limit} バイト）を超えています`);
@@ -44,9 +47,11 @@ export function localAdmin(options: { contentRoot: string }): AstroIntegration {
   return {
     name: "local-admin",
     hooks: {
-      "astro:config:setup": ({ command, injectRoute, config }) => {
+      "astro:config:setup": ({ command, injectRoute, config, updateConfig }) => {
         if (command !== "dev") return;
         if (config?.root) contentRoot = resolve(fileURLToPath(config.root), options.contentRoot);
+        // 管理画面が表示に使う保存先を、保存 API と同じ値にそろえる
+        updateConfig({ vite: { define: { [CONTENT_ROOT_DEFINE]: JSON.stringify(contentRoot) } } });
         for (const route of ADMIN_ROUTES) {
           injectRoute({ pattern: route.pattern, entrypoint: new URL(route.entrypoint, import.meta.url) });
         }
@@ -70,7 +75,7 @@ export function localAdmin(options: { contentRoot: string }): AstroIntegration {
             send(result.status, result.json);
           } catch (e) {
             if (e instanceof BodyTooLargeError) return send(413, { error: e.message });
-            logger.error(`保存 API でエラー: ${(e as Error).message}`);
+            logger.error(`保存 API でエラー: ${e instanceof Error ? e.message : String(e)}`);
             send(500, { error: "保存中にエラーが発生しました" });
           }
         });

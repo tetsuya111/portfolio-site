@@ -12,9 +12,9 @@ describe("buildspec.yml", () => {
     expect(commands("install").join("\n")).toContain("npm ci");
   });
 
-  it("runs test, lint and build in order", () => {
+  it("runs test, lint and build with output checks in order", () => {
     const build = commands("build");
-    const idx = ["npm test", "npm run lint", "npm run build"].map((c) => build.findIndex((l) => l.includes(c)));
+    const idx = ["npm test", "npm run lint", "npm run test:build"].map((c) => build.findIndex((l) => l.includes(c)));
     expect(idx.every((i) => i >= 0)).toBe(true);
     expect([...idx].sort((a, b) => a - b)).toEqual(idx);
   });
