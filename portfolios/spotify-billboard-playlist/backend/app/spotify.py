@@ -14,6 +14,7 @@ import httpx
 
 from app.config import Settings
 from app.sessions import Session
+from app.tls import system_ssl_context
 
 logger = logging.getLogger(__name__)
 
@@ -224,7 +225,9 @@ class SpotifyClient:
     # ---- HTTP 共通 ----
 
     def _client(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(transport=self._transport, timeout=TIMEOUT_SECONDS)
+        return httpx.AsyncClient(
+            transport=self._transport, timeout=TIMEOUT_SECONDS, verify=system_ssl_context()
+        )
 
     async def _token_request(self, form: dict, fallback_refresh_token: str) -> TokenSet:
         async with self._client() as client:

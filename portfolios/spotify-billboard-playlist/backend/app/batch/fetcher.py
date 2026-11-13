@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from app.batch.urls import HOST
+from app.tls import system_ssl_context
 
 TIMEOUT_SECONDS = 10.0
 MAX_BYTES = 2 * 1024 * 1024
@@ -30,6 +31,7 @@ class Fetcher:
                 httpx.Client(
                     transport=self._transport,
                     timeout=TIMEOUT_SECONDS,
+                    verify=system_ssl_context(),
                     follow_redirects=False,
                     headers={"User-Agent": USER_AGENT},
                 ) as client,

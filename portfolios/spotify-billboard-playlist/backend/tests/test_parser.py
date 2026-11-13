@@ -64,3 +64,12 @@ def test_find_latest_ignores_foreign_links():
 def test_find_latest_missing_raises():
     with pytest.raises(ParseError):
         find_latest_hot100_url("<html><a href='/php/chart.php?date=2026-01-03'>x</a></html>")
+
+
+def test_parse_missing_chart_file_message():
+    html = (
+        "<body><div>Billboard Hot 100 : 2001-11-17</div>"
+        "<p>チャートファイルが見つかりません: 2001-11-17</p></body>"
+    )
+    with pytest.raises(ParseError, match="この日付のチャートデータがありません"):
+        parse_hot100(html)

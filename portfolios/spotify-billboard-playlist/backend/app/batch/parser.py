@@ -11,6 +11,8 @@ from bs4 import BeautifulSoup, Tag
 from app.batch.urls import TOP_URL, InvalidChartUrl, resolve_chart_url
 
 _WS_RE = re.compile(r"\s+")
+# 指定日付のデータがないとき dispHot100.php が表示する文言
+_MISSING_CHART_TEXT = "チャートファイルが見つかりません"
 
 
 @dataclass(frozen=True)
@@ -62,6 +64,10 @@ def parse_hot100(html: str) -> list[ChartEntry]:
         if entry is not None:
             entries.append(entry)
     if not entries:
+        if _MISSING_CHART_TEXT in soup.get_text():
+            raise ParseError(
+                "この日付のチャートデータがありません（別の週のURLを指定してください）"
+            )
         raise ParseError("チャートの曲が見つかりませんでした")
     return entries
 
