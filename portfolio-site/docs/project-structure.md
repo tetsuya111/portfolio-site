@@ -30,7 +30,8 @@ flowchart LR
 portfolio-site/
 ├── README.md                     # 使い方（起動・コンテンツの更新）
 ├── docs/
-│   └── project-structure.md      # このファイル
+│   ├── project-structure.md      # このファイル
+│   └── content-files.md          # コンテンツファイル（自己紹介・ポートフォリオ・記事）の書式と追加方法
 ├── package.json                  # 依存と npm scripts
 ├── astro.config.mjs              # Astro の設定（静的出力、末尾スラッシュ、Tailwind、管理画面インテグレーション）
 ├── tsconfig.json                 # TypeScript の設定（astro/tsconfigs/strict を継承）
@@ -70,7 +71,7 @@ portfolio-site/
 | `articles/<スラッグ>.md` | `articles` | 記事1件 |
 
 - ファイル名（拡張子を除く）がスラッグになり、URL に使われる（例: `articles/hello-world.md` → `/articles/hello-world/`）。
-- frontmatter の項目は `src/lib/schemas.ts` で定義している。項目の説明は [../README.md](../README.md) の「コンテンツの更新」を参照。
+- frontmatter の項目は `src/lib/schemas.ts` で定義している。項目・書式・追加方法は [content-files.md](content-files.md) を参照。
 - 同梱の md はすべて動作確認用のサンプル。`articles/draft-sample.md` は `draft: true` のため公開されない。
 
 ## src/pages・layouts・components（公開ページ）

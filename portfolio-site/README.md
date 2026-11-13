@@ -35,64 +35,15 @@ npm run dev        # http://localhost:4321/ （管理画面は http://localhost:
 
 ## コンテンツの更新
 
-どの方法でも md ファイルが更新されるだけなので、公開するには変更をコミットして `main` に push します（CodeBuild がデプロイします）。
+自己紹介・ポートフォリオ・記事は `src/content/` 配下の md ファイルです。どの方法でも md ファイルが更新されるだけなので、公開するには変更をコミットして `main` に push します。
 
-### 自己紹介・経歴
+| 種類 | 追加・更新の方法 |
+|---|---|
+| 自己紹介・経歴 | `src/content/profile/profile.md` を編集、または `npm run dev` 中に管理画面 `/admin/profile/` |
+| ポートフォリオ | `npm run portfolio:new -- --slug my-app --title "My App" --tags "Astro,AWS"`、または md を直接置く（サイト上からは追加できない） |
+| 記事 | `src/content/articles/` に md を置く、または `npm run dev` 中に管理画面 `/admin/articles/new/` |
 
-`src/content/profile/profile.md` を編集します。frontmatter の `name`（氏名）と `role`（肩書き）は必須です。
-
-```markdown
----
-name: 山田 太郎
-role: フリーランス Web エンジニア
-summary: トップページに表示する一言紹介（任意）
-links:                      # 任意
-  - label: GitHub
-    url: https://github.com/xxxx
----
-
-## 経歴
-...
-```
-
-`npm run dev` 中は、管理画面の「自己紹介を編集」（`/admin/profile/`）からも編集・保存できます。
-
-### ポートフォリオ
-
-コマンドで追加します（サイト上からは追加できません）。
-
-```bash
-npm run portfolio:new -- --slug my-app --title "My App" --tags "Astro,AWS" --url https://example.com
-```
-
-- `--slug`（必須）: URL とファイル名になる名前。英小文字・数字・ハイフンのみ、64文字まで。日本語のタイトルからは自動で作らないので必ず指定する
-- `--title`（必須）、`--tags`（任意・カンマ区切り）、`--url`（任意・http/https のみ。指定するとタイルに「ポートフォリオのURL」ボタンが出る）
-
-`src/content/portfolios/<スラッグ>.md` が作られるので、`## 概要` 以下に内容を書きます。同じスラッグが既にある場合は何も作らずにエラーになります。
-
-### 記事
-
-`src/content/articles/` に md ファイルを置くだけで追加されます（ファイル名がスラッグになります）。
-
-```markdown
----
-title: 記事のタイトル
-date: 2026-11-13
-tags: [Astro]          # 任意
-description: 一覧に出す説明（任意）
-draft: false           # true にすると公開ビルドに含めない
----
-
-本文
-```
-
-`npm run dev` 中は、管理画面の「記事を追加」（`/admin/articles/new/`）から、フォーム入力または md ファイルのアップロードでも追加できます。既存の記事と同じスラッグでは保存できません（上書きしない）。
-
-### 管理画面について
-
-- 管理画面と保存 API（`/__admin/api/*`）は `npm run dev` のときだけ有効で、`npm run build` の成果物には含まれません。
-- 開発サーバーは localhost でだけ待ち受けます。`--host` を付けて外部に公開しないでください。
-- 別のサイトのページからの保存（Origin 不一致）、JSON 以外の送信、1 MB を超える送信は拒否します。
+各ファイルの項目・書式・スラッグのルール・管理画面の制限は [docs/content-files.md](docs/content-files.md) にまとめています。
 
 ## AWS への構築・デプロイ
 
