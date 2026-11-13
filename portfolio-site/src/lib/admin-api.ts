@@ -27,7 +27,7 @@ const error = (status: number, message: string, issues?: string[]): AdminRespons
  */
 function checkRequestSource(req: AdminRequest): AdminResponse | null {
   const { origin, host } = req.headers;
-  let originHost: string | null = null;
+  let originHost: string | null;
   try {
     originHost = origin ? new URL(origin).host : null;
   } catch {

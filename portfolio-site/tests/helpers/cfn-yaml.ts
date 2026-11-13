@@ -29,7 +29,7 @@ function tagsFor(name: string): (ScalarTag | CollectionTag)[] {
 
 const customTags = ["Ref", ...FUNCTIONS].flatMap(tagsFor);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- テンプレートの構造は自由形式
+// テンプレートの構造は自由形式のため any で返す
 export function loadCfnTemplate(path: string): any {
   return parse(readFileSync(path, "utf8"), { customTags });
 }

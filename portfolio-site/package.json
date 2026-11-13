@@ -8,7 +8,7 @@
     "preview": "astro preview",
     "test": "node scripts/vitest.mjs run",
     "test:build": "astro build && node scripts/vitest.mjs run --config vitest.build.config.ts",
-    "lint": "eslint .",
+    "lint": "eslint . && astro check",
     "portfolio:new": "tsx scripts/new-portfolio.mjs"
   },
   "dependencies": {
@@ -19,7 +19,9 @@
     "yaml": "^2.9.1"
   },
   "devDependencies": {
+    "@astrojs/check": "^0.9.12",
     "@eslint/js": "^10.0.1",
+    "@types/node": "^22.20.5",
     "eslint": "^10.14.0",
     "eslint-plugin-astro": "^3.2.1",
     "globals": "^17.14.0",

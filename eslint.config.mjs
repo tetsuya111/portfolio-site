@@ -5,8 +5,8 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import globals from "globals";
 
 export default defineConfig([
-  // ビルド成果物・依存パッケージは対象外
-  globalIgnores(["node_modules/", "dist/", "build/", "out/", ".next/", "coverage/"]),
+  // ビルド成果物・依存パッケージは対象外（portfolio-site/ は独自の eslint.config.mjs で検査する）
+  globalIgnores(["node_modules/", "dist/", "build/", "out/", ".next/", "coverage/", "portfolio-site/"]),
 
   {
     files: ["**/*.{js,mjs,cjs}"],
