@@ -1,0 +1,31 @@
+---
+import "../styles/global.css";
+import SiteHeader from "../components/SiteHeader.astro";
+
+interface Props {
+  title: string;
+  description?: string | undefined;
+}
+
+const { title, description } = Astro.props;
+const siteName = "Portfolio";
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title === siteName ? title : `${title} | ${siteName}`}</title>
+    {description && <meta name="description" content={description} />}
+  </head>
+  <body class="min-h-screen bg-slate-50 text-slate-800 antialiased">
+    <SiteHeader siteName={siteName} />
+    <main class="mx-auto max-w-5xl px-4 py-10">
+      <slot />
+    </main>
+    <footer class="border-t border-slate-200 py-6 text-center text-sm text-slate-500">
+      &copy; {new Date().getFullYear()} {siteName}
+    </footer>
+  </body>
+</html>

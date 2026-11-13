@@ -1,0 +1,17 @@
+---
+interface Props {
+  tags: string[];
+}
+
+const { tags } = Astro.props;
+---
+
+{
+  tags.length > 0 && (
+    <ul class="flex flex-wrap gap-2" aria-label="タグ">
+      {tags.map((t) => (
+        <li class="rounded-full bg-sky-100 px-2.5 py-0.5 text-xs text-sky-800">{t}</li>
+      ))}
+    </ul>
+  )
+}

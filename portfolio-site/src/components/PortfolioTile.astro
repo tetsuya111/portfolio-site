@@ -1,0 +1,36 @@
+---
+// タイル全体をクリック可能にしつつ、URL ボタンを入れ子の <a> にしないため
+// タイトルのリンクを疑似要素でタイル全体に広げる（stretched link）。
+import TagList from "./TagList.astro";
+
+interface Props {
+  slug: string;
+  title: string;
+  tags: string[];
+  url?: string | undefined;
+}
+
+const { slug, title, tags, url } = Astro.props;
+---
+
+<article
+  class="relative flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition focus-within:ring-2 focus-within:ring-sky-500 hover:shadow-md"
+>
+  <h3 class="text-base font-semibold">
+    <a href={`/portfolios/${slug}/`} class="after:absolute after:inset-0 focus:outline-none">{title}</a>
+  </h3>
+  <TagList tags={tags} />
+  {
+    url && (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`${title} のURLを開く（新しいタブ）`}
+        class="relative z-10 mt-auto self-start rounded border border-sky-600 px-2 py-0.5 text-xs text-sky-700 hover:bg-sky-50"
+      >
+        ポートフォリオのURL ↗
+      </a>
+    )
+  }
+</article>
