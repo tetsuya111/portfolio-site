@@ -12,33 +12,44 @@ description: OpenCodeReview（`npm run ocr`）でgit差分をAIコードレビ�
 - **ユーザーが `/code-review-ocr` で起動した場合**: 確認せず「実行手順」に進む。引数があればレビュー範囲の指定として解釈する（例: `main`、コミットハッシュ）。
 - **コードレビューの依頼から自動で読み込まれた場合**: 実行前に、OCRでレビューできることをユーザーに一言で提示し、実行してよいか確認する。OCRは外部のLLMプロバイダにコード差分を送信し、課金が発生しうるため、無断で実行しないこと。ユーザーが断った場合は通常のレビュー方法に戻る。
 
+## 入力を小さくする方針
+
+LLMへの入力（＝トークン・課金）を極力小さくするため、以下を常に守る。
+
+- **差分を中心に渡す**: レビュー範囲は依頼を満たす最小のもの（作業ツリー差分・特定コミットなど）にする。ブランチ全体は明示的に求められたときだけ使う。
+- **`docs/` 配下は対象外**: ルートの `docs/` も `*/docs/`（例: `portfolios/docs/`）も、すべてのコマンドに `--exclude '**/docs/**'` を付けて除外する。ユーザーが別の除外パターンを指定した場合はカンマ区切りで併記する（例: `--exclude '**/docs/**,**/fixtures/**'`）。
+- **不要な大きいファイルを除く**: プレビューで lock ファイル・ビルド成果物・生成物・テストデータなどレビュー不要の大きい差分が見つかったら、`--exclude` に追加する。
+- **背景情報は短く**: 要件・設計ドキュメントを `--background-file` で丸ごと渡さない。必要なら関連する要点だけを数行にまとめて `--background "<要約>"` で渡す。
+
 ## 実行手順
 
 1. **レビュー対象の確認**（LLMを呼ばない）
 
    ```bash
-   npm run ocr -- review --preview
+   npm run ocr -- review --preview --exclude '**/docs/**'
    ```
 
-   対象ファイルが0件なら、その旨を伝えて終了する。
+   - 範囲を指定する場合は、手順2と同じ `--from`/`--to`/`--commit` を付けてプレビューする。
+   - 「Will review」の一覧と行数を見て、上記方針に沿って除外パターンを追加する。
+   - 対象ファイルが0件なら、その旨を伝えて終了する。
 
 2. **レビュー範囲の決定**（ユーザーの指示がなければ既定の作業ツリー差分）
 
    | 対象 | コマンド |
    |---|---|
-   | 作業ツリーの変更（staged・unstaged・untracked） | `npm run ocr -- review --audience agent` |
-   | ブランチ間 | `npm run ocr -- review --from <base> --to <branch> --audience agent` |
-   | 特定コミット | `npm run ocr -- review --commit <hash> --audience agent` |
+   | 作業ツリーの変更（staged・unstaged・untracked） | `npm run ocr -- review --exclude '**/docs/**' --audience agent` |
+   | 特定コミット | `npm run ocr -- review --commit <hash> --exclude '**/docs/**' --audience agent` |
+   | ブランチ間（明示的に求められた場合のみ） | `npm run ocr -- review --from <base> --to <branch> --exclude '**/docs/**' --audience agent` |
 
    - プロジェクトルートに `set-ocr-env.bat`（LLM接続用の環境変数を `set` で定義するバッチ。APIキーを含むため `.gitignore` 済み）がある場合は、上記コマンドを次の形で包み、バッチを読み込んでから実行する。
      ```bash
-     cmd //c "call $(cygpath -w "$PWD")\\set-ocr-env.bat >nul && npm run ocr -- review --audience agent"
+     cmd //c "call $(cygpath -w "$PWD")\\set-ocr-env.bat >nul && npm run ocr -- review --exclude **/docs/** --audience agent"
      ```
      - バッチは絶対パスで `call` する（相対パスではcmdから認識されない）。
      - `>nul` は必須。バッチに `@echo off` がないため、省くとAPIキーの行が出力に表示される。
      - バッチの中身を `cat` / Read などで読まないこと（APIキーを含む）。
    - `--audience agent` は進捗表示を省き要約だけを出力する。トークン節約のため必ず付ける。
-   - 要件・設計ドキュメントが関連する場合は `--background-file <path>` で背景として渡す。
+     - cmd 経由では単一引用符がそのまま渡されるため、パターンは引用符なしで書く。
    - レビューは時間がかかるため、Bashのタイムアウトは長め（例: 600000ms）にする。
 
 3. **結果の提示**
