@@ -14,6 +14,7 @@ FRONTEND_TAG_DEPS = {"react": "React", "vue": "Vue", "svelte": "Svelte", "next":
                      "vite": "Vite", "typescript": "TypeScript"}
 PYTHON_TAG_DEPS = {"fastapi": "FastAPI", "flask": "Flask", "django": "Django"}
 _NEXT_EXPORT = re.compile(r"""output\s*:\s*["']export["']""")
+_NEXT_TRAILING_SLASH = re.compile(r"trailingSlash\s*:\s*true")
 _ASTRO_SERVER = re.compile(r"""output\s*:\s*["'](?:server|hybrid)["']|adapter\s*:""")
 # Vite を使うが dist に静的ファイルを出さない（または --base を受け付けない）フレームワーク
 VITE_META_FRAMEWORKS = ["@sveltejs/kit", "nuxt", "@remix-run/dev", "@react-router/dev", "@builder.io/qwik-city",
@@ -58,7 +59,7 @@ def _deps(pkg: dict) -> dict:
     return deps
 
 
-def _has_script(pkg: dict, name: str) -> bool:
+def has_script(pkg: dict, name: str) -> bool:
     scripts = pkg.get("scripts")
     return isinstance(scripts, dict) and isinstance(scripts.get(name), str)
 
@@ -67,12 +68,23 @@ def _tags(deps: dict, table: dict[str, str]) -> list[str]:
     return [tag for dep, tag in table.items() if dep in deps]
 
 
-def detect_frontend(project: Path, slug: str) -> Frontend | None:
+def detect_frontend(project: Path, slug: str, require_lockfile: bool = False) -> Frontend | None:
+    """require_lockfile=True なら、package-lock.json のないフロントエンドを配信不可にする
+    （デプロイ時に依存のバージョンを固定し、未検証のパッケージを取り込まないため）。"""
+    frontend = _detect_frontend(project, slug)
+    if (require_lockfile and frontend is not None and frontend.kind is not None
+            and not (frontend.dir / "package-lock.json").is_file()):
+        frontend.kind, frontend.output_dir, frontend.build_args = None, None, []
+        frontend.reason = "package-lock.json がなく、デプロイ時に依存のバージョンを固定できません"
+    return frontend
+
+
+def _detect_frontend(project: Path, slug: str) -> Frontend | None:
     base = f"/apps/{slug}/"
     for name in FRONTEND_DIRS:
         d = project if name == "." else project / name
         pkg = read_package_json(d / "package.json")
-        if pkg is None or not _has_script(pkg, "build"):
+        if pkg is None or not has_script(pkg, "build"):
             continue
         deps = _deps(pkg)
         tags = _tags(deps, FRONTEND_TAG_DEPS)
@@ -84,6 +96,10 @@ def detect_frontend(project: Path, slug: str) -> Frontend | None:
             if not any(base_path.search(c) for c in configs):
                 return Frontend(d, None, None, [],
                                 f'Next.js の next.config に basePath: "{base.rstrip("/")}" がなく、配信時にリソースのパスがずれます',
+                                tags)
+            if not any(_NEXT_TRAILING_SLASH.search(c) for c in configs):
+                return Frontend(d, None, None, [],
+                                "Next.js の next.config に trailingSlash: true がなく、配信時にトップ以外のページが 404 になります",
                                 tags)
             return Frontend(d, "next-export", "out", [], None, tags)
         if "astro" in deps:

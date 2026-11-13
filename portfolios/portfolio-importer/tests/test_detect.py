@@ -25,7 +25,7 @@ class DetectFrontendTest(TempDirMixin, unittest.TestCase):
 
     def test_next_with_static_export(self):
         write_json(self.tmp / "web/package.json", pkg({"next": "1"}))
-        write(self.tmp / "web/next.config.ts", 'const c = { output: "export", basePath: "/apps/s" };')
+        write(self.tmp / "web/next.config.ts", 'const c = { output: "export", basePath: "/apps/s", trailingSlash: true };')
         f = detect_frontend(self.tmp, "s")
         self.assertEqual((f.kind, f.output_dir, f.build_args), ("next-export", "out", []))
 
@@ -35,6 +35,21 @@ class DetectFrontendTest(TempDirMixin, unittest.TestCase):
         f = detect_frontend(self.tmp, "s")
         self.assertIsNone(f.kind)
         self.assertIn("basePath", f.reason)
+
+    def test_next_export_without_trailing_slash_is_not_deliverable(self):
+        write_json(self.tmp / "web/package.json", pkg({"next": "1"}))
+        write(self.tmp / "web/next.config.ts", 'const c = { output: "export", basePath: "/apps/s" };')
+        write(self.tmp / "web/package-lock.json", "{}")
+        f = detect_frontend(self.tmp, "s")
+        self.assertIsNone(f.kind)
+        self.assertIn("trailingSlash", f.reason)
+
+    def test_frontend_without_lockfile_is_not_deliverable(self):
+        (self.tmp / "frontend").mkdir()
+        write_json(self.tmp / "frontend/package.json", pkg({}, {"vite": "1"}))
+        f = detect_frontend(self.tmp, "s", require_lockfile=True)
+        self.assertIsNone(f.kind)
+        self.assertIn("package-lock.json", f.reason)
 
     def test_vite_meta_frameworks_are_not_deliverable(self):
         for dep in ["@sveltejs/kit", "nuxt", "@remix-run/dev", "@react-router/dev"]:

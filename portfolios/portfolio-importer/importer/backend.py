@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from importer import PortfolioError
-from importer.detect import Backend, read_package_json
+from importer.detect import Backend, has_script, read_package_json
 from importer.ignore import iter_files
 
 PYTHON_PORT = 8000
@@ -34,6 +34,19 @@ __pycache__
 .ruff_cache
 node_modules
 tests
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.secret
+id_rsa*
+id_ed25519*
+.npmrc
+credentials*.json
+service-account*.json
+secrets.*
 Dockerfile
 .dockerignore
 """
@@ -83,8 +96,16 @@ def _cmd_line(cmd: list[str] | None) -> str:
 
 
 def _python_dockerfile(d: Path) -> tuple[str, bool]:
-    install = "pip install --no-cache-dir ." if (d / "pyproject.toml").is_file() else \
-        "pip install --no-cache-dir -r requirements.txt"
+    # 依存は requirements.txt を優先し、pyproject.toml は [project] があるときだけパッケージとして入れる
+    # （ツール設定だけの pyproject.toml で pip install . すると依存が入らない・失敗するため）
+    steps = []
+    if (d / "requirements.txt").is_file():
+        steps.append("pip install --no-cache-dir -r requirements.txt")
+    pyproject = d / "pyproject.toml"
+    if pyproject.is_file() and re.search(r"^\[project\]", pyproject.read_text(encoding="utf-8", errors="replace"),
+                                         re.MULTILINE):
+        steps.append("pip install --no-cache-dir .")
+    install = " && ".join(steps) or "true"
     cmd = _python_command(d)
     text = (
         "# portfolio-importer が生成した Dockerfile。必要に応じて編集してください。\n"
@@ -104,13 +125,14 @@ def _python_dockerfile(d: Path) -> tuple[str, bool]:
 
 def _node_dockerfile(d: Path) -> tuple[str, bool]:
     pkg = read_package_json(d / "package.json") or {}
-    scripts = pkg.get("scripts") if isinstance(pkg.get("scripts"), dict) else {}
-    install = "npm ci --omit=dev" if (d / "package-lock.json").is_file() else "npm install --omit=dev"
-    cmd = ["npm", "start"] if isinstance(scripts.get("start"), str) else None
+    build = has_script(pkg, "build")
+    install = "npm ci" if (d / "package-lock.json").is_file() else "npm install"
+    if not build:
+        install += " --omit=dev"
+    cmd = ["npm", "start"] if has_script(pkg, "start") else None
     text = (
         "# portfolio-importer が生成した Dockerfile。必要に応じて編集してください。\n"
         "FROM node:22-slim\n"
-        "ENV NODE_ENV=production\n"
         "WORKDIR /app\n"
         # 実行ユーザー（node）がアプリのディレクトリに書き込めるよう、所有者を合わせてから依存を入れる
         "RUN chown node:node /app\n"
@@ -118,6 +140,9 @@ def _node_dockerfile(d: Path) -> tuple[str, bool]:
         "COPY --chown=node:node package*.json ./\n"
         f"RUN {install}\n"
         "COPY --chown=node:node . .\n"
+        # build スクリプトがあれば、開発用の依存を使ってビルドしてから取り除く
+        + ("RUN npm run build && npm prune --omit=dev\n" if build else "")
+        + "ENV NODE_ENV=production\n"
         f"EXPOSE {NODE_PORT}\n"
         + _cmd_line(cmd)
     )

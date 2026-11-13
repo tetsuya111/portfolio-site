@@ -19,6 +19,7 @@ class CliTest(TempDirMixin, unittest.TestCase):
         write_json(self.src / "frontend/package.json",
                    {"scripts": {"build": "vite build"}, "devDependencies": {"vite": "1"}})
         write(self.src / "frontend/index.html", "<p>hi</p>")
+        write(self.src / "frontend/package-lock.json", "{}")
         write(self.src / "backend/requirements.txt", "fastapi\n")
         write(self.src / "backend/main.py", "from fastapi import FastAPI\napp = FastAPI()\n")
         write(self.src / "backend/app.sqlite")

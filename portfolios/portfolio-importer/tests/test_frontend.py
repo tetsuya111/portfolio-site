@@ -49,6 +49,15 @@ class RegisterFrontendTest(TempDirMixin, unittest.TestCase):
         self.assertTrue((self.apps / "my-app/index.html").is_file())
         self.assertFalse((self.apps / "my-app/node_modules").exists())
 
+    def test_root_frontend_copy_excludes_backend_dir(self):
+        proj = self.tmp / "rootproj"
+        write(proj / "index.html")
+        write(proj / "server/app.py")
+        fe = Frontend(proj, "vite", "dist", [])
+        register_frontend(fe, "my-app", self.repo, proj, exclude=[proj / "server"])
+        self.assertTrue((self.apps / "my-app/index.html").is_file())
+        self.assertFalse((self.apps / "my-app/server").exists())
+
     def test_undeliverable_frontend_is_skipped_with_reason(self):
         fe = Frontend(self.src, None, None, [], "静的出力できません")
         registered, warnings = register_frontend(fe, "my-app", self.repo, self.tmp / "proj")

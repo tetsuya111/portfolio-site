@@ -44,15 +44,17 @@ def run_import(args: argparse.Namespace, repo_root: Path, run, today: date) -> d
         copy_tree(target.copy_from, target.project_dir)
     project = target.project_dir
 
-    frontend = detect_frontend(project, target.slug)
+    frontend = detect_frontend(project, target.slug, require_lockfile=True)
+    backend = detect_backend(project, frontend)
     frontend_out = None
     registered = False
     if frontend is not None:
-        registered, w = register_frontend(frontend, target.slug, repo_root, project)
+        # ルートにフロントエンドがある場合に、バックエンドまで apps/ にコピーしないようにする
+        exclude = [backend.dir] if backend is not None and frontend.dir in backend.dir.parents else []
+        registered, w = register_frontend(frontend, target.slug, repo_root, project, exclude=exclude)
         warnings += w
         frontend_out = {"dir": _rel(frontend.dir, repo_root), "kind": frontend.kind, "registered": registered}
 
-    backend = detect_backend(project, frontend)
     backend_out = None
     if backend is not None:
         docker = write_docker_files(backend)

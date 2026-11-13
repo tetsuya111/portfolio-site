@@ -53,8 +53,8 @@ portfolio-site/
 
   | 判定 | 種類 | 出力先 | ビルド引数 |
   |---|---|---|---|
-  | `next` あり、`next.config.*` に `output: "export"` と `basePath: "/apps/<スラッグ>"` | next-export | `out` | なし |
-  | `next` あり、basePath なし | 配信不可（警告） | — | — |
+  | `next` あり、`next.config.*` に `output: "export"`・`basePath: "/apps/<スラッグ>"`・`trailingSlash: true` | next-export | `out` | なし |
+  | `next` あり、上の3つのどれかがない | 配信不可（警告） | — | — |
   | `astro` で `output: "server"/"hybrid"` か adapter あり | 配信不可（警告） | — | — |
   | SvelteKit・Nuxt・Remix などの Vite メタフレームワーク | 配信不可（警告） | — | — |
   | `next` あり、上記以外 | 配信不可（警告） | — | — |
@@ -69,7 +69,8 @@ portfolio-site/
 
 - Python の Dockerfile: `python:3.12-slim`、`pip install --no-cache-dir .`（pyproject）または `-r requirements.txt`、非 root ユーザー、`EXPOSE 8000`。
   - 起動コマンド: バックエンド内の `.py`・README に `uvicorn <モジュール>:<属性> [--factory]` の記載があればそれを、なければ `<名前> = FastAPI(` の代入があるファイルから組み立てる。いずれも `--host 0.0.0.0 --port 8000` を付ける。`main.py` しかなければ `python main.py`。
-- node の Dockerfile: `node:22-slim`、`npm ci --omit=dev`（lock がなければ `npm install --omit=dev`）、`USER node`、`EXPOSE 3000`、`scripts.start` があれば `npm start`。
+- node の Dockerfile: `node:22-slim`、`/app` を node 所有にして `USER node`、`npm ci`（lock がなければ `npm install`）。`build` スクリプトがあれば `npm run build && npm prune --omit=dev`、なければ最初から `--omit=dev`。`EXPOSE 3000`、`scripts.start` があれば `npm start`。
+- Python の依存: `requirements.txt` があれば `-r requirements.txt`、`pyproject.toml` に `[project]` があれば `pip install .`（両方あれば両方）。ファイルは `COPY --chown=appuser` で実行ユーザーの所有にする。
 - 起動コマンドが決まらなければ `CMD` を書かずに編集を促すコメントを入れ、イメージを作らない（R3-2）。
 - 既存の `Dockerfile`・`.dockerignore` は上書きしない（警告）。
 - イメージ: `--build-image` のときだけ `docker build -t portfolio-<スラッグ>-backend:latest <dir>`、`docker save -o portfolios/docker-images/<スラッグ>-backend.tar <タグ>`。`portfolios/docker-images/.gitignore`（`*.tar`）を無ければ作る。`subprocess.run` は引数リストで呼び、テストでは差し替える。
@@ -77,9 +78,10 @@ portfolio-site/
 ### フロントエンド（frontend.py と portfolio-site 側）
 
 - `portfolio-site/apps/<スラッグ>/` がなければ除外規則つきでコピーする。あればコピーしない（警告）。
+- `package-lock.json` がないフロントエンドは配信不可にする（デプロイ時に `npm ci` で依存を固定するため）。ルートのフロントエンドをコピーするときはバックエンドのディレクトリを除く。
 - `apps.json` の形式: `{"apps": [{"slug": "...", "outputDir": "dist", "buildArgs": ["--base=/apps/x/"]}]}`。同じスラッグがあれば更新しない。キー順・2スペースインデントで書き出す。
 - `scripts/apps-manifest.mjs` の `validateManifest(data)`: スラッグ形式・重複、`outputDir` が相対パスで `..` を含まない、`buildArgs` の各要素が `^[\w@./:=-]+$`。不正なら例外（R2-4）。
-- `scripts/build-apps.mjs`: 検証後、各アプリで `npm ci`（lock がなければ `npm install`）と `npm run build -- <buildArgs>` を実行し、`<outputDir>` を `dist/apps/<スラッグ>/` にコピーする。どれかが失敗したら終了コード 1。`spawnSync` は Windows のみ `shell: true`（引数は上記の正規表現で検証済み）。
+- `scripts/build-apps.mjs`: 検証後、各アプリで `npm ci`（lock がなければエラー）と `npm run build -- <buildArgs>` を実行し、`<outputDir>` を `dist/apps/<スラッグ>/` にコピーする。どれかが失敗したら終了コード 1。`spawnSync` は Windows のみ `shell: true`（引数は上記の正規表現で検証済み）。
 - `/apps/<スラッグ>/` の `index.html` 解決は既存の `DirectoryIndexFunction` がそのまま担う。
 - `apps/` は portfolio-site の ESLint・`astro check`（tsconfig）の対象から外す。
 

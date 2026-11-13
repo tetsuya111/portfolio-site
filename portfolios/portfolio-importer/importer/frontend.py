@@ -26,8 +26,12 @@ def _load_manifest(path: Path) -> dict:
     return data
 
 
-def register_frontend(frontend: Frontend, slug: str, repo_root: Path, project: Path) -> tuple[bool, list[str]]:
-    """配信登録したか（既に登録済みも True）と、警告を返す。"""
+def register_frontend(frontend: Frontend, slug: str, repo_root: Path, project: Path,
+                      exclude: list[Path] | None = None) -> tuple[bool, list[str]]:
+    """配信登録したか（既に登録済みも True）と、警告を返す。
+
+    exclude（バックエンドのディレクトリなど）は apps/ へのコピーから除く。
+    """
     if frontend.kind is None:
         return False, [f"フロントエンドを配信登録しませんでした: {frontend.reason}"]
     warnings: list[str] = []
@@ -39,7 +43,7 @@ def register_frontend(frontend: Frontend, slug: str, repo_root: Path, project: P
     if dest.exists():
         warnings.append(f"portfolio-site/apps/{slug} が既にあるため、フロントエンドをコピーしませんでした")
     else:
-        copy_tree(frontend.dir, dest, root=project)
+        copy_tree(frontend.dir, dest, root=project, exclude=exclude)
 
     if any(isinstance(a, dict) and a.get("slug") == slug for a in manifest["apps"]):
         warnings.append(f"apps.json に {slug} が既に登録されているため、登録内容を変更しませんでした")

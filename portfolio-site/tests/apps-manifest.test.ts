@@ -60,8 +60,7 @@ describe("buildApps", () => {
     expect(readFileSync(join(root, "dist", "apps", "my-app", "index.html"), "utf8")).toBe("hi");
   });
 
-  it("uses npm install without a lockfile and omits -- without args", () => {
-    rmSync(join(root, "apps", "my-app", "package-lock.json"));
+  it("omits -- when there are no build args", () => {
     const calls: string[][] = [];
     const run = (cmd: string, args: string[], cwd: string) => {
       calls.push(args);
@@ -69,7 +68,16 @@ describe("buildApps", () => {
       return 0;
     };
     buildApps([app({ outputDir: "out", buildArgs: [] })], { appsDir: join(root, "apps"), distDir: join(root, "dist"), run });
-    expect(calls).toEqual([["install"], ["run", "build"]]);
+    expect(calls).toEqual([["ci"], ["run", "build"]]);
+  });
+
+  it("refuses to build without a lockfile (versions must be pinned)", () => {
+    rmSync(join(root, "apps", "my-app", "package-lock.json"));
+    const calls: string[][] = [];
+    expect(() =>
+      buildApps([app()], { appsDir: join(root, "apps"), distDir: join(root, "dist"), run: (_c, a) => (calls.push(a), 0) }),
+    ).toThrow(/package-lock\.json/);
+    expect(calls).toEqual([]);
   });
 
   it("throws when a command fails", () => {

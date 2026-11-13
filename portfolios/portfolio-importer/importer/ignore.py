@@ -16,9 +16,11 @@ _ALWAYS_EXCLUDED_FILE = re.compile(
       | .*\.pyc
       | \.env
       | \.env\.(?!example$).+                          # .env.example は残す
-      | .*\.(?:pem|key|p12|pfx)                         # 鍵・証明書
+      | .*\.(?:pem|key|p12|pfx|jks|keystore|secret)     # 鍵・証明書・秘密情報
+      | id_(?:rsa|ed25519).*
       | \.npmrc
-      | credentials.*\.json
+      | (?:credentials|service-account).*\.json
+      | secrets\..+
     )$""",
     re.VERBOSE,
 )
@@ -130,14 +132,16 @@ class IgnoreMatcher:
         return excluded
 
 
-def iter_files(root: Path, sub: str = "") -> Iterator[Path]:
+def iter_files(root: Path, sub: str = "", skip_dirs: set[str] | None = None) -> Iterator[Path]:
     """除外を適用したファイルの相対パスを返す（シンボリックリンクは返さない）。
 
     sub を指定すると root/sub 配下だけを走査し、sub からの相対パスを返す。root から sub までの
     各階層の .gitignore も適用する（プロジェクトのルートの .gitignore をサブディレクトリにも効かせるため）。
+    skip_dirs（root からの相対パス）のディレクトリは走査しない。
     """
     matcher = IgnoreMatcher(root)
-    sub = sub.strip("/")
+    skip = {p.strip("/") for p in (skip_dirs or set())}
+    sub = "" if sub.strip("/") in ("", ".") else sub.strip("/")
     parts = sub.split("/") if sub else []
     for i in range(len(parts)):
         matcher.add_gitignore("/".join(parts[:i]))
@@ -153,7 +157,7 @@ def iter_files(root: Path, sub: str = "") -> Iterator[Path]:
         kept = []
         for d in sorted(dirnames):
             full = Path(dirpath) / d
-            if full.is_symlink() or matcher.is_excluded(rel(d), True):
+            if full.is_symlink() or rel(d) in skip or matcher.is_excluded(rel(d), True):
                 continue
             kept.append(d)
         dirnames[:] = kept

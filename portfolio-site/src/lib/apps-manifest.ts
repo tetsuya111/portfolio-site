@@ -57,9 +57,12 @@ export function buildApps(apps: AppEntry[], { appsDir, distDir, run }: BuildOpti
     if (!existsSync(join(cwd, "package.json"))) {
       throw new Error(`${app.slug}: apps/${app.slug}/package.json がありません`);
     }
-    const install = existsSync(join(cwd, "package-lock.json")) ? ["ci"] : ["install"];
+    // デプロイ用の権限があるビルド環境で動くため、依存は lockfile で固定したものだけを入れる
+    if (!existsSync(join(cwd, "package-lock.json"))) {
+      throw new Error(`${app.slug}: apps/${app.slug}/package-lock.json がありません（依存のバージョンを固定してください）`);
+    }
     const build = ["run", "build", ...(app.buildArgs.length ? ["--", ...app.buildArgs] : [])];
-    for (const args of [install, build]) {
+    for (const args of [["ci"], build]) {
       const code = run("npm", args, cwd);
       if (code !== 0) throw new Error(`${app.slug}: npm ${args.join(" ")} が失敗しました（終了コード ${code}）`);
     }

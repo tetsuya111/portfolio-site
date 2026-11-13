@@ -74,6 +74,43 @@ class WriteDockerFilesTest(TempDirMixin, unittest.TestCase):
         self.assertTrue(write_docker_files(Backend(self.tmp, "python")).has_cmd)
 
 
+class WriteDockerFilesReview2Test(TempDirMixin, unittest.TestCase):
+    def dockerfile(self):
+        return (self.tmp / "Dockerfile").read_text(encoding="utf-8")
+
+    def test_requirements_used_when_pyproject_has_no_project_table(self):
+        write(self.tmp / "pyproject.toml", "[tool.ruff]\nline-length = 100\n")
+        write(self.tmp / "requirements.txt", "fastapi\n")
+        write(self.tmp / "main.py", "")
+        write_docker_files(Backend(self.tmp, "python"))
+        text = self.dockerfile()
+        self.assertIn("pip install --no-cache-dir -r requirements.txt", text)
+        self.assertNotIn("pip install --no-cache-dir .", text)
+
+    def test_requirements_and_project_both_installed(self):
+        write(self.tmp / "pyproject.toml", "[project]\nname = 'x'\n")
+        write(self.tmp / "requirements.txt", "fastapi\n")
+        write(self.tmp / "main.py", "")
+        write_docker_files(Backend(self.tmp, "python"))
+        self.assertIn("pip install --no-cache-dir -r requirements.txt && pip install --no-cache-dir .", self.dockerfile())
+
+    def test_node_build_script_runs_before_pruning_dev_deps(self):
+        write_json(self.tmp / "package.json", {"scripts": {"start": "node dist/index.js", "build": "tsc"}})
+        write(self.tmp / "package-lock.json", "{}")
+        write_docker_files(Backend(self.tmp, "node"))
+        text = self.dockerfile()
+        self.assertIn("RUN npm ci\n", text)
+        self.assertLess(text.index("npm run build"), text.index("npm prune --omit=dev"))
+        self.assertLess(text.index("COPY --chown=node:node . ."), text.index("npm run build"))
+
+    def test_dockerignore_excludes_secret_files(self):
+        write(self.tmp / "requirements.txt", "")
+        write_docker_files(Backend(self.tmp, "python"))
+        text = (self.tmp / ".dockerignore").read_text(encoding="utf-8")
+        for pattern in ["*.pem", "*.key", "credentials*.json", "service-account*.json", "secrets.*", "id_rsa*"]:
+            self.assertIn(pattern, text)
+
+
 class WriteDockerFilesReviewTest(TempDirMixin, unittest.TestCase):
     def test_app_files_are_owned_by_runtime_user(self):
         write(self.tmp / "requirements.txt", "")

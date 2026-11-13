@@ -63,13 +63,16 @@ def resolve_target(source: Path, repo_root: Path, slug: str | None) -> Target:
     return Target(slug, dest, source)
 
 
-def copy_tree(src: Path, dest: Path, root: Path | None = None) -> int:
+def copy_tree(src: Path, dest: Path, root: Path | None = None, exclude: list[Path] | None = None) -> int:
     """除外規則を適用して src を dest にコピーし、コピーしたファイル数を返す。
 
     root（src を含むプロジェクトのルート）を渡すと、root から src までの .gitignore も適用する。
+    exclude に渡したディレクトリ（src 配下のもの）はコピーしない。
     """
     count = 0
-    files = iter_files(root, src.relative_to(root).as_posix()) if root is not None else iter_files(src)
+    base = root if root is not None else src
+    skip = {p.relative_to(base).as_posix() for p in (exclude or []) if base in p.parents}
+    files = iter_files(base, src.relative_to(base).as_posix(), skip_dirs=skip)
     for rel in files:
         target = dest / rel
         target.parent.mkdir(parents=True, exist_ok=True)
