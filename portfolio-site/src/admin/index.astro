@@ -1,0 +1,14 @@
+---
+import AdminLayout from "./AdminLayout.astro";
+---
+
+<AdminLayout title="管理画面">
+  <ul class="list-disc space-y-2 pl-6">
+    <li><a href="/admin/profile/" class="text-sky-700 hover:underline">自己紹介・経歴を編集する</a></li>
+    <li><a href="/admin/articles/new/" class="text-sky-700 hover:underline">記事を追加する（フォーム／md ファイル）</a></li>
+  </ul>
+  <p class="mt-6 text-sm text-slate-600">
+    保存すると <code>src/content/</code> 配下の md ファイルが更新されます。公開するには変更をコミットして
+    <code>main</code> に push してください。ポートフォリオの追加は <code>npm run portfolio:new</code> で行います。
+  </p>
+</AdminLayout>

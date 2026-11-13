@@ -1,0 +1,89 @@
+---
+import AdminLayout from "./AdminLayout.astro";
+
+const today = new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD
+const input = "w-full rounded border border-slate-300 bg-white p-2";
+---
+
+<AdminLayout title="記事を追加">
+  <p class="mb-6 text-sm text-slate-600">
+    保存すると <code>src/content/articles/&lt;スラッグ&gt;.md</code> を新規作成します。同じスラッグの記事は上書きしません。
+  </p>
+
+  <section class="mb-10 rounded-lg border border-slate-200 bg-white p-5">
+    <h2 class="mb-4 text-lg font-bold">フォームで入力</h2>
+    <form id="article-form" class="space-y-4">
+      <label class="block text-sm">
+        スラッグ（英小文字・数字・ハイフン。URL とファイル名になります）
+        <input name="slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxlength="64" class={input} />
+      </label>
+      <label class="block text-sm">タイトル <input name="title" required class={input} /></label>
+      <label class="block text-sm">日付 <input name="date" type="date" required value={today} class={input} /></label>
+      <label class="block text-sm">タグ（カンマ区切り） <input name="tags" class={input} /></label>
+      <label class="block text-sm">説明（任意） <input name="description" class={input} /></label>
+      <label class="flex items-center gap-2 text-sm"><input name="draft" type="checkbox" /> 下書き（公開しない）</label>
+      <label class="block text-sm">
+        本文（Markdown）
+        <textarea name="body" rows="16" required class={`${input} font-mono text-sm`}></textarea>
+      </label>
+      <button type="submit" class="rounded bg-sky-700 px-4 py-2 text-white hover:bg-sky-800">保存</button>
+    </form>
+  </section>
+
+  <section class="rounded-lg border border-slate-200 bg-white p-5">
+    <h2 class="mb-4 text-lg font-bold">md ファイルをアップロード</h2>
+    <form id="upload-form" class="space-y-4">
+      <label class="block text-sm">
+        スラッグ（空欄ならファイル名を使います）
+        <input name="slug" pattern="[a-z0-9]+(-[a-z0-9]+)*" maxlength="64" class={input} />
+      </label>
+      <label class="block text-sm">
+        md ファイル（frontmatter に title・date が必要）
+        <input name="file" type="file" accept=".md,text/markdown" required class="mt-1 block" />
+      </label>
+      <button type="submit" class="rounded bg-sky-700 px-4 py-2 text-white hover:bg-sky-800">アップロードして保存</button>
+    </form>
+  </section>
+</AdminLayout>
+
+<script>
+  import { buildArticleMarkdown, showResult } from "./admin-client";
+
+  async function post(slug: string, markdown: string, form: HTMLFormElement) {
+    const res = await fetch("/__admin/api/articles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug, markdown }),
+    });
+    if (await showResult(res, `保存しました: /articles/${slug}/`)) form.reset();
+  }
+
+  const articleForm = document.getElementById("article-form") as HTMLFormElement;
+  articleForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = new FormData(articleForm);
+    const text = (name: string) => String(f.get(name) ?? "").trim();
+    const markdown = buildArticleMarkdown({
+      title: text("title"),
+      date: text("date"),
+      tags: text("tags")
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean),
+      description: text("description"),
+      draft: f.get("draft") === "on",
+      body: String(f.get("body") ?? ""),
+    });
+    await post(text("slug"), markdown, articleForm);
+  });
+
+  const uploadForm = document.getElementById("upload-form") as HTMLFormElement;
+  uploadForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = new FormData(uploadForm);
+    const file = f.get("file");
+    if (!(file instanceof File)) return;
+    const slug = String(f.get("slug") ?? "").trim() || file.name.replace(/\.md$/i, "");
+    await post(slug, await file.text(), uploadForm);
+  });
+</script>

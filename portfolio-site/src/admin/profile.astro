@@ -1,0 +1,39 @@
+---
+import { readFile } from "node:fs/promises";
+import AdminLayout from "./AdminLayout.astro";
+
+// 開発サーバーではリクエストごとに描画されるため、常に最新のファイル内容を表示する
+const markdown = await readFile(new URL("../content/profile/profile.md", import.meta.url), "utf8");
+---
+
+<AdminLayout title="自己紹介・経歴を編集">
+  <form id="profile-form" class="space-y-4">
+    <label class="block text-sm font-medium" for="markdown">
+      profile.md（frontmatter の name・role は必須）
+    </label>
+    <textarea
+      id="markdown"
+      name="markdown"
+      rows="24"
+      class="w-full rounded border border-slate-300 bg-white p-3 font-mono text-sm"
+      required>{markdown}</textarea
+    >
+    <button type="submit" class="rounded bg-sky-700 px-4 py-2 text-white hover:bg-sky-800">保存</button>
+  </form>
+</AdminLayout>
+
+<script>
+  import { showResult } from "./admin-client";
+
+  const form = document.getElementById("profile-form") as HTMLFormElement;
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const markdown = (form.elements.namedItem("markdown") as HTMLTextAreaElement).value;
+    const res = await fetch("/__admin/api/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ markdown }),
+    });
+    await showResult(res, "保存しました。");
+  });
+</script>
