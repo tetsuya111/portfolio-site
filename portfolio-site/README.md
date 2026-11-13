@@ -30,6 +30,7 @@ npm run dev        # http://localhost:4321/ （管理画面は http://localhost:
 | `npm run preview` | ビルド結果の確認 |
 | `npm test` | 単体テスト |
 | `npm run test:build` | ビルドしてから、生成された HTML を検証する |
+| `npm run test:e2e` | Playwright の E2E テスト（公開ページと管理画面をブラウザで操作して検証）。初回のみ `npx playwright install chromium` が必要 |
 | `npm run lint` | ESLint と型チェック（`astro check`） |
 | `npm run portfolio:new` | ポートフォリオを追加する（下記） |
 

@@ -38,6 +38,7 @@ portfolio-site/
 ├── eslint.config.mjs             # ESLint（JS・TS・Astro）
 ├── vitest.config.ts              # 単体テストの設定（build-output.test.ts を除く）
 ├── vitest.build.config.ts        # ビルド成果物のテストの設定（npm run test:build）
+├── playwright.config.ts          # E2E テストの設定（npm run test:e2e）
 ├── buildspec.test.yml            # CodeBuild: テスト用（プルリクエスト）
 ├── buildspec.yml                 # CodeBuild: デプロイ用（main への push）
 ├── infra/
@@ -57,10 +58,11 @@ portfolio-site/
 │   ├── components/               # 公開ページの部品
 │   ├── admin/                    # 管理画面（src/pages の外に置き、本番ビルドに含めない）
 │   └── styles/global.css         # Tailwind CSS と typography プラグインの読み込み
-└── tests/                        # vitest のテスト
+├── tests/                        # vitest のテスト（単体・ビルド成果物）
+└── e2e/                          # Playwright の E2E テスト
 ```
 
-生成物（git 管理外）: `node_modules/`、`dist/`（ビルド結果）、`.astro/`（Astro が生成する型定義）。
+生成物（git 管理外）: `node_modules/`、`dist/`（ビルド結果）、`.astro/`（Astro が生成する型定義）、`test-results/`・`playwright-report/`（E2E テストの結果）。
 
 ## src/content（コンテンツ）
 
@@ -160,3 +162,27 @@ flowchart TD
 | `admin-api.test.ts`・`admin-client.test.ts`・`local-admin.test.ts` | 保存 API、管理画面の md 組み立て、dev 限定のルート登録と本文サイズ上限 |
 | `infra-template.test.ts`（`helpers/cfn-yaml.ts` で読み込み）・`buildspec.test.ts` | CloudFormation の設定値と buildspec の手順 |
 | `build-output.test.ts` | `dist/` の HTML（タイル・詳細・下書き除外・管理画面が含まれないこと）。`npm run test:build` のみ |
+
+## e2e（E2E テスト）
+
+Playwright でブラウザ（Chromium）を動かし、実際の画面操作を検証する。`npm run test:e2e` で実行する（初回のみ `npx playwright install chromium` でブラウザを入れる）。設定は [`playwright.config.ts`](../playwright.config.ts)。
+
+| プロジェクト | 対象サーバー | 内容 |
+|---|---|---|
+| `site` | `astro build` → `astro preview`（ポート 4322、本番と同じ静的ビルド） | 公開ページ |
+| `admin` | `astro dev`（ポート 4399） | 管理画面と保存 API。実際の `src/content/` を書き換えるため1件ずつ順番に実行し、作った記事は削除、`profile.md` は元に戻す |
+
+| ファイル | 内容 |
+|---|---|
+| `e2e/fixtures.ts` | 共通のフィクスチャ。外部サイトへの通信を止める（自動）、作った記事をテスト後に削除する |
+| `e2e/content.ts` | 期待値を `src/content/` の md から求める（コンテンツを書き換えてもテストを直さずに済む） |
+| `e2e/site/layout.spec.ts` | 全公開ページの共通部分（200・`lang`・タイトル・`h1` が1つ・ナビゲーションとフッター）と、ナビゲーションでの移動 |
+| `e2e/site/home.spec.ts` | トップページ（氏名・肩書き・一言紹介、タイルの並び順、最新記事3件、各リンク） |
+| `e2e/site/about.spec.ts` | 自己紹介ページ（氏名・肩書き・別タブのリンク・本文） |
+| `e2e/site/portfolios.spec.ts` | 一覧・タイル（タグ、URL ボタンの有無と別タブ、タイル全体のクリック、キーボード操作）・詳細ページ |
+| `e2e/site/articles.spec.ts` | 記事一覧（並び順・日付・説明・タグ、下書き除外）・詳細ページ（画像の代替テキスト）・下書きは 404 |
+| `e2e/site/not-found.spec.ts` | 404 ページ、本番ビルドに管理画面と保存 API がないこと |
+| `e2e/site/responsive-a11y.spec.ts` | 幅 375・768・1280px で横スクロールが出ないこと、タイルの列数（1・2・3列）、axe-core による WCAG 2.1 A/AA の検査、Tab キーでの移動 |
+| `e2e/admin/profile.spec.ts` | 自己紹介の編集（保存して公開ページに反映、必須項目なし・frontmatter なしの拒否、通信失敗の表示、再読み込み後もメッセージが残る） |
+| `e2e/admin/articles.spec.ts` | 記事の追加（フォーム・アップロード、下書き、重複スラッグ、ブラウザ側とサーバー側のスラッグ検証、date なしの拒否） |
+| `e2e/admin/api.spec.ts` | 保存 API の防御（別 Origin・Origin なし 403、JSON 以外 415、1 MB 超 413、ポートフォリオ API なし 404、メソッド違い 405） |
