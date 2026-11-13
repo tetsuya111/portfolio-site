@@ -2,6 +2,8 @@
   "enabledPlugins": {
     "github@claude-plugins-official": true,
     "superpowers@anthropic-plugin-directory": true,
-    "agentic-actions-auditor@trailofbits": true
+    "agentic-actions-auditor@trailofbits": true,
+    "zeroize-audit@trailofbits": true,
+    "yara-authoring@trailofbits": true
   }
 }
