@@ -19,6 +19,13 @@ describe("buildspec.yml", () => {
     expect([...idx].sort((a, b) => a - b)).toEqual(idx);
   });
 
+  it("builds the portfolio apps into dist after the astro build", () => {
+    const build = commands("build");
+    const astro = build.findIndex((l) => l.includes("npm run test:build"));
+    const apps = build.findIndex((l) => l.includes("npm run build:apps"));
+    expect(apps).toBeGreaterThan(astro);
+  });
+
   it("deploys only for a successful push to the deploy branch", () => {
     const post = commands("post_build").join("\n");
     const guard = post.indexOf("CODEBUILD_WEBHOOK_EVENT");

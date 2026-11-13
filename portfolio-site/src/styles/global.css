@@ -1,2 +1,4 @@
 @import "tailwindcss";
+/* apps/ は取り込んだポートフォリオのフロントエンド。サイトの CSS にそのクラスを含めない */
+@source not "../../apps";
 @plugin "@tailwindcss/typography";

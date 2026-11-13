@@ -16,3 +16,5 @@ phases:
       - npm run lint
       # astro build と、成果物に管理画面が含まれないことなどの検証
       - npm run test:build
+      # apps/apps.json に登録したポートフォリオのフロントエンドを dist/apps/<スラッグ>/ にビルドする
+      - npm run build:apps

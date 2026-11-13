@@ -94,6 +94,7 @@ aws cloudformation describe-stacks --region us-east-1 --stack-name portfolio-sit
 | `SiteUrl` | サイトの URL（`https://<DomainName>/`） |
 | `BucketName` | サイトのファイルを置く S3 バケット名 |
 | `DistributionId` | CloudFront ディストリビューション ID |
+| `AppsBaseUrl` | ポートフォリオのフロントエンドの配信先（`https://<DomainName>/apps/`）。各アプリは `<AppsBaseUrl><スラッグ>/`（[../docs/apps.md](../docs/apps.md)） |
 
 ## 初回デプロイ
 

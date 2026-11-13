@@ -1,0 +1,8 @@
+{
+  "name": "portfolio-importer",
+  "private": true,
+  "scripts": {
+    "test": "python -m unittest discover -s tests -t .",
+    "lint": "python -m compileall -q importer tests add_portfolio.py"
+  }
+}

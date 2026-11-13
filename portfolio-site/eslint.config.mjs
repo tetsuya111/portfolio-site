@@ -6,7 +6,8 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default defineConfig([
-  globalIgnores(["dist/", ".astro/", "node_modules/"]),
+  // apps/ はポートフォリオのフロントエンド。各アプリが独自の lint 設定を持つため検査しない
+  globalIgnores(["dist/", ".astro/", "node_modules/", "apps/"]),
   js.configs.recommended,
   ...tseslint.configs.recommended,
   ...astro.configs.recommended,

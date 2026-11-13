@@ -31,7 +31,8 @@ portfolio-site/
 ├── README.md                     # 使い方（起動・コンテンツの更新）
 ├── docs/
 │   ├── project-structure.md      # このファイル
-│   └── content-files.md          # コンテンツファイル（自己紹介・ポートフォリオ・記事）の書式と追加方法
+│   ├── content-files.md          # コンテンツファイル（自己紹介・ポートフォリオ・記事）の書式と追加方法
+│   └── apps.md                   # ポートフォリオのフロントエンド（apps/）の配信
 ├── package.json                  # 依存と npm scripts
 ├── astro.config.mjs              # Astro の設定（静的出力、末尾スラッシュ、Tailwind、管理画面インテグレーション）
 ├── tsconfig.json                 # TypeScript の設定（astro/tsconfigs/strict を継承）
@@ -39,6 +40,8 @@ portfolio-site/
 ├── vitest.config.ts              # 単体テストの設定（build-output.test.ts を除く）
 ├── vitest.build.config.ts        # ビルド成果物のテストの設定（npm run test:build）
 ├── playwright.config.ts          # E2E テストの設定（npm run test:e2e）
+├── apps/
+│   └── apps.json                 # S3 で配信するポートフォリオのフロントエンドの一覧（docs/apps.md）
 ├── buildspec.test.yml            # CodeBuild: テスト用（プルリクエスト）
 ├── buildspec.yml                 # CodeBuild: デプロイ用（main への push）
 ├── infra/
@@ -48,6 +51,7 @@ portfolio-site/
 │   └── local-admin.ts            # 管理画面のルートと保存 API を開発サーバーにだけ追加する
 ├── scripts/
 │   ├── new-portfolio.mjs         # ポートフォリオ追加コマンドの入口
+│   ├── build-apps.mjs            # apps/ のフロントエンドをビルドして dist/apps/ に置く（npm run build:apps）
 │   └── vitest.mjs                # Windows のドライブ文字問題を避けて vitest を起動する
 ├── src/
 │   ├── content.config.ts         # コンテンツコレクションの定義

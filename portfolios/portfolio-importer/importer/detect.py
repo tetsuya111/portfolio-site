@@ -1,0 +1,149 @@
+"""プロジェクト内のフロントエンド・バックエンドの検出。"""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+
+FRONTEND_DIRS = ["frontend", "web", "client", "."]
+BACKEND_DIRS = ["backend", "server", "api"]
+NODE_BACKEND_DEPS = {"express": "Express", "fastify": "Fastify", "koa": "Koa", "@nestjs/core": "NestJS", "hono": "Hono"}
+FRONTEND_TAG_DEPS = {"react": "React", "vue": "Vue", "svelte": "Svelte", "next": "Next.js", "astro": "Astro",
+                     "vite": "Vite", "typescript": "TypeScript"}
+PYTHON_TAG_DEPS = {"fastapi": "FastAPI", "flask": "Flask", "django": "Django"}
+_NEXT_EXPORT = re.compile(r"""output\s*:\s*["']export["']""")
+_NEXT_TRAILING_SLASH = re.compile(r"trailingSlash\s*:\s*true")
+_ASTRO_SERVER = re.compile(r"""output\s*:\s*["'](?:server|hybrid)["']|adapter\s*:""")
+# Vite を使うが dist に静的ファイルを出さない（または --base を受け付けない）フレームワーク
+VITE_META_FRAMEWORKS = ["@sveltejs/kit", "nuxt", "@remix-run/dev", "@react-router/dev", "@builder.io/qwik-city",
+                        "@analogjs/platform", "vike", "@solidjs/start", "@tanstack/react-start"]
+
+
+def _read_configs(d: Path, pattern: str) -> list[str]:
+    return [p.read_text(encoding="utf-8", errors="replace") for p in d.glob(pattern) if p.is_file()]
+
+
+@dataclass
+class Frontend:
+    dir: Path
+    kind: str | None  # vite / astro / next-export。S3 で配信できなければ None
+    output_dir: str | None
+    build_args: list[str] = field(default_factory=list)
+    reason: str | None = None  # 配信できない理由
+    tags: list[str] = field(default_factory=list)
+
+
+@dataclass
+class Backend:
+    dir: Path
+    kind: str  # python / node
+    tags: list[str] = field(default_factory=list)
+
+
+def read_package_json(path: Path) -> dict | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _deps(pkg: dict) -> dict:
+    deps = {}
+    for key in ("dependencies", "devDependencies"):
+        value = pkg.get(key)
+        if isinstance(value, dict):
+            deps.update(value)
+    return deps
+
+
+def has_script(pkg: dict, name: str) -> bool:
+    scripts = pkg.get("scripts")
+    return isinstance(scripts, dict) and isinstance(scripts.get(name), str)
+
+
+def _tags(deps: dict, table: dict[str, str]) -> list[str]:
+    return [tag for dep, tag in table.items() if dep in deps]
+
+
+def detect_frontend(project: Path, slug: str, require_lockfile: bool = False) -> Frontend | None:
+    """require_lockfile=True なら、package-lock.json のないフロントエンドを配信不可にする
+    （デプロイ時に依存のバージョンを固定し、未検証のパッケージを取り込まないため）。"""
+    frontend = _detect_frontend(project, slug)
+    if (require_lockfile and frontend is not None and frontend.kind is not None
+            and not (frontend.dir / "package-lock.json").is_file()):
+        frontend.kind, frontend.output_dir, frontend.build_args = None, None, []
+        frontend.reason = "package-lock.json がなく、デプロイ時に依存のバージョンを固定できません"
+    return frontend
+
+
+def _detect_frontend(project: Path, slug: str) -> Frontend | None:
+    base = f"/apps/{slug}/"
+    for name in FRONTEND_DIRS:
+        d = project if name == "." else project / name
+        pkg = read_package_json(d / "package.json")
+        if pkg is None or not has_script(pkg, "build"):
+            continue
+        deps = _deps(pkg)
+        tags = _tags(deps, FRONTEND_TAG_DEPS)
+        if "next" in deps:
+            configs = _read_configs(d, "next.config.*")
+            if not any(_NEXT_EXPORT.search(c) for c in configs):
+                return Frontend(d, None, None, [], 'Next.js に output: "export" の設定がなく、静的ファイルを出力できません', tags)
+            base_path = re.compile(rf"""basePath\s*:\s*["']{re.escape(base.rstrip("/"))}/?["']""")
+            if not any(base_path.search(c) for c in configs):
+                return Frontend(d, None, None, [],
+                                f'Next.js の next.config に basePath: "{base.rstrip("/")}" がなく、配信時にリソースのパスがずれます',
+                                tags)
+            if not any(_NEXT_TRAILING_SLASH.search(c) for c in configs):
+                return Frontend(d, None, None, [],
+                                "Next.js の next.config に trailingSlash: true がなく、配信時にトップ以外のページが 404 になります",
+                                tags)
+            return Frontend(d, "next-export", "out", [], None, tags)
+        if "astro" in deps:
+            if any(_ASTRO_SERVER.search(c) for c in _read_configs(d, "astro.config.*")):
+                return Frontend(d, None, None, [], "Astro がサーバー出力（output: server/hybrid または adapter）の設定で、静的配信できません", tags)
+            return Frontend(d, "astro", "dist", ["--base", base], None, tags)
+        meta = next((m for m in VITE_META_FRAMEWORKS if m in deps), None)
+        if meta:
+            return Frontend(d, None, None, [], f"{meta} は dist に静的ファイルを出力する構成として扱えないため、配信登録しません", tags)
+        if "vite" in deps:
+            return Frontend(d, "vite", "dist", [f"--base={base}"], None, tags)
+        if name == ".":
+            # ルートの package.json は、フレームワークが判別できないときはフロントエンドとみなさない
+            continue
+        return Frontend(d, None, None, [], "静的出力に対応したフレームワーク（Vite・Astro・Next.js の静的出力）を判別できません", tags)
+    return None
+
+
+def _python_tags(d: Path) -> list[str]:
+    text = ""
+    for name in ("pyproject.toml", "requirements.txt"):
+        p = d / name
+        if p.is_file():
+            text += p.read_text(encoding="utf-8", errors="replace").lower()
+    return ["Python"] + [tag for dep, tag in PYTHON_TAG_DEPS.items() if re.search(rf"\b{dep}\b", text)]
+
+
+def _is_python(d: Path) -> bool:
+    return (d / "pyproject.toml").is_file() or (d / "requirements.txt").is_file()
+
+
+def detect_backend(project: Path, frontend: Frontend | None) -> Backend | None:
+    for name in BACKEND_DIRS:
+        d = project / name
+        if _is_python(d):
+            return Backend(d, "python", _python_tags(d))
+        pkg = read_package_json(d / "package.json")
+        if pkg is not None:
+            return Backend(d, "node", ["Node.js"] + _tags(_deps(pkg), NODE_BACKEND_DEPS))
+    if _is_python(project):
+        return Backend(project, "python", _python_tags(project))
+    pkg = read_package_json(project / "package.json")
+    if pkg is not None and not (frontend and frontend.dir == project):
+        server_tags = _tags(_deps(pkg), NODE_BACKEND_DEPS)
+        if server_tags:
+            return Backend(project, "node", ["Node.js"] + server_tags)
+    return None
