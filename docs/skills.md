@@ -15,7 +15,7 @@
 ## 使い分け
 
 - **設計だけ作りたい**: `superpowers-create-design`。成果物は `docs/specs/<機能名>/` 配下に作られる（書き方は [requirements-best-practices.md](requirements-best-practices.md)・[design-doc-best-practices.md](design-doc-best-practices.md)）。
-- **設計から PR まで任せたい**: `superpowers-create-from-design-to-pr`。作成物は `portfolios/<プロジェクト名>/` 配下に置かれ、途中のレビューに `code-review-ocr` を使う。
+- **設計から PR まで任せたい**: `superpowers-create-from-design-to-pr`。作成物は `portfolios/<プロジェクト名>/` 配下に置かれ、途中のレビューは標準の `code-review` を使い、`code-review-ocr` は引数で明示した場合のみ使う。
 - **コミット・PR 前の変更確認**: `code-review-ocr`。
 - **セキュリティ確認**: アプリケーションコードが中心なら `security-statics-review-of-trailofbits`、CI/CD・コンテナ・IaC などの設定が中心なら `security-infra-review-of-trailofbits`。両者は段階の定義と出力形式（[report-format.md](../.claude/skills/security-statics-review-of-trailofbits/references/report-format.md)）を共用する。
 
@@ -27,7 +27,7 @@
 |---|---|
 | superpowers（`brainstorming`・`writing-plans`・`test-driven-development` など） | `superpowers-create-design`、`superpowers-create-from-design-to-pr` |
 | Trail of Bits 製プラグイン（`insecure-defaults`・`sharp-edges`・`supply-chain-risk-auditor`・`static-analysis`・`variant-analysis`・`fp-check`・`agentic-actions-auditor`） | `security-statics-review-of-trailofbits`、`security-infra-review-of-trailofbits` |
-| `@alibaba-group/open-code-review`（`npm run ocr`）と LLM プロバイダの認証情報 | `code-review-ocr`、`superpowers-create-from-design-to-pr`（使えない場合は標準の `code-review` で代替） |
+| `@alibaba-group/open-code-review`（`npm run ocr`）と LLM プロバイダの認証情報 | `code-review-ocr`、`superpowers-create-from-design-to-pr`（引数でOCRを明示した場合のみ。使えない場合は標準の `code-review` で代替） |
 | `gh` CLI（認証済み） | `superpowers-create-from-design-to-pr`（PR作成・PRコメント） |
 
 ## スキルの追加・修正ルール
