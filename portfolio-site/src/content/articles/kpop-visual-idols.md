@@ -12,7 +12,7 @@ K-POP の女性アイドルは、ビジュアルの美しさだけでなく、�
 
 ## IVE（アイヴ）
 
-![IVE のメンバー](https://www.wowkorea.jp/img/topic/30/153404/309071_1280.jpg)
+<img src="https://www.wowkorea.jp/img/topic/30/153404/309071_1280.jpg" alt="IVE のメンバー" style="width: 33%;" />
 
 2021年12月に STARSHIP エンターテインメントからデビュー。「LOVE DIVE」「I AM」などのヒット曲で、自信に満ちた「自己愛」のコンセプトを打ち出しています。
 
