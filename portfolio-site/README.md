@@ -13,25 +13,7 @@
 
 ## ディレクトリ構成
 
-```
-portfolio-site/
-├── src/
-│   ├── content/
-│   │   ├── profile/profile.md     # 自己紹介・経歴（1ファイル）
-│   │   ├── portfolios/*.md        # ポートフォリオ（1件1ファイル）
-│   │   └── articles/*.md          # 記事（1件1ファイル）
-│   ├── content.config.ts          # コレクション定義（frontmatter の検証）
-│   ├── pages/                     # 公開ページ
-│   ├── components/ layouts/ styles/
-│   ├── admin/                     # 管理画面（npm run dev のときだけ表示）
-│   └── lib/                       # スキーマ・md の読み書き・保存 API の処理
-├── integrations/local-admin.ts    # 管理画面と保存 API を開発サーバーにだけ追加する
-├── scripts/new-portfolio.mjs      # ポートフォリオ追加コマンド
-├── infra/                         # CloudFormation テンプレートと AWS 構築手順（infra/README.md）
-├── buildspec.yml                  # CodeBuild の設定（デプロイ用。main への push）
-├── buildspec.test.yml             # CodeBuild の設定（テスト用。プルリクエスト）
-└── tests/                         # vitest
-```
+コンテンツは `src/content/` 配下の md ファイル（`profile/profile.md`・`portfolios/*.md`・`articles/*.md`）です。ディレクトリ構成と各ファイルの役割・つながりは [docs/project-structure.md](docs/project-structure.md) にまとめています。
 
 ## ローカルで動かす
 
