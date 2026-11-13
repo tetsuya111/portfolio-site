@@ -10,7 +10,10 @@ export class ApiError extends Error {
   }
 }
 
-export type Me = { authenticated: false } | { authenticated: true; id: string; display_name: string };
+/** OAuth はバックエンドへのページ遷移で開始する（fetch ではなくリンクで使う）。 */
+export const LOGIN_PATH = "/auth/login";
+
+export type Me ={ authenticated: false } | { authenticated: true; id: string; display_name: string };
 
 export type Track = { title: string; artist: string };
 export type ChartTrack = Track & { rank: number };
@@ -33,7 +36,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     res = await fetch(path, { credentials: "same-origin", ...init });
   } catch {
-    return Promise.reject(new ApiError(0, "サーバーに接続できませんでした"));
+    throw new ApiError(0, "サーバーに接続できませんでした");
   }
   if (res.status === 204) return undefined as T;
   const body: unknown = await res.json().catch(() => null);

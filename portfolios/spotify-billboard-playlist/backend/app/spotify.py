@@ -163,7 +163,12 @@ class SpotifyClient:
                 async with semaphore:
                     return await self._search_track(client, session, lock, track)
 
-            uris = await asyncio.gather(*(search(t) for t in tracks))
+            # 1件が失敗しても残りの検索を待ち切ってからクライアントを閉じる
+            outcomes = await asyncio.gather(*(search(t) for t in tracks), return_exceptions=True)
+            for outcome in outcomes:
+                if isinstance(outcome, BaseException):
+                    raise outcome
+            uris: list[str | None] = list(outcomes)  # type: ignore[arg-type]
 
             created = await self._authed(
                 client,

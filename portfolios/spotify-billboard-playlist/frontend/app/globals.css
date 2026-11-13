@@ -37,6 +37,7 @@ h1 { font-size: 1.6rem; margin: 0 0 8px; }
 .auth { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 .badge { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); font-size: 0.9rem; }
 .badge.on { border-color: var(--accent); }
+.badge.off { color: var(--muted); }
 
 .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
 form { display: grid; gap: 8px; }

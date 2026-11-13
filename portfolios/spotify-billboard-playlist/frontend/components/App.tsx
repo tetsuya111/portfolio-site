@@ -26,11 +26,14 @@ export default function App() {
   }, [refreshMe]);
 
   async function handleLogout() {
+    let failure: string | null = null;
     try {
       await api.logout();
-    } finally {
-      await refreshMe();
+    } catch (e) {
+      failure = e instanceof api.ApiError ? e.message : "ログアウトに失敗しました";
     }
+    await refreshMe();
+    if (failure) setError(failure);
   }
 
   return (

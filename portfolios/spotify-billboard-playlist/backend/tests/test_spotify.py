@@ -232,3 +232,24 @@ def test_refreshes_on_401_once():
     result = run(_client(fake).build_playlist(session, "x", [TrackQuery("Song A", "A")]))
     assert result.added == 1
     assert session.access_token == "new-access"
+
+
+def test_search_failure_aborts_without_creating_playlist():
+    fake = FakeSpotify({"song a": "spotify:track:a"})
+    original = fake.handler
+
+    def handler(request):
+        if request.url.path == "/v1/search" and "Song B" in request.url.params["q"]:
+            fake.requests.append(request)
+            return httpx.Response(500)
+        return original(request)
+
+    client = SpotifyClient(SETTINGS, transport=httpx.MockTransport(handler), clock=lambda: NOW)
+    tracks = [TrackQuery(f"Song {c}", "A") for c in "ABCDEFGH"]
+    with pytest.raises(SpotifyError) as exc:
+        run(client.build_playlist(_session(), "x", tracks))
+    assert exc.value.status == 500
+    assert not any(r.url.path == "/v1/me/playlists" for r in fake.requests)
+    # 失敗後も他の検索は完了まで待たれている（閉じたクライアントで走り続けない）
+    searched = {r.url.params["q"] for r in fake.requests if r.url.path == "/v1/search"}
+    assert any("Song H" in q for q in searched)

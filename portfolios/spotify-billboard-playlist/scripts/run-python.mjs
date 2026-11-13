@@ -16,4 +16,7 @@ if (!existsSync(python)) {
 }
 
 const result = spawnSync(python, process.argv.slice(2), { cwd: backend, stdio: "inherit" });
+if (result.error) {
+  console.error(`起動に失敗しました: ${result.error.message}`);
+}
 process.exit(result.status ?? 1);

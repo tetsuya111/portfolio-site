@@ -11,4 +11,7 @@ const bin = upperDrive(
   join(dirname(fileURLToPath(import.meta.url)), "..", "node_modules", "vitest", "vitest.mjs"),
 );
 const result = spawnSync(process.execPath, [bin, ...process.argv.slice(2)], { cwd, stdio: "inherit" });
+if (result.error) {
+  console.error(`起動に失敗しました: ${result.error.message}`);
+}
 process.exit(result.status ?? 1);
