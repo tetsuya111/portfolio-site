@@ -9,6 +9,7 @@
 | [code-review-ocr](../.claude/skills/code-review-ocr/SKILL.md) | OpenCodeReview（`npm run ocr`）で git 差分を AI コードレビューする | `/code-review-ocr` で即実行。レビュー依頼から自動で読み込まれた場合は、外部LLMへの送信・課金がありうるため実行前に確認する |
 | [security-statics-review-of-trailofbits](../.claude/skills/security-statics-review-of-trailofbits/SKILL.md) | Trail of Bits 製スキル群を組み合わせた、アプリケーションコードの静的セキュリティレビュー | `/security-statics-review-of-trailofbits`、または「セキュリティレビューして」などの依頼で自動 |
 | [security-infra-review-of-trailofbits](../.claude/skills/security-infra-review-of-trailofbits/SKILL.md) | CI/CD・Docker・IaC・デプロイ設定・シークレット管理など、インフラ設定のセキュリティレビュー | `/security-infra-review-of-trailofbits`、またはインフラ設定のレビュー依頼で自動 |
+| [add-portfolio](../.claude/skills/add-portfolio/SKILL.md) | 指定プロジェクトを `portfolios/` に取り込み、フロントエンドの S3 配信登録・バックエンドの Dockerfile／イメージ作成・portfolio-site への掲載を行う（本体は [portfolio-importer](../portfolios/portfolio-importer/README.md)） | `/add-portfolio <パス>` で明示起動のみ。`docker build` などの外部アクセスは実行前に確認する |
 | [superpowers-create-design](../.claude/skills/superpowers-create-design/SKILL.md) | superpowers を無人実行モードで使い、`requirements.md`・`design.md`・`tasks.md` を確認なしで作成する | `/superpowers-create-design` で明示起動のみ |
 | [superpowers-create-from-design-to-pr](../.claude/skills/superpowers-create-from-design-to-pr/SKILL.md) | 設計→ブランチ作成→TDD実装→テスト・レビュー→修正ループ→push・PR作成までを一気通貫で実行する | `/superpowers-create-from-design-to-pr` で明示起動のみ |
 
@@ -16,6 +17,7 @@
 
 - **設計だけ作りたい**: `superpowers-create-design`。成果物は `docs/specs/<機能名>/` 配下に作られる（書き方は [requirements-best-practices.md](requirements-best-practices.md)・[design-doc-best-practices.md](design-doc-best-practices.md)）。
 - **設計から PR まで任せたい**: `superpowers-create-from-design-to-pr`。作成物は `portfolios/<プロジェクト名>/` 配下に置かれ、途中のレビューは標準の `code-review` を使い、`code-review-ocr` は引数で明示した場合のみ使う。
+- **作ったプロジェクトをポートフォリオに載せたい**: `add-portfolio`。
 - **コミット・PR 前の変更確認**: `code-review-ocr`。
 - **セキュリティ確認**: アプリケーションコードが中心なら `security-statics-review-of-trailofbits`、CI/CD・コンテナ・IaC などの設定が中心なら `security-infra-review-of-trailofbits`。両者は段階の定義と出力形式（[report-format.md](../.claude/skills/security-statics-review-of-trailofbits/references/report-format.md)）を共用する。
 
