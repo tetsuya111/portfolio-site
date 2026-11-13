@@ -35,6 +35,18 @@ pnpm-debug.log*
 !.env.example
 *.pem
 *.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa*
+id_ed25519*
+.npmrc
+.yarnrc.yml
+credentials*.json
+service-account*.json
+secrets.*
+*.secret
 
 # ===== ツール固有 =====
 # Claude Code の個人用設定（共有する settings.json は管理対象）
