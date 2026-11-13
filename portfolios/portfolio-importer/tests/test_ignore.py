@@ -67,7 +67,8 @@ class IterFilesTest(TempDirMixin, unittest.TestCase):
     def test_always_excludes_dependency_dirs_and_secret_files(self):
         for name in ["node_modules/a.js", ".venv/lib/x.py", "venv/x", "be/__pycache__/x.pyc", "key.pem", "k.key",
                      ".npmrc", "credentials.json", "credentials-prod.json", "x.pyc", "id_rsa", "id_ed25519.pub",
-                     "secrets.yaml", "service-account-prod.json", "a.jks", "a.keystore", "a.secret"]:
+                     "secrets.yaml", "secrets.json", "secrets.toml", "service-account-prod.json", "a.jks", "a.keystore",
+                     "a.secret"]:
             write(self.tmp / name)
         write(self.tmp / "src/keep.txt")
         self.assertEqual(self.files(), ["src/keep.txt"])
@@ -88,6 +89,11 @@ class IterFilesTest(TempDirMixin, unittest.TestCase):
         write(self.tmp / "index.html")
         write(self.tmp / "server/app.py")
         self.assertEqual([p.as_posix() for p in iter_files(self.tmp, "", skip_dirs={"server"})], ["index.html"])
+
+    def test_source_files_named_secrets_are_kept(self):
+        write(self.tmp / "src/lib/secrets.ts")
+        write(self.tmp / "config/secrets.py")
+        self.assertEqual(self.files(), ["config/secrets.py", "src/lib/secrets.ts"])
 
     def test_skips_symlinks(self):
         write(self.tmp / "real.txt")

@@ -53,6 +53,9 @@ def run_import(args: argparse.Namespace, repo_root: Path, run, today: date) -> d
         exclude = [backend.dir] if backend is not None and frontend.dir in backend.dir.parents else []
         registered, w = register_frontend(frontend, target.slug, repo_root, project, exclude=exclude)
         warnings += w
+        if registered and backend is not None and backend.dir == frontend.dir:
+            warnings.append("フロントエンドとバックエンドが同じディレクトリにあるため、portfolio-site/apps/ にバックエンドの"
+                            "ファイルも含まれています。不要なファイルは apps/ から削除してください")
         frontend_out = {"dir": _rel(frontend.dir, repo_root), "kind": frontend.kind, "registered": registered}
 
     backend_out = None

@@ -24,6 +24,9 @@ describe("validateManifest", () => {
     ["absolute outputDir", { apps: [app({ outputDir: "/etc" })] }],
     ["windows absolute outputDir", { apps: [app({ outputDir: "C:\\x" })] }],
     ["empty outputDir", { apps: [app({ outputDir: "" })] }],
+    ["app root outputDir ./", { apps: [app({ outputDir: "./" })] }],
+    ["app root outputDir dist/..", { apps: [app({ outputDir: "dist/.." })] }],
+    ["app root outputDir ./.", { apps: [app({ outputDir: "./." })] }],
     ["shell metachar arg", { apps: [app({ buildArgs: ["--base=/x/;rm -rf /"] })] }],
     ["non-string arg", { apps: [app({ buildArgs: [1] })] }],
   ])("rejects %s", (_name, data) => {

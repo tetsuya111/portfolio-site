@@ -20,7 +20,7 @@ _ALWAYS_EXCLUDED_FILE = re.compile(
       | id_(?:rsa|ed25519).*
       | \.npmrc
       | (?:credentials|service-account).*\.json
-      | secrets\..+
+      | secrets\.(?:json|ya?ml|toml|ini|env|txt)       # 設定ファイル形式のみ（secrets.ts などのソースは残す）
     )$""",
     re.VERBOSE,
 )

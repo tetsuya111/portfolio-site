@@ -55,6 +55,16 @@ class CliTest(TempDirMixin, unittest.TestCase):
         self.assertNotIn("url:", md)
         self.assertEqual(self.calls, [])
 
+    def test_warns_when_frontend_and_backend_share_root(self):
+        root = self.tmp / "same"
+        write_json(root / "package.json", {"scripts": {"build": "vite build"}, "devDependencies": {"vite": "1"}})
+        write(root / "package-lock.json", "{}")
+        write(root / "requirements.txt", "fastapi\n")
+        write(root / "main.py", "")
+        code, out, _ = self.run_main(str(root))
+        self.assertEqual(code, 0)
+        self.assertTrue(any("同じディレクトリ" in w for w in json.loads(out)["warnings"]))
+
     def test_site_url_sets_app_url(self):
         self.run_main(str(self.src), "--site-url", "https://ex.com")
         md = (self.repo / "portfolio-site/src/content/portfolios/my-app.md").read_text(encoding="utf-8")

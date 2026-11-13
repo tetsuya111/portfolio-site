@@ -18,8 +18,9 @@ const SAFE_ARG = /^[\w@./:=-]+$/;
 
 function isSafeRelativeDir(dir: string): boolean {
   if (dir === "" || isAbsolute(dir) || /^[A-Za-z]:/.test(dir) || dir.includes("\\")) return false;
-  const n = normalize(dir).replace(/\\/g, "/");
-  return n !== "." && n !== ".." && !n.startsWith("../") && !dir.split("/").includes("..");
+  // アプリのディレクトリ自体（"./" など）を指すとソースや node_modules まで配信されるため拒否する
+  const n = normalize(dir).replace(/\\/g, "/").replace(/\/+$/, "");
+  return n !== "" && n !== "." && n !== ".." && !n.startsWith("../") && !dir.split("/").includes("..");
 }
 
 /** apps.json の内容を検証してアプリの一覧を返す。不正なら理由を含む Error を投げる。 */
