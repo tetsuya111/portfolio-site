@@ -1,0 +1,62 @@
+# ===== 依存パッケージ =====
+node_modules/
+.pnpm-store/
+
+# ===== ビルド成果物・キャッシュ =====
+dist/
+build/
+out/
+.next/
+.nuxt/
+.output/
+.astro/
+.vercel/
+.netlify/
+.cache/
+.turbo/
+*.tsbuildinfo
+.eslintcache
+
+# ===== テスト・カバレッジ =====
+coverage/
+playwright-report/
+test-results/
+
+# ===== ログ（作業ログの logs/*.md は管理対象） =====
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ===== 環境変数・秘密情報 =====
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ===== ツール固有 =====
+# Claude Code の個人用設定（共有する settings.json は管理対象）
+.claude/settings.local.json
+# OpenCodeReview の個人設定（APIキーを含みうる。rule.json は管理対象）
+.opencodereview/config.json
+.opencodereview/sessions/
+
+# ===== エディタ・IDE =====
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*~
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# OCR 環境変数設定バッチ（APIキーを含む）
+set-ocr-env.bat
+
+logs/

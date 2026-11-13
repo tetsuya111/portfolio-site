@@ -1,0 +1,14 @@
+{
+  "dependencies": {
+    "@alibaba-group/open-code-review": "^1.13.9"
+  },
+  "scripts": {
+    "ocr": "ocr",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0"
+  }
+}
