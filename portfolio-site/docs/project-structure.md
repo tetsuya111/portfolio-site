@@ -80,7 +80,7 @@ portfolio-site/
 |---|---|---|
 | `pages/index.astro` | `/` | 氏名・肩書き・一言紹介、ポートフォリオのタイル一覧、最新記事3件 |
 | `pages/about.astro` | `/about/` | 自己紹介・経歴（`profile.md` の本文） |
-| `pages/portfolios/index.astro` | `/portfolios/` | ポートフォリオ一覧（全件をタイルで表示。並び順はトップと同じ） |
+| `pages/portfolios/index.astro` | `/portfolios/` | ポートフォリオの一覧（全件をタイルで表示。並び順はトップと同じ） |
 | `pages/portfolios/[slug].astro` | `/portfolios/<スラッグ>/` | ポートフォリオの詳細（タイトル・タグ・URL・本文） |
 | `pages/articles/index.astro` | `/articles/` | 記事一覧（新しい順、下書きを除く） |
 | `pages/articles/[slug].astro` | `/articles/<スラッグ>/` | 記事の詳細（下書きはページを生成しない） |
@@ -89,7 +89,7 @@ portfolio-site/
 | 部品 | 内容 |
 |---|---|
 | `layouts/BaseLayout.astro` | `<html>`・ヘッダー・フッターと、`global.css` の読み込み |
-| `components/SiteHeader.astro` | サイト名とナビゲーション（ホーム・自己紹介・ポートフォリオ一覧・記事） |
+| `components/SiteHeader.astro` | サイト名とナビゲーション（ホーム・自己紹介・ポートフォリオ・記事） |
 | `components/PortfolioTile.astro` | ポートフォリオのタイル。タイトルのリンクをタイル全体に広げ（stretched link）、URL ボタンは入れ子にせず手前に重ねる |
 | `components/TagList.astro` | タグの一覧（タグがなければ何も出さない） |
 

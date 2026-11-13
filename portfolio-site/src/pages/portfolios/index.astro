@@ -7,8 +7,8 @@ import { sortPortfolios } from "../../lib/content-query";
 const portfolios = sortPortfolios(await getCollection("portfolios"));
 ---
 
-<BaseLayout title="ポートフォリオ一覧">
-  <h1 class="mb-6 text-3xl font-bold">ポートフォリオ一覧</h1>
+<BaseLayout title="ポートフォリオ">
+  <h1 class="mb-6 text-3xl font-bold">ポートフォリオ</h1>
   {
     portfolios.length === 0 ? (
       <p class="text-slate-500">まだありません。</p>

@@ -24,10 +24,12 @@ describe("build output", () => {
     expect(list).toContain("このポートフォリオサイト");
     expect(list).toContain('href="/portfolios/sample-portfolio-site/"');
     expect(list).toMatch(/target="_blank"/);
+    expect(list).toMatch(/<h1[^>]*>ポートフォリオ<\/h1>/);
+    expect(list).toContain("<title>ポートフォリオ | Portfolio</title>");
   });
 
   it("links to the portfolio index from the header", () => {
-    expect(html(".")).toMatch(/<a href="\/portfolios\/"[^>]*>\s*ポートフォリオ一覧\s*<\/a>/);
+    expect(html(".")).toMatch(/<a href="\/portfolios\/"[^>]*>\s*ポートフォリオ\s*<\/a>/);
   });
 
   it("links back to the portfolio index from the detail page", () => {
