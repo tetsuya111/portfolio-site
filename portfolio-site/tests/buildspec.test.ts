@@ -36,3 +36,24 @@ describe("buildspec.yml", () => {
     }
   });
 });
+
+describe("buildspec.test.yml", () => {
+  const testSpec = parse(readFileSync(join(import.meta.dirname, "..", "buildspec.test.yml"), "utf8"));
+  const testCommands = (phase: string): string[] => testSpec.phases[phase]?.commands ?? [];
+
+  it("uses Node.js 22 and installs from the lockfile", () => {
+    expect(String(testSpec.phases.install["runtime-versions"].nodejs)).toBe("22");
+    expect(testCommands("install").join("\n")).toContain("npm ci");
+  });
+
+  it("runs the same checks as the deploy buildspec", () => {
+    expect(testCommands("build")).toEqual(commands("build"));
+  });
+
+  it("never deploys", () => {
+    expect(testSpec.phases.post_build).toBeUndefined();
+    const all = Object.keys(testSpec.phases).flatMap(testCommands).join("\n");
+    expect(all).not.toMatch(/\baws\b/);
+    expect(all).not.toMatch(/SITE_BUCKET|DISTRIBUTION_ID/);
+  });
+});

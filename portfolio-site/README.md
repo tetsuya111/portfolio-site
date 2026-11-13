@@ -28,7 +28,8 @@ portfolio-site/
 ├── integrations/local-admin.ts    # 管理画面と保存 API を開発サーバーにだけ追加する
 ├── scripts/new-portfolio.mjs      # ポートフォリオ追加コマンド
 ├── infra/                         # CloudFormation テンプレートと AWS 構築手順（infra/README.md）
-├── buildspec.yml                  # CodeBuild の設定
+├── buildspec.yml                  # CodeBuild の設定（デプロイ用。main への push）
+├── buildspec.test.yml             # CodeBuild の設定（テスト用。プルリクエスト）
 └── tests/                         # vitest
 ```
 

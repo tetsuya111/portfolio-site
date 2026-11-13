@@ -68,35 +68,58 @@ describe("infra/template.yaml", () => {
     for (const r of records) expect(r.AliasTarget.HostedZoneId).toBe("Z2FDTNDATAQYW2");
   });
 
-  it("builds pull requests and pushes to the deploy branch under portfolio-site/", () => {
-    const p = one("AWS::CodeBuild::Project").Properties;
-    expect(p.Source.Type).toBe("GITHUB");
-    expect(p.Source.BuildSpec).toBe("portfolio-site/buildspec.yml");
-    expect(p.Environment.Image).toBe("aws/codebuild/amazonlinux-x86_64-standard:5.0");
-    const groups = p.Triggers.FilterGroups;
-    expect(groups).toHaveLength(2);
-    const byEvent = (g: any[]) => g.find((f) => f.Type === "EVENT").Pattern;
-    expect(groups.map(byEvent).sort()).toEqual([
-      "PULL_REQUEST_CREATED,PULL_REQUEST_UPDATED,PULL_REQUEST_REOPENED",
-      "PUSH",
-    ]);
-    for (const g of groups) {
-      expect(g.find((f: any) => f.Type === "FILE_PATH").Pattern).toBe("^portfolio-site/");
-    }
-    const push = groups.find((g: any[]) => byEvent(g) === "PUSH");
-    expect(JSON.stringify(push.find((f: any) => f.Type === "HEAD_REF").Pattern)).toContain("refs/heads/");
-    const env = Object.fromEntries(p.Environment.EnvironmentVariables.map((v: any) => [v.Name, v.Value]));
-    expect(Object.keys(env).sort()).toEqual(["DEPLOY_BRANCH", "DISTRIBUTION_ID", "SITE_BUCKET"]);
-  });
+  describe("CodeBuild", () => {
+    const testProject = R.CodeBuildTestProject?.Properties;
+    const deployProject = R.CodeBuildProject?.Properties;
+    const eventOf = (g: any[]) => g.find((f) => f.Type === "EVENT").Pattern;
+    const filePathOf = (g: any[]) => g.find((f) => f.Type === "FILE_PATH").Pattern;
+    const actionsOf = (roleId: string): string[] =>
+      R[roleId].Properties.Policies.flatMap((p: any) => p.PolicyDocument.Statement).flatMap((s: any) =>
+        Array.isArray(s.Action) ? s.Action : [s.Action],
+      );
 
-  it("grants CodeBuild no wildcard actions", () => {
-    const role = one("AWS::IAM::Role").Properties;
-    const actions = role.Policies.flatMap((p: any) => p.PolicyDocument.Statement).flatMap((s: any) =>
-      Array.isArray(s.Action) ? s.Action : [s.Action],
-    );
-    expect(actions.length).toBeGreaterThan(0);
-    for (const a of actions) expect(a).not.toContain("*");
-    expect(actions).toContain("cloudfront:CreateInvalidation");
+    it("has a test project and a deploy project", () => {
+      expect(ofType("AWS::CodeBuild::Project")).toHaveLength(2);
+      for (const p of [testProject, deployProject]) {
+        expect(p.Source.Type).toBe("GITHUB");
+        expect(p.Environment.Image).toBe("aws/codebuild/amazonlinux-x86_64-standard:5.0");
+      }
+    });
+
+    it("runs pull requests with the test buildspec only", () => {
+      expect(testProject.Source.BuildSpec).toBe("portfolio-site/buildspec.test.yml");
+      const groups = testProject.Triggers.FilterGroups;
+      expect(groups).toHaveLength(1);
+      expect(eventOf(groups[0])).toBe("PULL_REQUEST_CREATED,PULL_REQUEST_UPDATED,PULL_REQUEST_REOPENED");
+      expect(filePathOf(groups[0])).toBe("^portfolio-site/");
+      // デプロイ先の情報を渡さない
+      expect(testProject.Environment.EnvironmentVariables ?? []).toEqual([]);
+    });
+
+    it("runs pushes to the deploy branch with the deploy buildspec", () => {
+      expect(deployProject.Source.BuildSpec).toBe("portfolio-site/buildspec.yml");
+      const groups = deployProject.Triggers.FilterGroups;
+      expect(groups).toHaveLength(1);
+      expect(eventOf(groups[0])).toBe("PUSH");
+      expect(filePathOf(groups[0])).toBe("^portfolio-site/");
+      expect(JSON.stringify(groups[0].find((f: any) => f.Type === "HEAD_REF").Pattern)).toContain("refs/heads/");
+      const env = Object.fromEntries(deployProject.Environment.EnvironmentVariables.map((v: any) => [v.Name, v.Value]));
+      expect(Object.keys(env).sort()).toEqual(["DEPLOY_BRANCH", "DISTRIBUTION_ID", "SITE_BUCKET"]);
+    });
+
+    it("uses separate roles so pull request builds cannot deploy", () => {
+      expect(testProject.ServiceRole).toEqual({ "Fn::GetAtt": ["CodeBuildTestRole", "Arn"] });
+      expect(deployProject.ServiceRole).toEqual({ "Fn::GetAtt": ["CodeBuildRole", "Arn"] });
+      const testActions = actionsOf("CodeBuildTestRole");
+      expect(testActions.sort()).toEqual(["logs:CreateLogStream", "logs:PutLogEvents"]);
+      expect(actionsOf("CodeBuildRole")).toContain("cloudfront:CreateInvalidation");
+    });
+
+    it("grants no wildcard actions", () => {
+      for (const roleId of ["CodeBuildTestRole", "CodeBuildRole"]) {
+        for (const a of actionsOf(roleId)) expect(a).not.toContain("*");
+      }
+    });
   });
 
   it("outputs the site url, bucket and distribution id", () => {

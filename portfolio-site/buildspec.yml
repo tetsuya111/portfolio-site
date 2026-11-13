@@ -1,5 +1,6 @@
-# CodeBuild 用（infra/template.yaml の CodeBuildProject から参照）
-# プルリクエストではテスト・lint・ビルドだけを行い、DEPLOY_BRANCH への push が成功したときだけデプロイする。
+# CodeBuild 用・デプロイ（infra/template.yaml の CodeBuildProject から参照）
+# DEPLOY_BRANCH への push で実行し、テスト・lint・ビルドが成功したときだけデプロイする。
+# プルリクエストはテスト専用の buildspec.test.yml（権限の小さい別プロジェクト）で実行する。
 version: 0.2
 
 phases:

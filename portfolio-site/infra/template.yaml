@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   ポートフォリオサイト（portfolio-site/）の配信基盤と CI。
-  S3（非公開）+ CloudFront（OAC）+ ACM + Route 53 + CodeBuild（GitHub Webhook）。
+  S3（非公開）+ CloudFront（OAC）+ ACM + Route 53 + CodeBuild（GitHub Webhook。PR はテスト用、push はデプロイ用）。
   CloudFront で使う ACM 証明書は us-east-1 にしか作れないため、このスタックは us-east-1 にデプロイする。
 
 Parameters:
@@ -187,13 +187,68 @@ Resources:
         DNSName: !GetAtt Distribution.DomainName
         HostedZoneId: Z2FDTNDATAQYW2
 
-  # ===== CI（CodeBuild） =====
+  # ===== CI（CodeBuild: テスト用とデプロイ用の2プロジェクト） =====
   BuildLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/codebuild/${AWS::StackName}"
       RetentionInDays: 30
 
+  # --- テスト用（プルリクエスト）: ログ出力の権限だけを持ち、デプロイ先には触れない ---
+  CodeBuildTestRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: portfolio-site-test
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: WriteBuildLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "${BuildLogGroup.Arn}"
+
+  CodeBuildTestProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${AWS::StackName}-test"
+      Description: portfolio-site のプルリクエストのテスト・lint・ビルド（デプロイしない）
+      ServiceRole: !GetAtt CodeBuildTestRole.Arn
+      TimeoutInMinutes: 20
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Source:
+        # GitHub の認証情報は事前に CodeBuild へ登録しておく（テンプレートには含めない）
+        Type: GITHUB
+        Location: !Ref GitHubRepoUrl
+        BuildSpec: portfolio-site/buildspec.test.yml
+        ReportBuildStatus: true
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:5.0
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Ref BuildLogGroup
+      Triggers:
+        Webhook: true
+        FilterGroups:
+          - - Type: EVENT
+              Pattern: PULL_REQUEST_CREATED,PULL_REQUEST_UPDATED,PULL_REQUEST_REOPENED
+            - Type: FILE_PATH
+              Pattern: ^portfolio-site/
+
+  # --- デプロイ用（DeployBranch への push）---
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
@@ -234,8 +289,8 @@ Resources:
   CodeBuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub "${AWS::StackName}-ci"
-      Description: portfolio-site のテスト・lint・ビルドと、DeployBranch への push 時のデプロイ
+      Name: !Sub "${AWS::StackName}-deploy"
+      Description: portfolio-site の DeployBranch への push 時のテスト・lint・ビルドとデプロイ
       ServiceRole: !GetAtt CodeBuildRole.Arn
       TimeoutInMinutes: 20
       Artifacts:
@@ -264,12 +319,7 @@ Resources:
       Triggers:
         Webhook: true
         FilterGroups:
-          # プルリクエスト: テスト・lint・ビルドのみ
-          - - Type: EVENT
-              Pattern: PULL_REQUEST_CREATED,PULL_REQUEST_UPDATED,PULL_REQUEST_REOPENED
-            - Type: FILE_PATH
-              Pattern: ^portfolio-site/
-          # デプロイ対象ブランチへの push: 成功したらデプロイ
+          # デプロイ対象ブランチへの push だけ（プルリクエストは CodeBuildTestProject）
           - - Type: EVENT
               Pattern: PUSH
             - Type: HEAD_REF

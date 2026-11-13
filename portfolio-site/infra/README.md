@@ -8,15 +8,17 @@
 flowchart LR
   User[閲覧者] -- HTTPS --> R53[Route 53<br/>A / AAAA] --> CF[CloudFront<br/>+ ACM 証明書]
   CF -- OAC --> S3[(S3 バケット<br/>非公開)]
-  GH[GitHub] -- Webhook --> CB[CodeBuild]
-  CB -- main の push 成功時のみ<br/>s3 sync --> S3
+  GH[GitHub] -- PR --> CBT[CodeBuild テスト用<br/>ログ権限のみ]
+  GH -- main への push --> CB[CodeBuild デプロイ用]
+  CB -- 成功時のみ s3 sync --> S3
   CB -- キャッシュ無効化 --> CF
 ```
 
 | ファイル | 内容 |
 |---|---|
 | [template.yaml](template.yaml) | CloudFormation テンプレート（このディレクトリ） |
-| [../buildspec.yml](../buildspec.yml) | CodeBuild のビルド手順（テンプレートの `CodeBuildProject` から参照） |
+| [../buildspec.test.yml](../buildspec.test.yml) | テスト用のビルド手順。プルリクエストで実行（`CodeBuildTestProject` から参照） |
+| [../buildspec.yml](../buildspec.yml) | デプロイ用のビルド手順。`DeployBranch` への push で実行（`CodeBuildProject` から参照） |
 | [../tests/infra-template.test.ts](../tests/infra-template.test.ts) | テンプレートの設定値を検証するテスト（`npm test` で実行） |
 
 ## 作成されるリソース
@@ -31,8 +33,10 @@ flowchart LR
 | `Distribution` | CloudFront | HTTPS へリダイレクト、TLS 1.2 以上、HTTP/2・HTTP/3、IPv6。キャッシュはマネージドの CachingOptimized、レスポンスヘッダーは SecurityHeadersPolicy。403/404 は `/404.html` を 404 で返す |
 | `AliasRecordA` / `AliasRecordAAAA` | Route 53 | `DomainName` から CloudFront へのエイリアス |
 | `BuildLogGroup` | CloudWatch Logs | CodeBuild のログ（30日保存） |
-| `CodeBuildRole` | IAM ロール | ログの書き込み、`SiteBucket` の一覧・読み書き・削除、このディストリビューションの無効化だけを許可 |
-| `CodeBuildProject` | CodeBuild | GitHub の Webhook でビルドする（下記「CI / デプロイ」） |
+| `CodeBuildTestRole` | IAM ロール | テスト用。ログの書き込みだけを許可（S3・CloudFront には触れない） |
+| `CodeBuildTestProject` | CodeBuild | `<スタック名>-test`。プルリクエストでテスト・lint・ビルドを実行する |
+| `CodeBuildRole` | IAM ロール | デプロイ用。ログの書き込み、`SiteBucket` の一覧・読み書き・削除、このディストリビューションの無効化だけを許可 |
+| `CodeBuildProject` | CodeBuild | `<スタック名>-deploy`。`DeployBranch` への push でビルドし、成功したらデプロイする |
 
 ## 前提
 
@@ -105,25 +109,29 @@ aws cloudfront create-invalidation --distribution-id <DistributionId> --paths "/
 
 ## CI / デプロイ
 
-[../buildspec.yml](../buildspec.yml) の流れ:
-
-1. `install`: Node.js 22 で `npm ci`
-2. `build`: `npm test` → `npm run lint` → `npm run test:build`（ビルドと、成果物に管理画面が含まれないことなどの検証）
-3. `post_build`: 次の**すべて**を満たすときだけ、`dist/` を S3 に同期（`--delete`）し、CloudFront のキャッシュを無効化する
-   - ビルドが成功している（`CODEBUILD_BUILD_SUCCEEDING = 1`）
-   - Webhook のイベントが `PUSH`
-   - push 先が `refs/heads/<DeployBranch>`
+テスト用とデプロイ用で、CodeBuild のプロジェクトと buildspec を分けています。プルリクエストのビルド（フォークからの PR を含む）は、デプロイ先への権限を持たないプロジェクトで実行されます。
 
 Webhook が反応するのは、`portfolio-site/` 配下のファイルを変更した次のイベントだけです。
 
-| イベント | 動作 |
-|---|---|
-| プルリクエストの作成・更新・再オープン | テスト・lint・ビルドのみ。結果は GitHub の PR に表示される |
-| `DeployBranch` への push | テスト・lint・ビルド、成功したらデプロイ |
+| イベント | プロジェクト | buildspec | 動作 |
+|---|---|---|---|
+| プルリクエストの作成・更新・再オープン | `<スタック名>-test` | [../buildspec.test.yml](../buildspec.test.yml) | テスト・lint・ビルドのみ。結果は GitHub の PR に表示される |
+| `DeployBranch` への push | `<スタック名>-deploy` | [../buildspec.yml](../buildspec.yml) | テスト・lint・ビルド、成功したらデプロイ |
 
-CodeBuild のコンソールから手動でビルドを開始した場合は、Webhook のイベントがないためデプロイされません。
+どちらの buildspec も、次の手順は共通です（同じであることをテストで確認しています）。
 
-CodeBuild に渡す環境変数（テンプレートで設定）:
+1. `install`: Node.js 22 で `npm ci`
+2. `build`: `npm test` → `npm run lint` → `npm run test:build`（ビルドと、成果物に管理画面が含まれないことなどの検証）
+
+デプロイ用の [../buildspec.yml](../buildspec.yml) だけが、続けて `post_build` を実行します。次の**すべて**を満たすときだけ、`dist/` を S3 に同期（`--delete`）し、CloudFront のキャッシュを無効化します。
+
+- ビルドが成功している（`CODEBUILD_BUILD_SUCCEEDING = 1`）
+- Webhook のイベントが `PUSH`
+- push 先が `refs/heads/<DeployBranch>`
+
+そのため、デプロイ用プロジェクトを CodeBuild のコンソールから手動で開始しても、Webhook のイベントがないのでデプロイされません。手動でテストだけを実行したいときは、テスト用プロジェクトでビルドを開始し、ソースのバージョンにブランチ名やコミットを指定します。
+
+デプロイ用プロジェクトに渡す環境変数（テンプレートで設定。テスト用プロジェクトには渡さない）:
 
 | 変数 | 値 |
 |---|---|
@@ -150,6 +158,6 @@ S3 バケットは誤削除を防ぐため、スタックを消しても残り�
 |---|---|
 | 証明書が「検証保留中」のまま進まない | `HostedZoneId` が `DomainName` を管理するゾーンか。ドメインのネームサーバーがそのゾーンを向いているか |
 | `CodeBuildProject` の作成で Webhook のエラーになる | us-east-1 に GitHub の認証情報を登録したか。トークンにリポジトリと Webhook の権限があるか |
-| PR や push でビルドが始まらない | 変更が `portfolio-site/` 配下を含むか。push 先が `DeployBranch` か |
+| PR や push でビルドが始まらない | 変更が `portfolio-site/` 配下を含むか。push 先が `DeployBranch` か。PR は `-test`、push は `-deploy` のプロジェクトの履歴を見ているか |
 | ビルドは成功するのにデプロイされない | 手動開始のビルドではないか（Webhook の PUSH のみデプロイ） |
 | ページが 404 になる | `npm run build` の成果物が同期されているか。URL の綴り（パスは末尾 `/` 付き） |
