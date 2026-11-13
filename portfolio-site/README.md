@@ -9,7 +9,7 @@
 ## 必要なもの
 
 - Node.js 22.23.4 以上（Astro 7 の要件）
-- AWS へデプロイする場合: AWS CLI、Route 53 のホストゾーン、GitHub リポジトリ
+- AWS へデプロイする場合: [infra/README.md](infra/README.md) の「前提」を参照
 
 ## ディレクトリ構成
 
@@ -27,7 +27,7 @@ portfolio-site/
 │   └── lib/                       # スキーマ・md の読み書き・保存 API の処理
 ├── integrations/local-admin.ts    # 管理画面と保存 API を開発サーバーにだけ追加する
 ├── scripts/new-portfolio.mjs      # ポートフォリオ追加コマンド
-├── infra/template.yaml            # CloudFormation テンプレート
+├── infra/                         # CloudFormation テンプレートと AWS 構築手順（infra/README.md）
 ├── buildspec.yml                  # CodeBuild の設定
 └── tests/                         # vitest
 ```
@@ -111,46 +111,11 @@ draft: false           # true にすると公開ビルドに含めない
 - 開発サーバーは localhost でだけ待ち受けます。`--host` を付けて外部に公開しないでください。
 - 別のサイトのページからの保存（Origin 不一致）、JSON 以外の送信、1 MB を超える送信は拒否します。
 
-## AWS への構築
+## AWS への構築・デプロイ
 
-### 前提
+S3 + CloudFront での配信と、CodeBuild による CI/CD の構成・構築手順・削除方法は [infra/README.md](infra/README.md) にまとめています。
 
-1. Route 53 に、サイトのドメインを管理するホストゾーンがあること。
-2. CodeBuild に GitHub の認証情報を登録してあること（コンソールの CodeBuild →「ソースプロバイダーに接続」、または `aws codebuild import-source-credentials --server-type GITHUB --auth-type PERSONAL_ACCESS_TOKEN --token <トークン>`）。トークンはリポジトリに置かないこと。
+概要だけ示すと、us-east-1 に CloudFormation スタックを1つ作成したあと、`portfolio-site/` 配下の変更を次のように扱います。
 
-### スタックの作成
-
-CloudFront で使う ACM 証明書は us-east-1 でしか作れないため、**必ず us-east-1 に**作成します（テンプレートでも他のリージョンを拒否します）。
-
-```bash
-aws cloudformation validate-template --region us-east-1 --template-body file://infra/template.yaml
-
-aws cloudformation deploy \
-  --region us-east-1 \
-  --stack-name portfolio-site \
-  --template-file infra/template.yaml \
-  --capabilities CAPABILITY_IAM \
-  --parameter-overrides \
-    DomainName=portfolio.example.com \
-    HostedZoneId=Z0123456789ABCDEFGHIJ \
-    GitHubRepoUrl=https://github.com/<owner>/<repo>.git \
-    DeployBranch=main
-```
-
-作成されるもの:
-
-| リソース | 内容 |
-|---|---|
-| S3 バケット | サイトのファイル置き場。公開せず、CloudFront からだけ読める |
-| CloudFront | HTTPS（TLS 1.2 以上）で配信。`/about/` → `/about/index.html` の補完、404 ページ、セキュリティヘッダー |
-| ACM 証明書 | DNS 検証（検証用レコードはホストゾーンに自動作成） |
-| Route 53 | ドメイン → CloudFront の A / AAAA レコード |
-| CodeBuild | GitHub Webhook。権限はログ出力・バケットへの同期・キャッシュ無効化のみ |
-
-証明書の検証が終わるまで、スタックの作成には数分〜数十分かかります。
-
-### CI / デプロイの流れ
-
-- `portfolio-site/` 配下を変更するプルリクエストを作成・更新すると、CodeBuild が `npm test` → `npm run lint` → `npm run build` を実行し、結果を GitHub に表示します。
-- `DeployBranch`（既定 `main`）に push されると同じ処理を行い、成功した場合だけ `dist/` を S3 に同期（`--delete`）して CloudFront のキャッシュを無効化します。
-- 初回は、スタック作成後に `main` へ push するか、CodeBuild のコンソールからビルドを開始してください（手動開始ではデプロイされないため、初回デプロイは push で行います）。
+- プルリクエスト: CodeBuild がテスト・lint・ビルドを実行し、結果を GitHub に表示
+- `main` への push: 同じ処理が成功したら、S3 に反映して CloudFront のキャッシュを無効化
