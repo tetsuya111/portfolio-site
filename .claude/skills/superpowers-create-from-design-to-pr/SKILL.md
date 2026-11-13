@@ -68,6 +68,11 @@ tasks.md を上から順に実装する。
 
 ### 6. 完了処理（GitHub連携時）
 
+0. **秘密情報チェック（push前に必ず行う）**: `git diff --name-only <ベースブランチ>...HEAD` と `git diff <ベースブランチ>...HEAD` を確認し、次のいずれかがあれば push せずに状況報告して停止する。
+   - 秘密情報を含みうるファイル（`.env*`、`*.pem`、`*.key`、`.npmrc`、`credentials*.json`、`set-ocr-env.bat` など）が差分に含まれる
+   - APIキー・トークン・パスワードらしき値（`sk-`、`ghp_`、`AKIA`、`-----BEGIN ... PRIVATE KEY-----`、`password=` など）が追加行に含まれる
+
+   見つけた値そのものは報告に書かず、ファイル名と行番号だけを示す。
 1. `git push -u origin <ブランチ名>`
 2. `gh pr create --base <ベースブランチ> --title "<要約>" --body-file <一時ファイル>`
    本文: 概要／要件・設計ファイルへのリンク／テスト結果／未対応の指摘。末尾にシステム指示の帰属表記を付ける。
