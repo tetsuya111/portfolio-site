@@ -331,6 +331,9 @@ Outputs:
   SiteUrl:
     Description: サイトの URL
     Value: !Sub "https://${DomainName}/"
+  AppsBaseUrl:
+    Description: ポートフォリオのフロントエンド（apps/apps.json に登録したもの）の配信先。各アプリは <この URL><スラッグ>/
+    Value: !Sub "https://${DomainName}/apps/"
   BucketName:
     Description: サイトのファイルを置く S3 バケット
     Value: !Ref SiteBucket

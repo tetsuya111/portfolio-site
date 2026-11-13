@@ -10,7 +10,8 @@
     "test:e2e": "playwright test",
     "test:build": "astro build && node scripts/vitest.mjs run --config vitest.build.config.ts",
     "lint": "eslint . && astro check",
-    "portfolio:new": "tsx scripts/new-portfolio.mjs"
+    "portfolio:new": "tsx scripts/new-portfolio.mjs",
+    "build:apps": "tsx scripts/build-apps.mjs"
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.20",

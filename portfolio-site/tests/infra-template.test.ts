@@ -122,7 +122,8 @@ describe("infra/template.yaml", () => {
     });
   });
 
-  it("outputs the site url, bucket and distribution id", () => {
-    expect(Object.keys(t.Outputs).sort()).toEqual(["BucketName", "DistributionId", "SiteUrl"]);
+  it("outputs the site url, apps base url, bucket and distribution id", () => {
+    expect(Object.keys(t.Outputs).sort()).toEqual(["AppsBaseUrl", "BucketName", "DistributionId", "SiteUrl"]);
+    expect(JSON.stringify(t.Outputs.AppsBaseUrl.Value)).toContain("/apps/");
   });
 });
