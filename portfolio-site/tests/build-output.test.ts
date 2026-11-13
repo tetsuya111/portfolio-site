@@ -19,6 +19,21 @@ describe("build output", () => {
     expect(top).toContain('href="/portfolios/sample-portfolio-site/"');
   });
 
+  it("lists portfolios as tiles on the portfolio index page", () => {
+    const list = html("portfolios");
+    expect(list).toContain("このポートフォリオサイト");
+    expect(list).toContain('href="/portfolios/sample-portfolio-site/"');
+    expect(list).toMatch(/target="_blank"/);
+  });
+
+  it("links to the portfolio index from the header", () => {
+    expect(html(".")).toMatch(/<a href="\/portfolios\/"[^>]*>\s*ポートフォリオ一覧\s*<\/a>/);
+  });
+
+  it("links back to the portfolio index from the detail page", () => {
+    expect(html("portfolios/sample-portfolio-site")).toMatch(/<a href="\/portfolios\/"[^>]*>← ポートフォリオ一覧<\/a>/);
+  });
+
   it("renders the portfolio detail body", () => {
     expect(html("portfolios/sample-portfolio-site")).toMatch(/<h2[^>]*>概要<\/h2>/);
   });

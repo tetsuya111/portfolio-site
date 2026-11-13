@@ -13,7 +13,7 @@ const { Content } = await render(entry);
 ---
 
 <BaseLayout title={entry.data.title}>
-  <a href="/" class="text-sm text-sky-700 hover:underline">← ポートフォリオ一覧</a>
+  <a href="/portfolios/" class="text-sm text-sky-700 hover:underline">← ポートフォリオ一覧</a>
   <h1 class="mt-4 text-3xl font-bold">{entry.data.title}</h1>
   <div class="mt-3"><TagList tags={entry.data.tags} /></div>
   {
