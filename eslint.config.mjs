@@ -38,4 +38,9 @@ export default defineConfig([
     files: ["*.config.{js,mjs,cjs}"],
     languageOptions: { globals: { ...globals.node } },
   },
+  // portfolios 配下の補助スクリプト（npm scripts から node で実行する）
+  {
+    files: ["portfolios/*/scripts/**/*.{js,mjs,cjs}"],
+    languageOptions: { globals: { ...globals.node } },
+  },
 ]);

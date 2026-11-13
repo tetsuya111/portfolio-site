@@ -1,0 +1,72 @@
+// バックエンド(FastAPI)の呼び出し。Next.js の rewrites により同一オリジンの相対パスで届く。
+
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+/** OAuth はバックエンドへのページ遷移で開始する（fetch ではなくリンクで使う）。 */
+export const LOGIN_PATH = "/auth/login";
+
+export type Me ={ authenticated: false } | { authenticated: true; id: string; display_name: string };
+
+export type Track = { title: string; artist: string };
+export type ChartTrack = Track & { rank: number };
+export type Chart = { id: number; url: string; tracks: ChartTrack[] };
+export type PlaylistResult = { playlist_id: string; url: string; added: number; not_found: Track[] };
+
+function detailMessage(detail: unknown): string | null {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((d) => (d && typeof d === "object" && "msg" in d ? String(d.msg) : null))
+      .filter(Boolean);
+    if (messages.length) return `入力が正しくありません: ${messages.join(" / ")}`;
+  }
+  return null;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(path, { credentials: "same-origin", ...init });
+  } catch {
+    throw new ApiError(0, "サーバーに接続できませんでした");
+  }
+  if (res.status === 204) return undefined as T;
+  const body: unknown = await res.json().catch(() => null);
+  if (!res.ok) {
+    const detail = body && typeof body === "object" && "detail" in body ? body.detail : null;
+    throw new ApiError(res.status, detailMessage(detail) ?? `エラーが発生しました（HTTP ${res.status}）`);
+  }
+  return body as T;
+}
+
+function postJson<T>(path: string, payload: unknown): Promise<T> {
+  return request<T>(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getMe(): Promise<Me> {
+  return request<Me>("/api/me");
+}
+
+export async function logout(): Promise<void> {
+  await request<void>("/auth/logout", { method: "POST" });
+}
+
+export function fetchChart(url: string): Promise<Chart> {
+  return postJson<Chart>("/api/charts", { url });
+}
+
+export function createPlaylist(name: string, tracks: Track[]): Promise<PlaylistResult> {
+  return postJson<PlaylistResult>("/api/playlists", { name, tracks });
+}
