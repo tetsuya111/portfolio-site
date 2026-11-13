@@ -1,0 +1,56 @@
+---
+import { getCollection, getEntry } from "astro:content";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import PortfolioTile from "../components/PortfolioTile.astro";
+import { formatDisplayDate, publishedArticles, sortPortfolios } from "../lib/content-query";
+
+const profile = await getEntry("profile", "profile");
+if (!profile) throw new Error("src/content/profile/profile.md がありません");
+const portfolios = sortPortfolios(await getCollection("portfolios"));
+const latestArticles = publishedArticles(await getCollection("articles")).slice(0, 3);
+---
+
+<BaseLayout title="Portfolio" description={profile.data.summary}>
+  <section class="mb-12">
+    <h1 class="text-3xl font-bold">{profile.data.name}</h1>
+    <p class="mt-1 text-lg text-slate-600">{profile.data.role}</p>
+    {profile.data.summary && <p class="mt-4 max-w-2xl">{profile.data.summary}</p>}
+    <a href="/about/" class="mt-4 inline-block text-sm text-sky-700 hover:underline">経歴・自己紹介を見る →</a>
+  </section>
+
+  <section class="mb-12">
+    <h2 class="mb-4 text-xl font-bold">ポートフォリオ</h2>
+    {
+      portfolios.length === 0 ? (
+        <p class="text-slate-500">まだありません。</p>
+      ) : (
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {portfolios.map((p) => (
+            <PortfolioTile slug={p.id} title={p.data.title} tags={p.data.tags} url={p.data.url} />
+          ))}
+        </div>
+      )
+    }
+    <a href="/portfolios/" class="mt-4 inline-block text-sm text-sky-700 hover:underline">ポートフォリオ一覧へ →</a>
+  </section>
+
+  <section>
+    <h2 class="mb-4 text-xl font-bold">最新の記事</h2>
+    {latestArticles.length === 0 && <p class="text-slate-500">まだありません。</p>}
+    <ul class="space-y-2">
+      {
+        latestArticles.map((a) => (
+          <li>
+            <time class="mr-3 text-sm text-slate-500" datetime={a.data.date.toISOString()}>
+              {formatDisplayDate(a.data.date)}
+            </time>
+            <a href={`/articles/${a.id}/`} class="hover:text-sky-700 hover:underline">
+              {a.data.title}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+    <a href="/articles/" class="mt-4 inline-block text-sm text-sky-700 hover:underline">記事一覧へ →</a>
+  </section>
+</BaseLayout>

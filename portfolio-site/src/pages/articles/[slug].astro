@@ -1,0 +1,27 @@
+---
+import { getCollection, render } from "astro:content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import TagList from "../../components/TagList.astro";
+import { formatDisplayDate, publishedArticles } from "../../lib/content-query";
+
+export async function getStaticPaths() {
+  // 下書き（draft: true）はページを生成しない
+  const items = publishedArticles(await getCollection("articles"));
+  return items.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+---
+
+<BaseLayout title={entry.data.title} description={entry.data.description}>
+  <a href="/articles/" class="text-sm text-sky-700 hover:underline">← 記事一覧</a>
+  <h1 class="mt-4 text-3xl font-bold">{entry.data.title}</h1>
+  <time class="mt-2 block text-sm text-slate-500" datetime={entry.data.date.toISOString()}>
+    {formatDisplayDate(entry.data.date)}
+  </time>
+  <div class="mt-3"><TagList tags={entry.data.tags} /></div>
+  <article class="prose prose-slate mt-8 max-w-none">
+    <Content />
+  </article>
+</BaseLayout>

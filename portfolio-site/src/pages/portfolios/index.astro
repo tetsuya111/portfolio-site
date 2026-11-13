@@ -1,0 +1,23 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import PortfolioTile from "../../components/PortfolioTile.astro";
+import { sortPortfolios } from "../../lib/content-query";
+
+const portfolios = sortPortfolios(await getCollection("portfolios"));
+---
+
+<BaseLayout title="ポートフォリオ">
+  <h1 class="mb-6 text-3xl font-bold">ポートフォリオ</h1>
+  {
+    portfolios.length === 0 ? (
+      <p class="text-slate-500">まだありません。</p>
+    ) : (
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {portfolios.map((p) => (
+          <PortfolioTile slug={p.id} title={p.data.title} tags={p.data.tags} url={p.data.url} />
+        ))}
+      </div>
+    )
+  }
+</BaseLayout>

@@ -1,0 +1,18 @@
+# CodeBuild 用・テスト専用（infra/template.yaml の CodeBuildTestProject から参照）
+# プルリクエストで実行する。テスト・lint・ビルドの検証だけを行い、デプロイはしない。
+# 実行するプロジェクトにはログ出力の権限しかなく、デプロイ先の情報も渡さない。
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 22
+    commands:
+      - cd portfolio-site
+      - npm ci
+  build:
+    commands:
+      - npm test
+      - npm run lint
+      # astro build と、成果物に管理画面が含まれないことなどの検証
+      - npm run test:build

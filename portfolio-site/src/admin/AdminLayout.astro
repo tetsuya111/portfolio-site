@@ -1,0 +1,41 @@
+---
+// 管理画面の共通レイアウト（astro dev でのみ表示される）
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>{title} | 管理画面</title>
+  </head>
+  <body class="min-h-screen bg-amber-50 text-slate-800">
+    <header class="border-b border-amber-200 bg-amber-100">
+      <nav class="mx-auto flex max-w-4xl flex-wrap items-center gap-4 px-4 py-3 text-sm">
+        <a href="/admin/" class="font-bold">管理画面（開発サーバーのみ）</a>
+        <a href="/admin/profile/" class="hover:underline">自己紹介を編集</a>
+        <a href="/admin/articles/new/" class="hover:underline">記事を追加</a>
+        <a href="/" class="ml-auto hover:underline">サイトを表示 →</a>
+      </nav>
+    </header>
+    <main class="mx-auto max-w-4xl px-4 py-8">
+      <h1 class="mb-6 text-2xl font-bold">{title}</h1>
+      <slot />
+      <p id="status" role="status" class="mt-4 whitespace-pre-wrap text-sm"></p>
+    </main>
+  </body>
+</html>
+
+<script>
+  import { restoreStatus } from "./admin-client";
+
+  restoreStatus();
+</script>

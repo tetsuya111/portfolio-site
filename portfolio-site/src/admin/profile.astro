@@ -1,0 +1,39 @@
+---
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import AdminLayout from "./AdminLayout.astro";
+import { PROFILE_PATH } from "../lib/content-store";
+
+// 保存先は integrations/local-admin.ts が保存 API と同じ値を埋め込む
+declare const __ADMIN_CONTENT_ROOT__: string;
+
+// 開発サーバーではリクエストごとに描画されるため、常に最新のファイル内容を表示する
+const markdown = await readFile(join(__ADMIN_CONTENT_ROOT__, ...PROFILE_PATH), "utf8");
+---
+
+<AdminLayout title="自己紹介・経歴を編集">
+  <form id="profile-form" class="space-y-4">
+    <label class="block text-sm font-medium" for="markdown">
+      profile.md（frontmatter の name・role は必須）
+    </label>
+    <textarea
+      id="markdown"
+      name="markdown"
+      rows="24"
+      class="w-full rounded border border-slate-300 bg-white p-3 font-mono text-sm"
+      required>{markdown}</textarea
+    >
+    <button type="submit" class="rounded bg-sky-700 px-4 py-2 text-white hover:bg-sky-800">保存</button>
+  </form>
+</AdminLayout>
+
+<script>
+  import { sendJson } from "./admin-client";
+
+  const form = document.getElementById("profile-form") as HTMLFormElement;
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const markdown = (form.elements.namedItem("markdown") as HTMLTextAreaElement).value;
+    await sendJson("PUT", "/__admin/api/profile", { markdown }, "保存しました。");
+  });
+</script>

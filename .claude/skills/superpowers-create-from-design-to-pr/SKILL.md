@@ -1,6 +1,6 @@
 ---
 name: superpowers-create-from-design-to-pr
-description: 設計ファイル作成→ブランチ作成→TDD実装→テストと/code-review-ocrによるレビュー→修正のループ→push・PR作成・PRへのレビューコメントまでを、superpowersのスキル群を使って確認なしで一気通貫に実行する。/superpowers-create-from-design-to-pr で起動する。
+description: 設計ファイル作成→ブランチ作成→TDD実装→テストとコードレビュー（既定は標準のcode-review。引数で明示した場合のみcode-review-ocr）→修正のループ→push・PR作成・PRへのレビューコメントまでを、superpowersのスキル群を使って確認なしで一気通貫に実行する。/superpowers-create-from-design-to-pr で起動する。
 disable-model-invocation: true
 ---
 
@@ -22,7 +22,7 @@ disable-model-invocation: true
 - このプロジェクト（リポジトリのルート）外のファイルを作成・修正・削除する（グローバル設定・`~/.claude/`・スクラッチパッド以外の一時領域など）
 - 外部URLにアクセスする（WebFetch・WebSearch・curl、`npm install` 等のパッケージ取得を含む）
 
-ただし、このスキルの手順として明記された次の通信は起動時点で承認済みとみなし、確認しない: `/code-review-ocr` によるレビュー（使用できない場合の `code-review` を含む）、`git push`、`gh` による認証確認・PR作成・PRコメント。PR本文用の一時ファイルをスクラッチパッドに書くことも確認不要。
+ただし、このスキルの手順として明記された次の通信は起動時点で承認済みとみなし、確認しない: 4-2 のコードレビュー（`code-review`、および引数で明示された場合の `code-review-ocr`）、`git push`、`gh` による認証確認・PR作成・PRコメント。PR本文用の一時ファイルをスクラッチパッドに書くことも確認不要。
 
 ## 作成先ディレクトリ
 
@@ -45,7 +45,7 @@ git switch -c dev/feature/claude-superpowers/<修正内容の要約>
 
 ### 2. 設計
 
-[../superpowers-create-design/SKILL.md](../superpowers-create-design/SKILL.md) を Read で読み、その手順を引数そのままで実行して設計ファイル一式を作る（同スキルはモデルからの自動起動を無効化しているため、Skill ツールでは呼ばない）。完了後、設計ファイルと作業ログをコミットする。
+[../superpowers-create-design/SKILL.md](../superpowers-create-design/SKILL.md) を Read で読み、その手順を引数で実行して（4-2 のレビュー方法の指定など、機能要望でない指示は除いて渡す）設計ファイル一式を作る（同スキルはモデルからの自動起動を無効化しているため、Skill ツールでは呼ばない）。完了後、設計ファイルと作業ログをコミットする。
 
 ### 3. 実装
 
@@ -59,9 +59,10 @@ tasks.md を上から順に実装する。
 ### 4. 検証とレビュー（指摘がなくなるまで繰り返す）
 
 1. `portfolios/<プロジェクト名>/package.json` の `scripts` にある test・lint・build を実行する（存在するものだけ）。出力は失敗箇所のみ確認する（例: `| tail -40`）。
-2. Skill ツールで `code-review-ocr` を引数 `--from <ベースブランチ> --to HEAD` 付きで呼び出す。これは明示起動として扱い、実行確認は行わない。
-   - `code-review-ocr` を使用できない場合（スキルが読み込まれていない、`npm run ocr` が導入されていない・起動しない、LLMプロバイダの認証エラーなど）は、代わりにClaude Code標準の `code-review` スキルを、`<ベースブランチ>` からの差分を対象として呼び出す。レベルは `max`・`ultra` を指定しない。
-   - `code-review` に切り替えた場合は、切り替えた理由（OCRが使えなかった原因）を最終報告とPR本文に書く。
+2. コードレビューを行う。
+   - **既定**: Claude Code標準の `code-review` スキルを、`<ベースブランチ>` からの差分を対象として呼び出す。レベルは `max`・`ultra` を指定しない。
+   - **`code-review-ocr` は、引数（`$ARGUMENTS`）で明示的に指定された場合のみ使う**（例: 「OCRでレビュー」「code-review-ocrを使う」）。指定がなければ、レビュー依頼や「コミット・PR前の確認」に当たる場面でも `code-review-ocr` を読み込まない・提案しない。
+   - 明示された場合は、Skill ツールで `code-review-ocr` を引数 `--from <ベースブランチ> --to HEAD` 付きで呼び出す。これは明示起動として扱い、実行確認は行わない。使用できない場合（`npm run ocr` が導入されていない・起動しない、LLMプロバイダの認証エラーなど）は既定の `code-review` に切り替え、その理由を最終報告とPR本文に書く。
 3. 指摘は `superpowers:receiving-code-review` に従い実コードで妥当性を確かめ、妥当なものだけ修正してコミットする。
 4. テスト失敗・妥当な指摘が0件になったら次へ。**最大3周**で打ち切り、残った指摘は最終報告とPR本文に「未対応」として書く。
 
@@ -85,7 +86,7 @@ tasks.md を上から順に実装する。
 1. `git push -u origin <ブランチ名>`
 2. `gh pr create --base <ベースブランチ> --title "<要約>" --body-file <一時ファイル>`
    本文: 概要／要件・設計ファイルへのリンク／テスト結果／未対応の指摘。末尾にシステム指示の帰属表記を付ける。
-3. 4-2 の最終回のOCRレビュー結果を要約し、`gh pr comment <PR番号> --body-file <一時ファイル>` でPRにコメントする。
+3. 4-2 の最終回のレビュー結果を要約し（使ったレビュー方法も書く）、`gh pr comment <PR番号> --body-file <一時ファイル>` でPRにコメントする。
 4. PRのURLを報告する。
 
 一時ファイルはスクラッチパッドに作る。force push・ベースブランチへの直接push・マージはしない。

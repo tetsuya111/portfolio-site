@@ -1,0 +1,27 @@
+# CodeBuild 用・デプロイ（infra/template.yaml の CodeBuildProject から参照）
+# DEPLOY_BRANCH への push で実行し、テスト・lint・ビルドが成功したときだけデプロイする。
+# プルリクエストはテスト専用の buildspec.test.yml（権限の小さい別プロジェクト）で実行する。
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 22
+    commands:
+      - cd portfolio-site
+      - npm ci
+  build:
+    commands:
+      - npm test
+      - npm run lint
+      # astro build と、成果物に管理画面が含まれないことなどの検証
+      - npm run test:build
+  post_build:
+    commands:
+      - |
+        if [ "$CODEBUILD_BUILD_SUCCEEDING" = "1" ] && [ "$CODEBUILD_WEBHOOK_EVENT" = "PUSH" ] && [ "$CODEBUILD_WEBHOOK_HEAD_REF" = "refs/heads/$DEPLOY_BRANCH" ]; then
+          aws s3 sync dist "s3://$SITE_BUCKET" --delete
+          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*"
+        else
+          echo "デプロイ対象のビルドではないため、デプロイを省略します"
+        fi

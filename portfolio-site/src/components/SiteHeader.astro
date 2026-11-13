@@ -1,0 +1,30 @@
+---
+interface Props {
+  siteName: string;
+}
+
+const { siteName } = Astro.props;
+const links = [
+  { href: "/", label: "ホーム" },
+  { href: "/about/", label: "自己紹介" },
+  { href: "/portfolios/", label: "ポートフォリオ" },
+  { href: "/articles/", label: "記事" },
+];
+---
+
+<header class="border-b border-slate-200 bg-white">
+  <nav class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2 px-4 py-4">
+    <a href="/" class="text-lg font-bold">{siteName}</a>
+    <ul class="flex gap-4 text-sm">
+      {
+        links.map((l) => (
+          <li>
+            <a href={l.href} class="hover:text-sky-700">
+              {l.label}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </nav>
+</header>
