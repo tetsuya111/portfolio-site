@@ -1,3 +1,10 @@
 {
-  "apps": []
+  "apps": [
+    {
+      "slug": "spotify-billboard-playlist",
+      "outputDir": "out",
+      "buildArgs": [],
+      "mock": true
+    }
+  ]
 }

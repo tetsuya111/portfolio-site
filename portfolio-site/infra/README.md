@@ -18,7 +18,7 @@ flowchart LR
 |---|---|
 | [template.yaml](template.yaml) | CloudFormation テンプレート（このディレクトリ） |
 | [../buildspec.test.yml](../buildspec.test.yml) | テスト用のビルド手順。プルリクエストで実行（`CodeBuildTestProject` から参照） |
-| [../buildspec.yml](../buildspec.yml) | デプロイ用のビルド手順。`DeployBranch` への push で実行（`CodeBuildProject` から参照） |
+| [../buildspec.yml](../buildspec.yml) | デプロイ用のビルド手順。`DeployBranch`（未指定なら任意のブランチ）への push で実行（`CodeBuildProject` から参照） |
 | [../tests/infra-template.test.ts](../tests/infra-template.test.ts) | テンプレートの設定値を検証するテスト（`npm test` で実行） |
 
 ## 作成されるリソース
@@ -36,7 +36,7 @@ flowchart LR
 | `CodeBuildTestRole` | IAM ロール | テスト用。`TestLogGroup` への書き込みだけを許可（S3・CloudFront には触れない）。このアカウントの `<スタック名>-test` からだけ引き受けられる |
 | `CodeBuildTestProject` | CodeBuild | `<スタック名>-test`。`GitHubActorAccountId` のアカウントが出したプルリクエストだけで、テスト・lint・ビルドを実行する（同時実行は1件） |
 | `CodeBuildRole` | IAM ロール | デプロイ用。`BuildLogGroup` への書き込み、`SiteBucket` の一覧・読み書き・削除、このディストリビューションの無効化だけを許可。このアカウントの `<スタック名>-deploy` からだけ引き受けられる |
-| `CodeBuildProject` | CodeBuild | `<スタック名>-deploy`。`DeployBranch` への push でビルドし、成功したらデプロイする（同時実行は1件） |
+| `CodeBuildProject` | CodeBuild | `<スタック名>-deploy`。`DeployBranch`（未指定なら任意のブランチ）への push でビルドし、成功したらデプロイする（同時実行は1件） |
 | `WebAcl` | AWS WAF | `EnableWaf=true` のときだけ作る。IP ごとに 5 分間 1000 リクエストを超えたら遮断する |
 | `CostBudget` | AWS Budgets | 月額料金が予算の 80% を超えた（実績）・100% を超えそう（予測）なときに `BudgetAlertEmail` へメールする |
 
@@ -59,7 +59,7 @@ cp infra/parameters.example.json infra/parameters.json  # 値を書き換える
 | `DomainName` | ○ | — | サイトのドメイン名（例 `portfolio.example.com`）。`HostedZoneId` のゾーン内の名前にする |
 | `HostedZoneId` | ○ | — | `DomainName` を管理している Route 53 ホストゾーンの ID |
 | `GitHubRepoUrl` | ○ | — | GitHub リポジトリの HTTPS URL（例 `https://github.com/<owner>/<repo>.git`） |
-| `DeployBranch` | | `main` | push されたときに本番へデプロイするブランチ |
+| `DeployBranch` | | `""`（空） | push されたときに本番へデプロイするブランチ。空なら任意のブランチへの push でデプロイする（作業ブランチの push もそのまま本番に出る） |
 | `GitHubActorAccountId` | ○ | — | プルリクエストのビルドを許可する GitHub アカウントの数値 ID（`gh api users/<ユーザー名> -q .id` で確認）。公開リポジトリのため、ほかのアカウントの PR ではビルドしない |
 | `BudgetAlertEmail` | ○ | — | 料金アラートの送り先メールアドレス |
 | `MonthlyBudgetUsd` | | `10` | 月額料金の予算（USD） |
@@ -68,7 +68,7 @@ cp infra/parameters.example.json infra/parameters.json  # 値を書き換える
 ## セキュリティ上の前提（テンプレートの外で設定するもの）
 
 - **GitHub の認証情報は、このリポジトリだけに絞る**: CodeBuild に登録した認証情報は、そのアカウント・リージョンのすべての CodeBuild プロジェクトで共有される。AWS CodeConnections（GitHub App）を使うか、個人用アクセストークンならこのリポジトリだけを対象にした fine-grained トークンにする（classic トークンの `repo` は全リポジトリへの書き込み権限になる）。
-- **`main` にブランチ保護を付ける**: `DeployBranch` への push はそのまま本番に出る。GitHub の Settings → Branches で、PR 必須・テスト用 CodeBuild の成功必須・force push 禁止にする。
+- **デプロイするブランチにブランチ保護を付ける**: `DeployBranch` への push はそのまま本番に出る（`DeployBranch` が空なら、どのブランチへの push も本番に出るため、本番運用では `main` などを指定する）。GitHub の Settings → Branches で、PR 必須・テスト用 CodeBuild の成功必須・force push 禁止にする。
 - **アカウントの監視を有効にする**: CloudTrail（管理イベント）と GuardDuty を有効にしておく（このテンプレートでは作らない）。料金は `CostBudget` のメールで気づけるようにしている。
 - **ビルドで依存のインストールスクリプトを実行しない**: buildspec と `npm run build:apps` は `npm ci --ignore-scripts` で依存を入れる。インストール時のスクリプトが必要な依存を追加するときは、デプロイ用の権限で動くことを踏まえて buildspec に明示的に追加する。
 
@@ -81,7 +81,7 @@ Webhook が反応するのは、`portfolio-site/` 配下のファイルを変更
 | イベント | プロジェクト | buildspec | 動作 |
 |---|---|---|---|
 | プルリクエストの作成・更新・再オープン | `<スタック名>-test` | [../buildspec.test.yml](../buildspec.test.yml) | テスト・lint・ビルドのみ。結果は GitHub の PR に表示される |
-| `DeployBranch` への push | `<スタック名>-deploy` | [../buildspec.yml](../buildspec.yml) | テスト・lint・ビルド、成功したらデプロイ |
+| `DeployBranch`（未指定なら任意のブランチ）への push | `<スタック名>-deploy` | [../buildspec.yml](../buildspec.yml) | テスト・lint・ビルド、成功したらデプロイ |
 
 どちらの buildspec も、次の手順は共通です（同じであることをテストで確認しています）。
 
@@ -92,7 +92,7 @@ Webhook が反応するのは、`portfolio-site/` 配下のファイルを変更
 
 - ビルドが成功している（`CODEBUILD_BUILD_SUCCEEDING = 1`）
 - Webhook のイベントが `PUSH`
-- push 先が `refs/heads/<DeployBranch>`
+- push 先が `refs/heads/<DeployBranch>`（`DeployBranch` が空なら任意のブランチ `refs/heads/*`。タグは除く）
 
 そのため、デプロイ用プロジェクトを CodeBuild のコンソールから手動で開始しても、Webhook のイベントがないのでデプロイされません。手動でテストだけを実行したいときは、テスト用プロジェクトでビルドを開始し、ソースのバージョンにブランチ名やコミットを指定します。
 
@@ -102,7 +102,7 @@ Webhook が反応するのは、`portfolio-site/` 配下のファイルを変更
 |---|---|
 | `SITE_BUCKET` | `SiteBucket` のバケット名 |
 | `DISTRIBUTION_ID` | `Distribution` の ID |
-| `DEPLOY_BRANCH` | パラメーター `DeployBranch` |
+| `DEPLOY_BRANCH` | パラメーター `DeployBranch`（空なら任意のブランチ） |
 
 ## スタックの削除
 
@@ -123,6 +123,6 @@ S3 バケットは誤削除を防ぐため、スタックを消しても残り�
 |---|---|
 | 証明書が「検証保留中」のまま進まない | `HostedZoneId` が `DomainName` を管理するゾーンか。ドメインのネームサーバーがそのゾーンを向いているか |
 | `CodeBuildProject` の作成で Webhook のエラーになる | us-east-1 に GitHub の認証情報を登録したか。トークンにリポジトリと Webhook の権限があるか |
-| PR や push でビルドが始まらない | 変更が `portfolio-site/` 配下を含むか。push 先が `DeployBranch` か。PR は `-test`、push は `-deploy` のプロジェクトの履歴を見ているか |
+| PR や push でビルドが始まらない | 変更が `portfolio-site/` 配下を含むか。push 先が `DeployBranch` か（指定している場合）。PR は `-test`、push は `-deploy` のプロジェクトの履歴を見ているか |
 | ビルドは成功するのにデプロイされない | 手動開始のビルドではないか（Webhook の PUSH のみデプロイ） |
 | ページが 404 になる | `npm run build` の成果物が同期されているか。URL の綴り（パスは末尾 `/` 付き） |

@@ -18,8 +18,8 @@ Parameters:
     AllowedPattern: "^https://github\\.com/[^/]+/[^/]+$"
   DeployBranch:
     Type: String
-    Default: main
-    Description: push されたときに本番へデプロイするブランチ
+    Default: ""
+    Description: push されたときに本番へデプロイするブランチ。未指定（空）なら任意のブランチへの push でデプロイする
   GitHubActorAccountId:
     Type: String
     Description: >-
@@ -45,6 +45,7 @@ Parameters:
 
 Conditions:
   UseWaf: !Equals [!Ref EnableWaf, "true"]
+  HasDeployBranch: !Not [!Equals [!Ref DeployBranch, ""]]
 
 Rules:
   RegionMustBeUsEast1:
@@ -320,7 +321,7 @@ Resources:
             - Type: ACTOR_ACCOUNT_ID
               Pattern: !Sub "^${GitHubActorAccountId}$"
 
-  # --- デプロイ用（DeployBranch への push）---
+  # --- デプロイ用（DeployBranch への push。未指定なら任意のブランチへの push）---
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
@@ -368,7 +369,7 @@ Resources:
     Type: AWS::CodeBuild::Project
     Properties:
       Name: !Sub "${AWS::StackName}-deploy"
-      Description: portfolio-site の DeployBranch への push 時のテスト・lint・ビルドとデプロイ
+      Description: portfolio-site の DeployBranch（未指定なら任意のブランチ）への push 時のテスト・lint・ビルドとデプロイ
       ServiceRole: !GetAtt CodeBuildRole.Arn
       TimeoutInMinutes: 20
       # デプロイ（s3 sync）が並行して走り、古い成果物で上書きされるのを防ぐ
@@ -399,11 +400,11 @@ Resources:
       Triggers:
         Webhook: true
         FilterGroups:
-          # デプロイ対象ブランチへの push だけ（プルリクエストは CodeBuildTestProject）
+          # デプロイ対象ブランチへの push だけ（DeployBranch 未指定なら任意のブランチ。プルリクエストは CodeBuildTestProject）
           - - Type: EVENT
               Pattern: PUSH
             - Type: HEAD_REF
-              Pattern: !Sub "^refs/heads/${DeployBranch}$"
+              Pattern: !If [HasDeployBranch, !Sub "^refs/heads/${DeployBranch}$", "^refs/heads/"]
             - Type: FILE_PATH
               Pattern: ^portfolio-site/
 

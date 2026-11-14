@@ -32,12 +32,15 @@ describe("buildspec.yml", () => {
     expect(apps).toBeGreaterThan(astro);
   });
 
-  it("deploys only for a successful push to the deploy branch", () => {
+  it("deploys only for a successful push to the deploy branch (any branch when DEPLOY_BRANCH is empty)", () => {
     const post = commands("post_build").join("\n");
     const guard = post.indexOf("CODEBUILD_WEBHOOK_EVENT");
     expect(guard).toBeGreaterThanOrEqual(0);
     expect(post).toContain("CODEBUILD_BUILD_SUCCEEDING");
     expect(post).toContain('refs/heads/$DEPLOY_BRANCH');
+    expect(post).toContain('-z "$DEPLOY_BRANCH"');
+    // タグなどブランチ以外の push ではデプロイしない
+    expect(post).toContain("refs/heads/*");
     expect(post.indexOf("aws s3 sync")).toBeGreaterThan(guard);
     expect(post.indexOf("create-invalidation")).toBeGreaterThan(guard);
     expect(post).toContain("--delete");
