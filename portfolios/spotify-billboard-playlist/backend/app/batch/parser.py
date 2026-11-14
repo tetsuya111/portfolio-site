@@ -116,35 +116,68 @@ def _has_class(tag: Tag, name: str, class_name: str) -> bool:
     return tag.name == name and class_name in (tag.get("class") or [])
 
 
+def _is_number(tag: Tag) -> bool:
+    return _has_class(tag, "div", "number")
+
+
+def _is_title(tag: Tag) -> bool:
+    return _has_class(tag, "span", "title")
+
+
+def _is_artist(tag: Tag) -> bool:
+    return _has_class(tag, "span", "artistLink")
+
+
+def _row_parts(number: Tag, numbers_in: dict[int, int]) -> tuple[Tag | None, Tag | None]:
+    """div.number に対応する曲名・アーティストの要素を返す。
+
+    div.number を直接含む要素がその1行だけを含むなら、その中の最初の span.title・
+    span.artistLink を使う（実ページは 曲名 → div.number → アーティスト の順で同じセルに並ぶ）。
+    複数行が同じ親に平たく並ぶ場合は、次の div.number までに現れたものを使う。
+    """
+    container = number.parent
+    if container is not None:
+        key = id(container)
+        if key not in numbers_in:
+            numbers_in[key] = len(container.find_all(_is_number))
+        if numbers_in[key] == 1:
+            return container.find(_is_title), container.find(_is_artist)
+    title = artist = None
+    for tag in number.find_all_next(True):
+        if _is_number(tag):
+            break
+        if title is None and _is_title(tag):
+            title = tag
+        elif artist is None and _is_artist(tag):
+            artist = tag
+    return title, artist
+
+
 def parse_detail_page(html: str) -> list[ChartEntry]:
     """詳細表示ページの埋め込みHTMLから順位・曲名・アーティストを取り出す。
 
-    div.number を行の区切りとし、次の div.number までに現れた最初の span.title・
-    span.artistLink をその行の曲名・アーティストとする（1曲だけ欠けても他の行はずれない）。
+    div.number ごとに1行を組む（1曲だけ欠けても他の行はずれない）。同順位（タイ）は
+    捨てずに、それまでに採用した最大順位+1 に繰り下げて、DB の主キー（順位）の重複を避ける。
     """
     fragment = extract_data_table_html(html) or ""
     soup = BeautifulSoup(fragment, "html.parser")
-    rows: list[dict[str, str | None]] = []
-    for tag in soup.find_all(True):
-        if _has_class(tag, "div", "number"):
-            rows.append({"rank": tag.get_text(), "title": None, "artist": None})
-        elif not rows:
-            continue
-        elif _has_class(tag, "span", "title") and rows[-1]["title"] is None:
-            rows[-1]["title"] = tag.get_text()
-        elif _has_class(tag, "span", "artistLink") and rows[-1]["artist"] is None:
-            rows[-1]["artist"] = tag.get_text()
-
+    numbers_in: dict[int, int] = {}
     by_rank: dict[int, ChartEntry] = {}
-    for row in rows:
+    max_rank = 0
+    for number in soup.find_all(_is_number):
         try:
-            rank = int(_clean(row["rank"] or ""))
+            rank = int(_clean(number.get_text()))
         except ValueError:
             continue
-        title = _clean(row["title"] or "")
-        if not title or rank in by_rank:
+        title_tag, artist_tag = _row_parts(number, numbers_in)
+        title = _clean(title_tag.get_text()) if title_tag is not None else ""
+        if not title:
             continue
-        by_rank[rank] = ChartEntry(rank=rank, title=title, artist=_clean(row["artist"] or ""))
+        if rank in by_rank:
+            rank = max_rank + 1
+        artist = _clean(artist_tag.get_text()) if artist_tag is not None else ""
+        by_rank[rank] = ChartEntry(rank=rank, title=title, artist=artist)
+        max_rank = max(max_rank, rank)
     if not by_rank:
         raise ParseError("詳細表示ページから曲を取り出せませんでした")
     return [by_rank[rank] for rank in sorted(by_rank)]

@@ -125,12 +125,28 @@ def test_parse_detail_missing_artist_does_not_shift():
     assert parse_detail_page(html) == [ChartEntry(1, "A", ""), ChartEntry(2, "B", "X")]
 
 
-def test_parse_detail_duplicate_rank_keeps_first():
+def test_parse_detail_duplicate_rank_moves_down():
+    # 同順位（タイ）は捨てずに、それまでの最大順位+1 に繰り下げて主キーの重複を避ける
     html = _detail(
         "<div class='number'>1</div><span class='title'>First</span>",
         "<div class='number'>1</div><span class='title'>Second</span>",
+        "<div class='number'>3</div><span class='title'>Third</span>",
     )
-    assert parse_detail_page(html) == [ChartEntry(1, "First", "")]
+    assert parse_detail_page(html) == [
+        ChartEntry(1, "First", ""),
+        ChartEntry(2, "Second", ""),
+        ChartEntry(3, "Third", ""),
+    ]
+
+
+def test_parse_detail_real_layout_title_before_number():
+    # 実ページ（2026-11-14 確認）は同じセル内で 曲名 → div.number → アーティスト の順
+    assert parse_detail_page(_read("detail_real.html")) == [
+        ChartEntry(1, "A Bar Song (Tipsy)", "Shaboozey"),
+        ChartEntry(2, "Ordinary", "Alex Warren"),
+        ChartEntry(3, "Choosin’ Texas", "Ella Langley"),
+        ChartEntry(4, "Blinding Lights", "The Weeknd"),
+    ]
 
 
 def test_parse_detail_skips_bad_rank_and_empty_title():
