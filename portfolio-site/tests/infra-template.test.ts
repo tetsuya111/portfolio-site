@@ -25,7 +25,7 @@ describe("infra/template.yaml", () => {
       "GitHubRepoUrl",
       "HostedZoneId",
       "ItArticlesPerRun",
-      "ItArticlesSchedule",
+      "ItArticlesScheduleExpression",
       "ItArticlesScheduleState",
       "MonthlyBudgetUsd",
       "PerplexityApiKeyParameterName",
@@ -37,6 +37,12 @@ describe("infra/template.yaml", () => {
     expect(t.Conditions.HasDeployBranch).toEqual({ "Fn::Not": [{ "Fn::Equals": [{ Ref: "DeployBranch" }, ""] }] });
     expect(t.Parameters.GitHubActorAccountId.AllowedPattern).toBe("^[0-9]+$");
     expect(t.Parameters.EnableWaf.AllowedValues).toEqual(["true", "false"]);
+  });
+
+  it("uses unique logical ids across parameters, resources and outputs", () => {
+    // CloudFormation では Parameters・Resources・Outputs の論理 ID が重なるとテンプレートが拒否される
+    const ids = [...Object.keys(t.Parameters), ...Object.keys(t.Resources), ...Object.keys(t.Outputs)];
+    expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
   });
 
   it("requires us-east-1", () => {
@@ -231,7 +237,7 @@ describe("infra/template.yaml", () => {
 
     it("declares the schedule parameters (daily, off until the API key is registered, 5 articles)", () => {
       const P = t.Parameters;
-      expect(P.ItArticlesSchedule.Default).toBe("rate(1 day)");
+      expect(P.ItArticlesScheduleExpression.Default).toBe("rate(1 day)");
       expect(P.ItArticlesScheduleState.Default).toBe("DISABLED");
       expect(P.ItArticlesScheduleState.AllowedValues).toEqual(["ENABLED", "DISABLED"]);
       expect(P.ItArticlesPerRun.Default).toBe(5);
@@ -292,7 +298,7 @@ describe("infra/template.yaml", () => {
     });
 
     it("starts the build on the schedule in Asia/Tokyo, with the state from the parameter", () => {
-      expect(schedule.ScheduleExpression).toEqual({ Ref: "ItArticlesSchedule" });
+      expect(schedule.ScheduleExpression).toEqual({ Ref: "ItArticlesScheduleExpression" });
       expect(schedule.ScheduleExpressionTimezone).toBe("Asia/Tokyo");
       expect(schedule.State).toEqual({ Ref: "ItArticlesScheduleState" });
       expect(schedule.FlexibleTimeWindow).toEqual({ Mode: "OFF" });

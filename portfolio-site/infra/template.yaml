@@ -79,7 +79,7 @@ Parameters:
     Description: >-
       CloudFront に AWS WAF（IP ごとのレート制限）を付けるか。付けると Web ACL とルールの月額固定費がかかる
       （料金の歯止めは BudgetAlertEmail の通知が基本）
-  ItArticlesSchedule:
+  ItArticlesScheduleExpression:
     Type: String
     Default: rate(1 day)
     Description: >-
@@ -737,7 +737,7 @@ Resources:
     Properties:
       Name: !Sub "${AWS::StackName}-it-articles"
       Description: IT 記事の定期作成（CodeBuild の StartBuild）
-      ScheduleExpression: !Ref ItArticlesSchedule
+      ScheduleExpression: !Ref ItArticlesScheduleExpression
       ScheduleExpressionTimezone: Asia/Tokyo
       FlexibleTimeWindow:
         Mode: "OFF"

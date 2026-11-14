@@ -5,7 +5,7 @@ AI（Perplexity）が最新の IT ニュースから記事を自動で作成し�
 ## 流れ
 
 ```
-EventBridge Scheduler（ItArticlesSchedule、既定 rate(1 day)。ItArticlesScheduleState で ON/OFF）
+EventBridge Scheduler（ItArticlesScheduleExpression、既定 rate(1 day)。ItArticlesScheduleState で ON/OFF）
   └─ CodeBuild <スタック名>-it-articles（buildspec.it-articles.yml、DeployBranch のコード）
        1. 過去の記事を取り込む   s3://<記事バケット>/it-articles/*.md → src/content/it-articles/
        2. 新しい記事を作る       portfolios/batch/generate_it_articles.py（既定 5 本）
@@ -28,7 +28,7 @@ EventBridge Scheduler（ItArticlesSchedule、既定 rate(1 day)。ItArticlesSche
 
    | 名前 | 既定 | 内容 |
    |---|---|---|
-   | `ItArticlesSchedule` | `rate(1 day)` | 実行間隔。`rate(...)` か `cron(...)`（タイムゾーンは Asia/Tokyo。例 `cron(0 6 * * ? *)` で毎日 6:00） |
+   | `ItArticlesScheduleExpression` | `rate(1 day)` | 実行間隔。`rate(...)` か `cron(...)`（タイムゾーンは Asia/Tokyo。例 `cron(0 6 * * ? *)` で毎日 6:00） |
    | `ItArticlesScheduleState` | `DISABLED` | `ENABLED` で定期実行を ON。API キーを登録してから ON にする |
    | `ItArticlesPerRun` | `5` | 1回で作る記事の数（1〜10） |
    | `PerplexityModel` | `sonar` | `sonar` か `sonar-pro` |

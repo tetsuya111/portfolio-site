@@ -42,7 +42,7 @@ flowchart LR
 | `ItArticlesLogGroup` | CloudWatch Logs | IT 記事用 CodeBuild のログ（30日保存） |
 | `ItArticlesRole` | IAM ロール | IT 記事用。ログ書き込み、API キーの SSM パラメーターの読み取り、記事バケットの読み書き、`SiteBucket` の一覧・読み取り・アップロード（削除はできない）、このディストリビューションの無効化だけを許可。このアカウントの `<スタック名>-it-articles` からだけ引き受けられる |
 | `ItArticlesProject` | CodeBuild | `<スタック名>-it-articles`。Webhook なし。`buildspec.it-articles.yml` で記事を作り、ビルドして差分だけデプロイする（同時実行は1件。[../docs/it-articles.md](../docs/it-articles.md)） |
-| `ItArticlesSchedulerRole` / `ItArticlesSchedule` | IAM ロール / EventBridge Scheduler | `ItArticlesSchedule` の間隔（Asia/Tokyo）で `ItArticlesProject` を起動する。`ItArticlesScheduleState` で ON/OFF |
+| `ItArticlesSchedulerRole` / `ItArticlesSchedule` | IAM ロール / EventBridge Scheduler | `ItArticlesScheduleExpression` の間隔（Asia/Tokyo）で `ItArticlesProject` を起動する。`ItArticlesScheduleState` で ON/OFF |
 | `CostBudget` | AWS Budgets | 月額料金が予算の 80% を超えた（実績）・100% を超えそう（予測）なときに `BudgetAlertEmail` へメールする |
 
 ## セットアップ
@@ -73,7 +73,7 @@ cp infra/parameters.example.json infra/parameters.json  # 値を書き換える
 | `SiteBucketName` | | `""`（空） | サイトのファイルを置くバケットの名前。空なら自動で付ける。作成済みのスタックで変えるとバケットが作り直される（旧バケットは残る） |
 | `DeployPath` | | `""`（空） | バケット内のアップロード先のパス（例 `preview`）。CloudFront はこのパスをドメイン直下として配信する（`OriginPath`）。先頭・末尾に `/` を付けない。空ならバケット直下。デプロイ用ロールの S3 権限もこのパス以下に限る |
 | `EnablePrTests` | | `true` | `false` ならプルリクエストのテスト用 CodeBuild（`<スタック名>-test`）とそのロール・ロググループを作らない（dev スタック用） |
-| `ItArticlesSchedule` | | `rate(1 day)` | IT 記事の定期作成の間隔（`rate(...)` か `cron(...)`、タイムゾーンは Asia/Tokyo） |
+| `ItArticlesScheduleExpression` | | `rate(1 day)` | IT 記事の定期作成の間隔（`rate(...)` か `cron(...)`、タイムゾーンは Asia/Tokyo） |
 | `ItArticlesScheduleState` | | `DISABLED` | `ENABLED` で IT 記事の定期作成を ON。API キーの SSM パラメーターを作ってから ON にする |
 | `ItArticlesPerRun` | | `5` | 1回で作る IT 記事の数（1〜10） |
 | `PerplexityModel` | | `sonar` | IT 記事の作成に使う Perplexity のモデル（`sonar` / `sonar-pro`） |

@@ -12,7 +12,7 @@
     "SiteBucketName": "portfolio-site-dev-example",
     "DeployPath": "",
     "EnablePrTests": "false",
-    "ItArticlesSchedule": "rate(1 day)",
+    "ItArticlesScheduleExpression": "rate(1 day)",
     "ItArticlesScheduleState": "DISABLED",
     "ItArticlesPerRun": "5",
     "PerplexityModel": "sonar",
