@@ -13,7 +13,9 @@ const httpUrl = z.url({ protocol: /^https?$/ });
 const sitePath = z.string().regex(/^\/(?![/\\])[^\s\\\x00-\x1f\x7f]*$/);
 
 /** 掲載 md の url。http(s) の URL かサイト内のパスを受け付ける（profile の links は http(s) のみ）。 */
-const portfolioUrl = z.union([httpUrl, sitePath]);
+const portfolioUrl = z.union([httpUrl, sitePath], {
+  error: "http(s) の URL か、/ で始まるサイト内のパス（例 /apps/my-app/）にしてください",
+});
 
 export const profileSchema = z.object({
   name: z.string().min(1),

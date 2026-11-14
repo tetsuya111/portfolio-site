@@ -49,6 +49,12 @@ describe("portfolioSchema", () => {
     },
   );
 
+  it("explains the accepted url forms when invalid", () => {
+    const r = portfolioSchema.safeParse({ title: "App", url: "ftp://x" });
+    expect(r.success).toBe(false);
+    expect(r.error?.issues[0]?.message).toContain("/ で始まるサイト内のパス");
+  });
+
   it("requires title", () => {
     expect(portfolioSchema.safeParse({ tags: ["a"] }).success).toBe(false);
   });

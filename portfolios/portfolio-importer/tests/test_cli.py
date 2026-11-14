@@ -97,6 +97,16 @@ class CliTest(TempDirMixin, unittest.TestCase):
         md = (self.repo / json.loads(out)["content"]).read_text(encoding="utf-8")
         self.assertNotIn("url:", md)
 
+    def test_unregistered_frontend_keeps_metadata_http_url(self):
+        (self.src / "frontend/package-lock.json").unlink()
+        write(self.repo / "portfolios/docs/my-app.md", "---\ntitle: x\nurl: https://my-app.example.com/\n---\n")
+        code, out, _ = self.run_main(str(self.src))
+        self.assertEqual(code, 0)
+        result = json.loads(out)
+        self.assertFalse(result["frontend"]["registered"])
+        md = (self.repo / result["content"]).read_text(encoding="utf-8")
+        self.assertIn('url: "https://my-app.example.com/"', md)
+
     def test_invalid_site_url_is_error(self):
         code, _, err = self.run_main(str(self.src), "--site-url", "javascript:x")
         self.assertEqual(code, 1)

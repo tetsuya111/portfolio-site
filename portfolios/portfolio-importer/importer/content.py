@@ -105,10 +105,11 @@ def write_portfolio_md(slug: str, project: Path, repo_root: Path, tags: list[str
     final_tags = doc_tags or tags
     # app_url は呼び出し側が組み立てた値（相対パス /apps/<スラッグ>/ または絶対 URL）なので、そのまま使う。
     # 元のプロジェクトのメタデータの url は、http(s) のものだけを使う。
-    url = app_url
-    if url is None:
-        meta_url = meta.get("url")
-        url = meta_url if isinstance(meta_url, str) and _HTTP.match(meta_url) else None
+    meta_url = meta.get("url") if isinstance(meta.get("url"), str) and _HTTP.match(meta.get("url")) else None
+    url = app_url or meta_url
+    warnings: list[str] = []
+    if app_url and meta_url and meta_url != app_url:
+        warnings.append(f"url を配信先の {app_url} にしました（{docs.name} の {meta_url} は使っていません）")
     if not body.strip():
         body = "## 概要\n\n（ここにポートフォリオの説明を書く）\n"
     if not body.endswith("\n"):
@@ -123,4 +124,4 @@ def write_portfolio_md(slug: str, project: Path, repo_root: Path, tags: list[str
     lines += [f"date: {today.isoformat()}", "---", "", ""]
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(lines) + body, encoding="utf-8", newline="\n")
-    return out, []
+    return out, warnings
