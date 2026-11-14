@@ -19,6 +19,7 @@
   --theme-on-accent: #ffffff;
   --theme-accent-soft: #eef2ff;
   --theme-on-accent-soft: #3730a3;
+  --theme-danger: #b91c1c;
   --theme-link: #4338ca;
   --theme-focus: #4338ca;
   --theme-hero-from: #e0e7ff;
@@ -44,6 +45,7 @@
   --theme-on-accent: #ffffff;
   --theme-accent-soft: #fff3c4;
   --theme-on-accent-soft: #6b4d00;
+  --theme-danger: #b91c1c;
   --theme-link: #0d4ea6;
   --theme-focus: #0d4ea6;
   --theme-hero-from: #dbe8fb;
@@ -67,6 +69,7 @@
   --color-on-accent: var(--theme-on-accent);
   --color-accent-soft: var(--theme-accent-soft);
   --color-on-accent-soft: var(--theme-on-accent-soft);
+  --color-danger: var(--theme-danger);
   --color-link: var(--theme-link);
   --color-focus: var(--theme-focus);
   --color-hero-from: var(--theme-hero-from);

@@ -33,6 +33,7 @@ AWS の CodeBuild（[infra/template.yaml](../infra/template.yaml)）には `PUBL
 | `line` | 罫線 | `border-line` `divide-line` |
 | `accent` / `on-accent` | ボタンの塗り / その上の文字 | `bg-accent` `text-on-accent` |
 | `accent-soft` / `on-accent-soft` | タグの背景 / その上の文字 | `bg-accent-soft` `text-on-accent-soft` |
+| `danger` | 注意書きの文字（赤） | `text-danger` |
 | `link` | リンク・小見出しの文字 | `text-link` |
 | `focus` | キーボードのフォーカス枠 | `ring-focus` |
 | `hero-from` / `hero-to` | トップ・自己紹介の冒頭のグラデーション | `from-hero-from` `to-hero-to` |

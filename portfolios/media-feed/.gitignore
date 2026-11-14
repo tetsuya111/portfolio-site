@@ -1,0 +1,32 @@
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Django
+db.sqlite3
+*.sqlite3
+backend/media/
+
+# Node / Next.js
+node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env.local
+frontend/.env*.local
+.npm
+
+# Env files
+.env
+.env.local
+.env.bat
+
+# OS
+.DS_Store
+Thumbs.db
+
+#else
+others/
