@@ -14,6 +14,18 @@ _WS_RE = re.compile(r"\s+")
 # 指定日付のデータがないとき dispHot100.php が表示する文言
 _MISSING_CHART_TEXT = "チャートファイルが見つかりません"
 
+# 詳細表示ページ（alltime.php 等）が <script> で $('#data-table').append(…) に渡す文字列。
+# 入れ子の量指定を持たない形にして、入力長に対して線形に動くようにしている。
+_JS_STRING = r"\"(?:[^\"\\\n]|\\.)*\"|'(?:[^'\\\n]|\\.)*'"
+_JS_STRING_RE = re.compile(_JS_STRING)
+_DATA_TABLE_APPEND_RE = re.compile(
+    r"\$\(\s*(['\"])#data-table\1\s*\)\s*\.append\(\s*"
+    rf"((?:{_JS_STRING})(?:\s*\+\s*(?:{_JS_STRING}))*)"
+    r"\s*\)"
+)
+_JS_ESCAPE_RE = re.compile(r"\\(u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|.)", re.DOTALL)
+_JS_SIMPLE_ESCAPES = {"n": "\n", "t": "\t", "r": "\r"}
+
 
 @dataclass(frozen=True)
 class ChartEntry:
@@ -70,6 +82,34 @@ def parse_hot100(html: str) -> list[ChartEntry]:
             )
         raise ParseError("チャートの曲が見つかりませんでした")
     return entries
+
+
+def _replace_js_escape(match: re.Match[str]) -> str:
+    code = match.group(1)
+    if len(code) > 1:  # uXXXX / xXX
+        return chr(int(code[1:], 16))
+    return _JS_SIMPLE_ESCAPES.get(code, code)
+
+
+def _unescape_js_string(body: str) -> str:
+    """JavaScript の文字列リテラルの中身（引用符を除く）のエスケープを戻す。"""
+    return _JS_ESCAPE_RE.sub(_replace_js_escape, body)
+
+
+def extract_data_table_html(html: str) -> str | None:
+    """<script> 内の $('#data-table').append(…) に渡されたHTML断片を出現順に連結して返す。
+
+    呼び出しが1つもなければ None（詳細表示形式のページではない）。スクリプトは実行しない。
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    script = "\n".join(tag.get_text() for tag in soup.find_all("script"))
+    parts: list[str] = []
+    found = False
+    for call in _DATA_TABLE_APPEND_RE.finditer(script):
+        found = True
+        for literal in _JS_STRING_RE.finditer(call.group(2)):
+            parts.append(_unescape_js_string(literal.group(0)[1:-1]))
+    return "".join(parts) if found else None
 
 
 def find_latest_hot100_url(html: str) -> str:
