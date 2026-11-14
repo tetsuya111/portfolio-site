@@ -104,6 +104,42 @@ Webhook が反応するのは、`portfolio-site/` 配下のファイルを変更
 | `DISTRIBUTION_ID` | `Distribution` の ID |
 | `DEPLOY_BRANCH` | パラメーター `DeployBranch`（空なら任意のブランチ） |
 
+## dev 環境
+
+本番に出す前の確認用に、ビルド成果物を dev 用の S3 バケットへアップロードするだけの別スタックを [template.dev.yaml](template.dev.yaml) で作れます（CloudFront・独自ドメインは作らず、バケットは非公開）。本番のスタック・buildspec には影響しません。
+
+```mermaid
+flowchart LR
+  GH[GitHub] -- dev-release への push --> CBD[CodeBuild dev 用]
+  CBD -- 成功時のみ s3 sync --> S3D[(dev 用 S3 バケット<br/>非公開)]
+```
+
+| ファイル | 内容 |
+|---|---|
+| [template.dev.yaml](template.dev.yaml) | dev 用のテンプレート（S3 バケット・ロググループ・IAM ロール・CodeBuild） |
+| [../buildspec.dev.yml](../buildspec.dev.yml) | dev 用のビルド手順。install・build は `buildspec.yml` と同じで、成功時に dev バケットへ同期する（キャッシュ無効化なし） |
+| [parameters.dev.example.json](parameters.dev.example.json) | パラメーターファイルの例。`infra/parameters.dev.json` にコピーして使う（`.gitignore` 済み） |
+
+| 名前 | 必須 | 既定値 | 内容 |
+|---|---|---|---|
+| `GitHubRepoUrl` | ○ | — | 本番と同じ GitHub リポジトリの HTTPS URL |
+| `DeployBranch` | | `dev-release` | push されたときに dev へアップロードするブランチ |
+| `DeployPath` | | `""`（空） | アップロード先のバケット内のパス（例 `preview`）。先頭・末尾に `/` を付けない。空ならバケット直下 |
+
+本番と同じく、GitHub の認証情報を登録したリージョン（us-east-1）に作ります。スタック名は本番と別にします（CodeBuild のプロジェクト名 `<スタック名>-deploy` が重ならないようにするため）。
+
+```bash
+cp infra/parameters.dev.example.json infra/parameters.dev.json  # 値を書き換える
+aws cloudformation deploy --region us-east-1 --stack-name portfolio-site-dev \
+  --template-file infra/template.dev.yaml \
+  --parameter-overrides file://infra/parameters.dev.json \
+  --capabilities CAPABILITY_IAM
+```
+
+`DeployBranch` に `portfolio-site/` 配下を変更するコミットを push すると、テスト・lint・ビルドを実行し、成功したら `dist/` を出力 `DeployUri`（`s3://<バケット>/<DeployPath>/`）へ `--delete` 付きで同期します。手動開始のビルドやほかのブランチではアップロードしません。dev のロールは dev バケット（`DeployPath` 指定時はそのパス以下）とログにしか権限がなく、本番の S3・CloudFront には触れません。
+
+dev スタックを削除するときは、先に dev バケットを空にしてください（中身が残っているとバケットの削除に失敗します）。
+
 ## スタックの削除
 
 ```bash
