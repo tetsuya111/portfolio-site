@@ -13,6 +13,7 @@ _S = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 _R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
 _PR = "{http://schemas.openxmlformats.org/package/2006/relationships}"
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+_MC_FALLBACK = "{http://schemas.openxmlformats.org/markup-compatibility/2006}Fallback"
 
 
 class _Package:
@@ -40,8 +41,11 @@ class _Package:
             raise SkillsheetError(f"{self.kind} の {name} を読めません（壊れています）") from None
 
 
-def _text_of(el: ET.Element, tag: str) -> str:
-    return "".join(t.text or "" for t in el.iter(tag))
+def _string_item(el: ET.Element) -> str:
+    """共有文字列・インライン文字列の本文。ふりがな（rPh）は除く。"""
+    parts = [el.findtext(_S + "t") or ""]
+    parts += [r.findtext(_S + "t") or "" for r in el.findall(_S + "r")]
+    return "".join(parts)
 
 
 def _col_index(ref: str) -> int | None:
@@ -57,7 +61,8 @@ def _col_index(ref: str) -> int | None:
 def _cell_value(c: ET.Element, shared: list[str]) -> str:
     kind = c.get("t")
     if kind == "inlineStr":
-        return _text_of(c, _S + "t")
+        is_ = c.find(_S + "is")
+        return _string_item(is_) if is_ is not None else ""
     v = c.find(_S + "v")
     raw = v.text if v is not None and v.text is not None else ""
     if kind == "s":
@@ -74,7 +79,7 @@ def xlsx_to_text(data: bytes) -> str:
     pkg = _Package(data, "xlsx")
     shared = []
     if pkg.has("xl/sharedStrings.xml"):
-        shared = [_text_of(si, _S + "t") for si in pkg.xml("xl/sharedStrings.xml").iter(_S + "si")]
+        shared = [_string_item(si) for si in pkg.xml("xl/sharedStrings.xml").iter(_S + "si")]
     rels = {r.get("Id"): r.get("Target", "") for r in pkg.xml("xl/_rels/workbook.xml.rels").iter(_PR + "Relationship")}
 
     blocks = []
@@ -97,31 +102,59 @@ def xlsx_to_text(data: bytes) -> str:
     return "\n\n".join(blocks)
 
 
+def _iter_skip_fallback(el: ET.Element):
+    """el 以下の要素を順に返す。mc:Fallback（mc:Choice と同じ内容の代替表示）の中は辿らない。"""
+    yield el
+    for child in el:
+        if child.tag != _MC_FALLBACK:
+            yield from _iter_skip_fallback(child)
+
+
 def _paragraph_text(p: ET.Element) -> str:
     parts = []
-    for el in p.iter():
+    for el in _iter_skip_fallback(p):
         if el.tag == _W + "t":
             parts.append(el.text or "")
-        elif el.tag == _W + "tab":
-            parts.append(" ")
-        elif el.tag in (_W + "br", _W + "cr"):
+        elif el.tag in (_W + "tab", _W + "br", _W + "cr"):
             parts.append(" ")
     return "".join(parts).strip()
 
 
-def docx_to_text(data: bytes) -> str:
-    pkg = _Package(data, "docx")
-    body = pkg.xml("word/document.xml").find(_W + "body")
-    lines = []
-    for child in body if body is not None else []:
+def _table_rows(tbl: ET.Element):
+    """表の行（入れ子の表の行は含めない。sdt などで包まれた行は含める）。"""
+    for child in tbl:
+        if child.tag == _W + "tr":
+            yield child
+        elif child.tag not in (_W + "tbl", _MC_FALLBACK):
+            yield from _table_rows(child)
+
+
+def _cell_text(tc: ET.Element) -> str:
+    paragraphs = (el for el in _iter_skip_fallback(tc) if el.tag == _W + "p")
+    return " ".join(filter(None, (_paragraph_text(p) for p in paragraphs)))
+
+
+def _walk_blocks(el: ET.Element, lines: list[str]) -> None:
+    """本文の段落と表を順に読む。sdt・customXml などの入れ物の中も辿る。"""
+    for child in el:
         if child.tag == _W + "p":
             text = _paragraph_text(child)
             if text:
                 lines.append(text)
         elif child.tag == _W + "tbl":
-            for tr in child.iter(_W + "tr"):
-                cells = [" ".join(filter(None, (_paragraph_text(p) for p in tc.iter(_W + "p")))) for tc in tr.findall(_W + "tc")]
+            for tr in _table_rows(child):
+                cells = [_cell_text(tc) for tc in tr if tc.tag == _W + "tc"]
                 line = "\t".join(cells).rstrip("\t")
                 if line.strip():
                     lines.append(line)
+        elif child.tag != _MC_FALLBACK:
+            _walk_blocks(child, lines)
+
+
+def docx_to_text(data: bytes) -> str:
+    pkg = _Package(data, "docx")
+    body = pkg.xml("word/document.xml").find(_W + "body")
+    lines: list[str] = []
+    if body is not None:
+        _walk_blocks(body, lines)
     return "\n".join(lines)

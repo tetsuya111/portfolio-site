@@ -57,6 +57,10 @@ def read_file(path: Path) -> str:
     path = Path(path)
     if not path.is_file():
         raise SkillsheetError(f"ファイルが見つかりません: {path}")
-    if path.stat().st_size > MAX_BYTES:
-        raise SkillsheetError(f"ファイルが大きすぎます（上限 {MAX_BYTES // (1024 * 1024)}MB）: {path}")
-    return read_bytes(path.read_bytes(), path.suffix.lower())
+    try:
+        if path.stat().st_size > MAX_BYTES:
+            raise SkillsheetError(f"ファイルが大きすぎます（上限 {MAX_BYTES // (1024 * 1024)}MB）: {path}")
+        data = path.read_bytes()
+    except OSError as e:
+        raise SkillsheetError(f"ファイルを読めません（{e.strerror or e}）: {path}") from None
+    return read_bytes(data, path.suffix.lower())

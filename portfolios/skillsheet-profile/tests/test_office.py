@@ -34,6 +34,15 @@ class XlsxTest(unittest.TestCase):
         )
         self.assertIn("Python\tAWS\tTRUE\t式", office.xlsx_to_text(data))
 
+    def test_skips_phonetic_reading(self):
+        data = make_xlsx(
+            {"s": '<row r="1"><c r="A1" t="s"><v>0</v></c>'
+                  '<c r="B1" t="inlineStr"><is><t>東京</t><rPh sb="0" eb="2"><t>トウキョウ</t></rPh></is></c></row>'},
+            shared=['<si><t>山田太郎</t><rPh sb="0" eb="2"><t>ヤマダ</t></rPh><phoneticPr fontId="1"/></si>'],
+        )
+        self.assertIn("山田太郎\t東京", office.xlsx_to_text(data))
+        self.assertNotIn("ヤマダ", office.xlsx_to_text(data))
+
     def test_cells_without_ref(self):
         data = make_xlsx({"s": '<row><c t="inlineStr"><is><t>a</t></is></c><c t="inlineStr"><is><t>b</t></is></c></row>'})
         self.assertIn("a\tb", office.xlsx_to_text(data))
@@ -56,6 +65,19 @@ class DocxTest(unittest.TestCase):
         table = ("<w:tbl><w:tr><w:tc>" + para("言語") + "</w:tc><w:tc>" + para("Python") + "</w:tc></w:tr></w:tbl>")
         text = office.docx_to_text(make_docx(para("自己PR") + "<w:p/>" + table))
         self.assertEqual(text, "自己PR\n言語\tPython")
+
+    def test_docx_content_controls(self):
+        body = ("<w:sdt><w:sdtContent>" + para("氏名 T.Y") + "<w:tbl><w:tr><w:tc>" + para("言語")
+                + "</w:tc><w:tc>" + para("Go") + "</w:tc></w:tr></w:tbl></w:sdtContent></w:sdt>"
+                + "<w:customXml>" + para("自己PR") + "</w:customXml>")
+        self.assertEqual(office.docx_to_text(make_docx(body)), "氏名 T.Y\n言語\tGo\n自己PR")
+
+    def test_docx_alternate_content_once(self):
+        mc = 'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"'
+        p = ('<w:p><w:r><mc:AlternateContent ' + mc + '><mc:Choice Requires="wps"><w:txbxContent>' + para("枠内")
+             + '</w:txbxContent></mc:Choice><mc:Fallback><w:txbxContent>' + para("枠内")
+             + "</w:txbxContent></mc:Fallback></mc:AlternateContent></w:r></w:p>")
+        self.assertEqual(office.docx_to_text(make_docx(p)), "枠内")
 
     def test_read_bytes_docx(self):
         self.assertEqual(readers.read_bytes(make_docx(para("x")), ".docx"), "x")

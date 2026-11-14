@@ -87,6 +87,35 @@ class ValidateTest(unittest.TestCase):
         errors = profile.validate(replace("role: フリーランス Web エンジニア", "role: x\n  nested: y"))
         self.assertTrue(any("行目" in e for e in errors), errors)
 
+    def test_bare_links_is_error(self):
+        errors = profile.validate(replace("links:\n  - label: GitHub\n    url: https://github.com/\n", "links:\n"))
+        self.assertTrue(any("links" in e for e in errors), errors)
+
+    def test_zero_indent_items(self):
+        text = replace("  - label: GitHub\n    url: https://github.com/", "- label: GitHub\n  url: https://github.com/")
+        self.assertEqual(profile.validate(text), [])
+
+    def test_misaligned_continuation(self):
+        for bad in ("      url: https://github.com/", "  url: https://github.com/"):
+            errors = profile.validate(replace("    url: https://github.com/", bad))
+            self.assertTrue(any("インデント" in e or "links" in e for e in errors), (bad, errors))
+
+    def test_misaligned_items(self):
+        text = replace("    url: https://github.com/\n", "    url: https://github.com/\n    - label: X\n      url: https://x.com/\n")
+        self.assertTrue(profile.validate(text))
+
+    def test_more_non_string_scalars(self):
+        for value in ("2024-4-1", "0b101", "1_000", "yes", "12:30"):
+            errors = profile.validate(replace("role: フリーランス Web エンジニア", f"role: {value}"))
+            self.assertTrue(any("role" in e for e in errors), (value, errors))
+
+    def test_url_rules(self):
+        for bad in ("https://[github", "https://exa%zzmple.com", "https://", "https://a b.com", "mailto:a@b.c"):
+            errors = profile.validate(replace("url: https://github.com/", f'url: "{bad}"'))
+            self.assertTrue(any("url" in e for e in errors), (bad, errors))
+        for good in ("HTTPS://github.com/x", "http://localhost:4321/", "https://例え.jp/"):
+            self.assertEqual(profile.validate(replace("url: https://github.com/", f"url: {good}")), [], good)
+
     def test_duplicate_key(self):
         errors = profile.validate(replace("role: フリーランス Web エンジニア", "role: a\nrole: b"))
         self.assertTrue(any("role" in e for e in errors), errors)
@@ -139,6 +168,18 @@ class ApplyCliTest(TempDirMixin, unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("name", err)
         self.assertEqual(self.target.read_bytes(), before)
+
+    def test_apply_cp932_draft(self):
+        draft = self.tmp / "draft.md"
+        draft.write_bytes(VALID.encode("cp932"))
+        code, out, err = run_main("apply", str(draft), "--target", str(self.target))
+        self.assertEqual(code, 0, err)
+        # cp932 の往復で「〜」は全角チルダになる（cp932 の仕様）
+        self.assertEqual(self.target.read_text(encoding="utf-8"), VALID.encode("cp932").decode("cp932"))
+
+    def test_apply_draft_is_directory(self):
+        code, out, err = run_main("apply", str(self.tmp), "--target", str(self.target))
+        self.assertEqual(code, 1)
 
     def test_missing_draft(self):
         code, out, err = run_main("apply", str(self.tmp / "none.md"), "--target", str(self.target))

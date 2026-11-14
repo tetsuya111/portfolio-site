@@ -47,6 +47,13 @@ class TextReaderTest(TempDirMixin, unittest.TestCase):
             with self.assertRaises(SkillsheetError):
                 readers.read_file(p)
 
+    def test_unreadable_file(self):
+        p = self.tmp / "a.txt"
+        p.write_text("x", encoding="utf-8")
+        with mock.patch("pathlib.Path.read_bytes", side_effect=PermissionError("denied")):
+            with self.assertRaises(SkillsheetError):
+                readers.read_file(p)
+
     def test_undecodable(self):
         with self.assertRaises(SkillsheetError):
             readers.read_bytes(b"\x81\x00\xff\xfe\x80", ".txt")

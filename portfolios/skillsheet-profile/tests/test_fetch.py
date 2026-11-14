@@ -72,6 +72,30 @@ class FetchTest(unittest.TestCase):
         body, ext = fetch.fetch("https://example.com/me", opener=FakeOpener(FakeResponse(b"<p>x</p>", "text/html")))
         self.assertEqual((body, ext), (b"<p>x</p>", ".html"))
 
+    def test_other_url_by_content_type(self):
+        cases = [("text/plain; charset=utf-8", ".txt"), ("text/markdown", ".txt"), ("text/csv", ".txt"),
+                 ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xlsx"),
+                 ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".docx")]
+        for content_type, ext in cases:
+            _, got = fetch.fetch("https://example.com/a", opener=FakeOpener(FakeResponse(b"x", content_type)))
+            self.assertEqual(got, ext, content_type)
+
+    def test_octet_stream_uses_url_ext(self):
+        _, ext = fetch.fetch("https://example.com/sheet.XLSX?dl=1", opener=FakeOpener(FakeResponse(b"x", "application/octet-stream")))
+        self.assertEqual(ext, ".xlsx")
+        _, ext = fetch.fetch("https://example.com/download", opener=FakeOpener(FakeResponse(b"x", "application/octet-stream")))
+        self.assertEqual(ext, ".html")
+
+    def test_charset_is_respected(self):
+        body = "<p>山田</p>".encode("euc_jp")
+        data, ext = fetch.fetch("https://example.com/", opener=FakeOpener(FakeResponse(body, "text/html; charset=EUC-JP")))
+        self.assertEqual(readers.read_bytes(data, ext), "山田")
+
+    def test_unknown_charset_falls_back(self):
+        body = "<p>山田</p>".encode("utf-8")
+        data, ext = fetch.fetch("https://example.com/", opener=FakeOpener(FakeResponse(body, "text/html; charset=x-unknown")))
+        self.assertEqual(readers.read_bytes(data, ext), "山田")
+
     def test_other_url_http_error(self):
         err = urllib.error.HTTPError("https://example.com/", 404, "Not Found", email.message.Message(), None)
         with self.assertRaises(SkillsheetError) as cm:

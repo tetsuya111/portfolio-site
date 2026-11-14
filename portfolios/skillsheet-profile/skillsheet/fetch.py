@@ -1,7 +1,9 @@
 """URL のスキルシートを取得する。Google スプレッドシートは公開シートを xlsx でエクスポートする（OAuth は扱わない）。"""
 
+import posixpath
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from skillsheet import readers
@@ -40,6 +42,7 @@ def fetch(url: str, opener=urllib.request.urlopen) -> tuple[bytes, str]:
     try:
         with opener(request, timeout=TIMEOUT_SECONDS) as res:
             content_type = res.headers.get_content_type()
+            charset = res.headers.get_content_charset()
             body = res.read(readers.MAX_BYTES + 1)
     except urllib.error.HTTPError as e:
         if export and e.code in (401, 403, 404):
@@ -54,4 +57,37 @@ def fetch(url: str, opener=urllib.request.urlopen) -> tuple[bytes, str]:
             # 非公開シートはログイン画面の HTML が返る
             raise SkillsheetError(_PRIVATE_MESSAGE)
         return body, ".xlsx"
-    return body, ".html"
+    ext = _ext_for(content_type, url)
+    if ext in readers.TEXT_EXTS | readers.HTML_EXTS and charset:
+        body = _to_utf8(body, charset)
+    return body, ext
+
+
+_CONTENT_TYPE_EXTS = {
+    "text/html": ".html",
+    "application/xhtml+xml": ".html",
+    "text/plain": ".txt",
+    "text/markdown": ".txt",
+    "text/x-markdown": ".txt",
+    "text/csv": ".txt",
+    "text/tab-separated-values": ".txt",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    "application/vnd.ms-excel.sheet.macroenabled.12": ".xlsm",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+}
+
+
+def _ext_for(content_type: str, url: str) -> str:
+    """応答の Content-Type から読み分けの拡張子を決める。不明なら URL の拡張子、それもなければ HTML として読む。"""
+    if content_type in _CONTENT_TYPE_EXTS:
+        return _CONTENT_TYPE_EXTS[content_type]
+    path_ext = posixpath.splitext(urllib.parse.urlsplit(url).path)[1].lower()
+    return path_ext if path_ext in readers.SUPPORTED_EXTS else ".html"
+
+
+def _to_utf8(body: bytes, charset: str) -> bytes:
+    """Content-Type の charset でデコードして UTF-8 にする。charset が不明・合わなければそのまま返す（推測に任せる）。"""
+    try:
+        return body.decode(charset).encode("utf-8")
+    except (LookupError, UnicodeDecodeError):
+        return body

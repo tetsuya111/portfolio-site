@@ -10,6 +10,7 @@ import os
 import re
 import tempfile
 from pathlib import Path
+from urllib.parse import urlsplit
 
 # このファイルは <リポジトリ>/portfolios/skillsheet-profile/skillsheet/ にある
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -17,12 +18,16 @@ DEFAULT_TARGET = REPO_ROOT / "portfolio-site" / "src" / "content" / "profile" / 
 
 REQUIRED_HEADINGS = ("## 自己紹介", "## 経歴", "## スキル")
 _TOP = re.compile(r"^([A-Za-z_][\w-]*):(?:\s+(.*))?$")
-_ITEM_START = re.compile(r"^\s+-\s+([A-Za-z_][\w-]*):(?:\s+(.*))?$")
-_ITEM_CONT = re.compile(r"^\s+([A-Za-z_][\w-]*):(?:\s+(.*))?$")
-# クォートなしだと YAML で文字列以外（数値・真偽値・null・日付）になる値
+# YAML のインデントは空白だけ（タブは不可）。group(1)=「-」までの空白、group(2)=キー、group(3)=値
+_ITEM_START = re.compile(r"^( *)- +([A-Za-z_][\w-]*):(?: +(.*))?$")
+_ITEM_CONT = re.compile(r"^( +)([A-Za-z_][\w-]*):(?: +(.*))?$")
+# クォートなしだと YAML（js-yaml・yaml の両方）で文字列以外（数値・真偽値・null・日付）になりうる値。
+# 文字列として扱われるものまで含めて広めに拒否する（クォートすれば必ず通る）。
 _NON_STRING = re.compile(
-    r"^(?:[-+]?(?:\d[\d_]*)?\.?\d+(?:[eE][-+]?\d+)?|0x[0-9a-fA-F]+|0o[0-7]+|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN)"
-    r"|true|True|TRUE|false|False|FALSE|null|Null|NULL|~|\d{4}-\d{2}-\d{2}(?:[Tt ].*)?)$"
+    r"^(?:[-+]?[\d_]*\.?[\d_]+(?:[eE][-+]?\d+)?|[-+]?0b[01_]+|[-+]?0x[0-9a-fA-F_]+|[-+]?0o[0-7_]+"
+    r"|[-+]?\d[\d_]*(?::[0-5]?\d)+(?:\.[\d_]*)?|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN)"
+    r"|true|True|TRUE|false|False|FALSE|yes|Yes|YES|no|No|NO|on|On|ON|off|Off|OFF|y|Y|n|N"
+    r"|null|Null|NULL|~|\d{4}-\d{1,2}-\d{1,2}(?:(?:[Tt]|\s+).*)?)$"
 )
 # クォートなしでは YAML の別の構文になる先頭の記号
 _SPECIAL_START = tuple("[]{}|>&*!%@`#,?-")
@@ -72,12 +77,14 @@ def _split(text: str) -> tuple[list[str], list[str]] | None:
 def _parse_frontmatter(lines: list[str], errors: list[str]) -> dict:
     data: dict = {}
     links: list[dict] | None = None  # links の並びを読んでいる間だけ list
+    dash_col = key_col = None  # 要素の「-」の列と、要素内のキーの列（YAML ではすべての要素でそろう必要がある）
     for no, line in enumerate(lines, start=2):  # 1 行目は ---
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         key = None
         try:
-            if not line[0].isspace():
+            item = _ITEM_START.match(line) if links is not None else None
+            if not line[0].isspace() and not item:
                 links = None
                 m = _TOP.match(line)
                 if not m:
@@ -90,27 +97,54 @@ def _parse_frontmatter(lines: list[str], errors: list[str]) -> dict:
                         raise _ScalarError("links は「- label: ...」「url: ...」の並びで書いてください")
                     data[key] = []
                     links = data[key] if raw == "" else None
+                    dash_col = key_col = None
                     continue
                 data[key] = _scalar(raw)
                 continue
             if links is None:
                 raise _ScalarError("インデントされた行は links の中にだけ書けます")
-            m = _ITEM_START.match(line)
-            if m:
+            if item:
+                col_dash, col_key = len(item.group(1)), item.start(2)
+                if dash_col is None:
+                    dash_col, key_col = col_dash, col_key
+                elif (col_dash, col_key) != (dash_col, key_col):
+                    raise _ScalarError("links の要素のインデントがそろっていません")
                 links.append({})
+                name, raw = item.group(2), item.group(3)
             else:
                 m = _ITEM_CONT.match(line)
                 if not m or not links:
                     raise _ScalarError("links の要素は「- label: ...」で始めてください")
-            key, raw = m.group(1), m.group(2)
-            if key in links[-1]:
-                raise _ScalarError(f"links の {key} が重複しています")
-            key = f"links.{len(links) - 1}.{key}"
-            links[-1][m.group(1)] = _scalar(raw)
+                if len(m.group(1)) != key_col:
+                    raise _ScalarError("links の要素のインデントが「- 」の後ろのキーとそろっていません")
+                name, raw = m.group(2), m.group(3)
+            key = f"links.{len(links) - 1}.{name}"
+            if name in links[-1]:
+                raise _ScalarError(f"{name} が重複しています")
+            links[-1][name] = _scalar(raw)
         except _ScalarError as e:
             where = f"（{key}）" if key else ""
             errors.append(f"frontmatter の {no} 行目{where}を解釈できません: {e}")
+    if links is not None and not links:
+        # 値のない「links:」は YAML では null になり、スキーマ（配列か省略）に合わない
+        errors.append("links: 要素がありません（リンクがなければ行ごと消してください）")
     return data
+
+
+def _is_http_url(url) -> bool:
+    """スキーマの z.url({ protocol: /^https?$/ }) に近い判定。ホスト名を持つ http(s) の URL だけを通す。"""
+    if not isinstance(url, str) or not url or re.search(r"\s", url):
+        return False
+    try:
+        parts = urlsplit(url)
+        host = parts.hostname
+        parts.port  # 不正なポートは ValueError
+    except ValueError:
+        return False
+    if parts.scheme.lower() not in ("http", "https") or not host:
+        return False
+    # % を含むホスト名・使えない記号を含むホスト名は WHATWG URL でも不正になる
+    return re.fullmatch(r"[A-Za-z0-9\-._~\u0080-\U0010ffff]+|\[[0-9A-Fa-f:.]+\]", host if ":" not in host else f"[{host}]") is not None
 
 
 def validate(text: str) -> list[str]:
@@ -130,8 +164,7 @@ def validate(text: str) -> list[str]:
     for i, link in enumerate(data.get("links") or []):
         if not isinstance(link.get("label"), str) or not link["label"]:
             errors.append(f"links.{i}.label: 空でない文字列が必要です")
-        url = link.get("url")
-        if not isinstance(url, str) or not re.match(r"^https?://\S+$", url):
+        if not _is_http_url(link.get("url")):
             errors.append(f"links.{i}.url: http:// か https:// で始まる URL が必要です")
 
     body_lines = {line.rstrip() for line in body}

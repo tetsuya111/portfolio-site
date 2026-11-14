@@ -23,7 +23,10 @@ def _apply(draft: str, target: Path) -> None:
         path = Path(draft)
         if not path.is_file():
             raise SkillsheetError(f"下書きが見つかりません: {path}")
-        text = path.read_text(encoding="utf-8-sig")
+        try:
+            text = readers.decode_text(path.read_bytes())
+        except OSError as e:
+            raise SkillsheetError(f"下書きを読めません（{e.strerror or e}）: {path}") from None
     errors = profile.validate(text)
     if errors:
         raise SkillsheetError(
@@ -31,7 +34,10 @@ def _apply(draft: str, target: Path) -> None:
         )
     if not target.parent.is_dir():
         raise SkillsheetError(f"置き換え先のディレクトリがありません: {target.parent}")
-    profile.write_profile(text, target)
+    try:
+        profile.write_profile(text, target)
+    except OSError as e:
+        raise SkillsheetError(f"profile.md を書き込めません（{e.strerror or e}）: {target}") from None
     print(json.dumps({"target": str(target), "replaced": True}, ensure_ascii=False))
 
 
