@@ -1,8 +1,8 @@
 ---
-import { getCollection, render } from "astro:content";
+import { getCollection } from "astro:content";
 import BaseLayout from "../../layouts/BaseLayout.astro";
-import TagList from "../../components/TagList.astro";
-import { formatDisplayDate, publishedArticles } from "../../lib/content-query";
+import ArticleBody from "../../components/ArticleBody.astro";
+import { publishedArticles } from "../../lib/content-query";
 
 export async function getStaticPaths() {
   // 下書き（draft: true）はページを生成しない
@@ -11,19 +11,8 @@ export async function getStaticPaths() {
 }
 
 const { entry } = Astro.props;
-const { Content } = await render(entry);
 ---
 
 <BaseLayout title={entry.data.title} description={entry.data.description}>
-  <a href="/articles/" class="text-sm font-semibold text-link hover:underline">← 記事一覧</a>
-  <header class="mt-6 border-b border-line pb-6">
-    <h1 class="font-heading text-3xl font-bold tracking-tight break-words sm:text-4xl">{entry.data.title}</h1>
-    <time class="mt-3 block text-sm text-muted tabular-nums" datetime={entry.data.date.toISOString()}>
-      {formatDisplayDate(entry.data.date)}
-    </time>
-    <div class="mt-3"><TagList tags={entry.data.tags} /></div>
-  </header>
-  <article class="prose prose-themed mt-8 max-w-none">
-    <Content />
-  </article>
+  <ArticleBody entry={entry} backHref="/articles/" backLabel="← 記事一覧" />
 </BaseLayout>

@@ -1,34 +1,21 @@
 ---
 import { getCollection } from "astro:content";
 import BaseLayout from "../../layouts/BaseLayout.astro";
-import TagList from "../../components/TagList.astro";
 import SectionHeading from "../../components/SectionHeading.astro";
-import { formatDisplayDate, publishedArticles } from "../../lib/content-query";
+import ArticleList from "../../components/ArticleList.astro";
+import { publishedArticles } from "../../lib/content-query";
 
+// 手で書いた記事だけ。自動作成の記事（itArticles）は /it-news/ に分けて表示する
 const articles = publishedArticles(await getCollection("articles"));
 ---
 
 <BaseLayout title="記事">
-  <SectionHeading as="h1" eyebrow="Articles" title="記事" class="mb-8" />
-  {articles.length === 0 && <p class="text-muted">まだありません。</p>}
-  <ul class="space-y-5">
-    {
-      articles.map((a) => (
-        <li class="rounded-card border border-line bg-surface p-5 shadow-sm">
-          <time class="text-sm text-muted tabular-nums" datetime={a.data.date.toISOString()}>
-            {formatDisplayDate(a.data.date)}
-          </time>
-          <h2 class="mt-1 font-heading text-lg font-bold">
-            <a href={`/articles/${a.id}/`} class="hover:text-link hover:underline">
-              {a.data.title}
-            </a>
-          </h2>
-          {a.data.description && <p class="mt-1 text-muted">{a.data.description}</p>}
-          <div class="mt-3">
-            <TagList tags={a.data.tags} />
-          </div>
-        </li>
-      ))
-    }
-  </ul>
+  <SectionHeading as="h1" eyebrow="Articles" title="記事" class="mb-4" />
+  <a
+    href="/it-news/"
+    class="mb-8 inline-block rounded-card border border-line bg-surface px-4 py-2 text-sm font-semibold text-link shadow-sm hover:underline"
+  >
+    IT ニュース（AI が自動で作成した記事）の一覧 →
+  </a>
+  <ArticleList articles={articles} basePath="/articles/" />
 </BaseLayout>

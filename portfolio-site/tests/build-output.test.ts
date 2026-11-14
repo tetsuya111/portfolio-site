@@ -54,6 +54,16 @@ describe("build output", () => {
     expect(existsSync(join(dist, "articles", "draft-sample"))).toBe(false);
   });
 
+  it("has the IT news list page for auto-generated articles, linked from the article list", () => {
+    expect(html("it-news")).toMatch(/<h1[^>]*>IT ニュース<\/h1>/);
+    expect(html("it-news")).toContain("<title>IT ニュース | Portfolio</title>");
+    expect(html("articles")).toMatch(/<a href="\/it-news\/"/);
+  });
+
+  it("keeps the back link on hand-written article pages", () => {
+    expect(html("articles/hello-world")).toMatch(/<a href="\/articles\/"[^>]*>← 記事一覧<\/a>/);
+  });
+
   it("contains no admin pages", () => {
     expect(existsSync(join(dist, "admin"))).toBe(false);
   });
@@ -62,7 +72,7 @@ describe("build output", () => {
     // ビルドと同じ規則で期待値を決める。PUBLIC_THEME は astro build と同じく環境変数と .env ファイルの両方から読む
     const env = loadEnv("production", join(import.meta.dirname, ".."), "PUBLIC_");
     const theme = resolveTheme(env.PUBLIC_THEME, siteConfig.theme);
-    for (const p of [".", "about", "portfolios", "articles"]) {
+    for (const p of [".", "about", "portfolios", "articles", "it-news"]) {
       expect(html(p)).toContain(`<html lang="ja" data-theme="${theme}"`);
     }
   });

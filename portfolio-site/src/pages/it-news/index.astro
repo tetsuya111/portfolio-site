@@ -1,0 +1,19 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import SectionHeading from "../../components/SectionHeading.astro";
+import ArticleList from "../../components/ArticleList.astro";
+import { publishedArticles } from "../../lib/content-query";
+
+// 自動作成の記事（src/content/it-articles）だけ。手で書いた記事とは並べない
+const articles = publishedArticles(await getCollection("itArticles"));
+---
+
+<BaseLayout title="IT ニュース" description="AI（Perplexity）が最新の IT ニュースから自動で作成した記事の一覧です。">
+  <SectionHeading as="h1" eyebrow="IT News" title="IT ニュース" class="mb-4" />
+  <p class="mb-8 text-muted">
+    AI（Perplexity）が最新の IT ニュースから重要なものを選び、出典と用語解説つきで自動で作成した記事です。内容は各記事の参考リンクで確認してください。
+  </p>
+  <ArticleList articles={articles} basePath="/it-news/" />
+  <a href="/articles/" class="mt-8 inline-block text-sm font-semibold text-link hover:underline">← 記事一覧</a>
+</BaseLayout>
