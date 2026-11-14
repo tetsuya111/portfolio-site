@@ -86,7 +86,7 @@ describe("buildApps", () => {
     expect(readFileSync(join(root, "dist", "apps", "my-app", "index.html"), "utf8")).toBe("hi");
   });
 
-  it("passes env to both npm ci and npm run build", () => {
+  it("passes env only to npm run build (not to npm ci)", () => {
     const envs: Record<string, string>[] = [];
     const run = (_cmd: string, args: string[], cwd: string, env: Record<string, string>) => {
       envs.push(env);
@@ -95,7 +95,7 @@ describe("buildApps", () => {
     };
     const env = { VITE_API_URL: "https://api.example.com" };
     buildApps([app({ env })], { appsDir: join(root, "apps"), distDir: join(root, "dist"), run });
-    expect(envs).toEqual([env, env]);
+    expect(envs).toEqual([{}, env]);
   });
 
   it("omits -- when there are no build args", () => {

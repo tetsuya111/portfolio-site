@@ -8,10 +8,11 @@ from tests.helpers import TempDirMixin, write, write_json
 class HttpsUrlTest(unittest.TestCase):
     def test_accepts_https_urls_only(self):
         for ok in ["https://api.example.com", "https://a.example.com:8443/v1/", "https://x-y.example.com/a_b.c~d"]:
-            self.assertRegex(ok, HTTPS_URL)
+            self.assertIsNotNone(HTTPS_URL.fullmatch(ok), ok)
         for ng in ["http://api.example.com", "https://a.example.com/?a=1", "https://a.example.com/#x",
-                   'https://a.example.com/"', "https://a b.example.com", "ftp://a.example.com"]:
-            self.assertNotRegex(ng, HTTPS_URL)
+                   'https://a.example.com/"', "https://a b.example.com", "ftp://a.example.com",
+                   "https://api.example.com\n"]:
+            self.assertIsNone(HTTPS_URL.fullmatch(ng), ng)
 
 
 class FindFrontendEnvNamesTest(TempDirMixin, unittest.TestCase):
@@ -23,6 +24,11 @@ class FindFrontendEnvNamesTest(TempDirMixin, unittest.TestCase):
         write(self.tmp / "src/App.vue", "import.meta.env.VITE_API_URL\n")
         self.assertEqual(find_frontend_env_names(self.tmp),
                          ["NEXT_PUBLIC_BACKEND_URL", "PUBLIC_SERVER_ORIGIN", "VITE_API_URL"])
+
+    def test_finds_destructured_and_bracket_access(self):
+        write(self.tmp / "src/a.ts", "const { VITE_API_URL } = import.meta.env;\n"
+                                     "const b = import.meta.env['VITE_BACKEND_URL'];\n")
+        self.assertEqual(find_frontend_env_names(self.tmp), ["VITE_API_URL", "VITE_BACKEND_URL"])
 
     def test_ignores_node_modules_and_other_extensions(self):
         write(self.tmp / "node_modules/x/index.js", "import.meta.env.VITE_API_URL\n")
@@ -44,7 +50,14 @@ class FindBackendEnvNamesTest(TempDirMixin, unittest.TestCase):
     def test_ignores_tests(self):
         write(self.tmp / "tests/test_config.py", 'os.getenv("FRONTEND_URL")\n')
         write(self.tmp / "test_main.py", 'os.getenv("CLIENT_URL")\n')
+        write(self.tmp / "src/tests/conftest.py", 'os.environ["TEST_CLIENT_URL"]\n')
         self.assertEqual(find_backend_env_names(self.tmp), [])
+
+    def test_ignores_public_names_and_nested_frontend(self):
+        write(self.tmp / "web/.env.example", "API_ORIGIN=\n")
+        write(self.tmp / "web/src/a.js", "process.env.WEB_CLIENT_URL\n")
+        write(self.tmp / "cfg.py", 'os.getenv("NEXT_PUBLIC_SITE_ORIGIN")\n')
+        self.assertEqual(find_backend_env_names(self.tmp, skip_dirs=[self.tmp / "web"]), [])
 
 
 class ReadSiteUrlTest(TempDirMixin, unittest.TestCase):
@@ -58,7 +71,8 @@ class ReadSiteUrlTest(TempDirMixin, unittest.TestCase):
         write(self.params(), "{")
         self.assertIsNone(read_site_url(self.tmp))
         for bad in [{"Parameters": {"DomainName": "x/y"}}, {"Parameters": {"DomainName": 1}}, {"Parameters": []},
-                    [], {"Parameters": {"DomainName": "localhost"}}, {"Parameters": {"DomainName": '"a.com'}}]:
+                    [], {"Parameters": {"DomainName": "localhost"}}, {"Parameters": {"DomainName": '"a.com'}},
+                    {"Parameters": {"DomainName": "a.example.com\n"}}]:
             write_json(self.params(), bad)
             self.assertIsNone(read_site_url(self.tmp), bad)
 
@@ -72,6 +86,10 @@ class FrontendUrlEnvTest(unittest.TestCase):
         env = frontend_url_env(["CORS_ORIGINS", "FRONTEND_URL"], "https://p.example.com/", "my-app", True)
         self.assertEqual(env, {"CORS_ORIGINS": "https://p.example.com",
                                "FRONTEND_URL": "https://p.example.com/apps/my-app/"})
+
+    def test_site_url_path_is_kept_for_app_url(self):
+        self.assertEqual(frontend_url_env(["FRONTEND_URL"], "https://p.example.com/pf/", "a", True),
+                         {"FRONTEND_URL": "https://p.example.com/pf/apps/a/"})
 
     def test_unregistered_frontend_gets_origin(self):
         self.assertEqual(frontend_url_env(["FRONTEND_URL"], "https://p.example.com/x", "my-app", False),

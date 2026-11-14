@@ -88,8 +88,13 @@ export function buildApps(apps: AppEntry[], { appsDir, distDir, run }: BuildOpti
     }
     const build = ["run", "build", ...(app.buildArgs.length ? ["--", ...app.buildArgs] : [])];
     // インストールスクリプトは実行しない（乗っ取られた依存のスクリプトにデプロイ用の権限を使わせない）
-    for (const args of [["ci", "--ignore-scripts"], build]) {
-      const code = run("npm", args, cwd, app.env);
+    // env はビルド時に埋め込む値のため、依存のインストールには渡さない
+    const steps: [string[], Record<string, string>][] = [
+      [["ci", "--ignore-scripts"], {}],
+      [build, app.env],
+    ];
+    for (const [args, env] of steps) {
+      const code = run("npm", args, cwd, env);
       if (code !== 0) throw new Error(`${app.slug}: npm ${args.join(" ")} が失敗しました（終了コード ${code}）`);
     }
     const out = join(cwd, app.outputDir);

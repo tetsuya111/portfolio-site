@@ -9,6 +9,7 @@ import subprocess
 import sys
 from datetime import date
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from importer import PortfolioError
 from importer.backend import build_image, write_docker_files
@@ -39,10 +40,13 @@ def _rel(path: Path, repo_root: Path) -> str:
     return path.relative_to(repo_root).as_posix()
 
 
+_BACKEND_URL_UNUSED = "配信登録できるフロントエンドがないため、--backend-url は使いませんでした"
+
+
 def _frontend_env(frontend, backend_url: str | None) -> tuple[dict[str, str], list[str]]:
     """apps.json の env に書く内容と警告を返す（配信できないフロントエンドは対象外）。"""
     if frontend.kind is None:
-        return {}, []
+        return {}, [_BACKEND_URL_UNUSED] if backend_url is not None else []
     names = find_frontend_env_names(frontend.dir)
     if backend_url is None:
         if not names:
@@ -57,14 +61,14 @@ def _frontend_env(frontend, backend_url: str | None) -> tuple[dict[str, str], li
     return {names[0]: backend_url}, warnings
 
 
-def _backend_env(backend_dir: Path, site_url: str | None, slug: str,
-                 registered: bool) -> tuple[dict[str, str], list[str]]:
+def _backend_env(backend_dir: Path, site_url: str | None, slug: str, registered: bool,
+                 skip_dirs: list[Path]) -> tuple[dict[str, str], list[str]]:
     """Dockerfile の ENV に書くフロントエンドの URL と警告を返す。"""
     if site_url is None:
         return {}, ["サイトの URL（--site-url または portfolio-site/infra/parameters.json の DomainName）を判定できないため、"
                     "Dockerfile にフロントエンドの URL を書きませんでした"]
     warnings: list[str] = []
-    names = find_backend_env_names(backend_dir)
+    names = find_backend_env_names(backend_dir, skip_dirs=skip_dirs)
     if not names:
         names = ["FRONTEND_URL"]
         warnings.append("バックエンドがフロントエンドの URL を読む環境変数を判定できないため、FRONTEND_URL として"
@@ -72,18 +76,24 @@ def _backend_env(backend_dir: Path, site_url: str | None, slug: str,
     env = frontend_url_env(names, site_url, slug, registered)
     if not env:
         warnings.append("サイトの URL に Dockerfile に書けない文字が含まれるため、フロントエンドの URL を書きませんでした")
+    with_path = [n for n, v in env.items() if urlsplit(v).path not in ("", "/")]
+    if with_path:
+        warnings.append(f"{', '.join(with_path)} にはアプリの URL（パス付き）を書きました。CORS の許可オリジンに使う変数なら、"
+                        "オリジン（パスなし）に直してください")
     return env, warnings
 
 
 def run_import(args: argparse.Namespace, repo_root: Path, run, today: date) -> dict:
-    if args.site_url is not None and not _SITE_URL.match(args.site_url):
+    if args.site_url is not None and not _SITE_URL.fullmatch(args.site_url):
         raise PortfolioError("--site-url は http:// または https:// で始まる URL にしてください")
-    if args.backend_url is not None and not HTTPS_URL.match(args.backend_url):
+    if args.backend_url is not None and not HTTPS_URL.fullmatch(args.backend_url):
         raise PortfolioError("--backend-url は https:// で始まる URL（英数字と . - _ ~ / だけ、クエリなし）にしてください")
     # サイトの URL は明示指定を優先し、なければスタックのパラメーター（DomainName）から作る
     site_url = args.site_url or read_site_url(repo_root)
     target = resolve_target(Path(args.source), repo_root, args.slug)
     warnings: list[str] = []
+    if args.site_url is None and site_url is not None:
+        warnings.append(f"サイトの URL を portfolio-site/infra/parameters.json の DomainName から {site_url} としました")
     if target.copy_from is not None:
         copy_tree(target.copy_from, target.project_dir)
     project = target.project_dir
@@ -104,10 +114,14 @@ def run_import(args: argparse.Namespace, repo_root: Path, run, today: date) -> d
                             "ファイルも含まれています。不要なファイルは apps/ から削除してください")
         frontend_out = {"dir": _rel(frontend.dir, repo_root), "kind": frontend.kind, "registered": registered,
                         "env": env}
+    elif args.backend_url is not None:
+        warnings.append(_BACKEND_URL_UNUSED)
 
     backend_out = None
     if backend is not None:
-        env, w = _backend_env(backend.dir, site_url, target.slug, registered)
+        # バックエンド内にあるフロントエンドの .env.example などを、バックエンドの変数として拾わない
+        nested = [frontend.dir] if frontend is not None and backend.dir in frontend.dir.parents else []
+        env, w = _backend_env(backend.dir, site_url, target.slug, registered, nested)
         warnings += w
         docker = write_docker_files(backend, env)
         warnings += docker.warnings

@@ -11,7 +11,7 @@
 | [`src/lib/apps-manifest.ts`](../src/lib/apps-manifest.ts) | `apps.json` の検証とビルド処理 |
 | [`scripts/build-apps.mjs`](../scripts/build-apps.mjs) | `npm run build:apps` の入口 |
 
-CloudFormation はリポジトリのファイルを直接読めないため、テンプレートで定義した CodeBuild の buildspec（`buildspec.yml`・`buildspec.test.yml`）が `astro build` の後に `npm run build:apps` を実行する。各アプリで `npm ci` と `npm run build -- <buildArgs>` を（`env` を環境変数に追加して）実行し（`package-lock.json` がないアプリはビルドせずエラーにする）、`<outputDir>` を `dist/apps/<スラッグ>/` にコピーする。デプロイは既存の `aws s3 sync dist` がそのまま行う。
+CloudFormation はリポジトリのファイルを直接読めないため、テンプレートで定義した CodeBuild の buildspec（`buildspec.yml`・`buildspec.test.yml`）が `astro build` の後に `npm run build:apps` を実行する。各アプリで `npm ci` と `npm run build -- <buildArgs>`（`env` はこのビルドにだけ環境変数として追加する）を実行し（`package-lock.json` がないアプリはビルドせずエラーにする）、`<outputDir>` を `dist/apps/<スラッグ>/` にコピーする。デプロイは既存の `aws s3 sync dist` がそのまま行う。
 
 ## apps.json の書式
 

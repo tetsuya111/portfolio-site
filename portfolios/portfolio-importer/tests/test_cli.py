@@ -179,6 +179,23 @@ class CliUrlTest(CliBase, unittest.TestCase):
         self.assertEqual(json.loads(out)["backend"]["env"], {})
         self.assertTrue(any("parameters.json" in w for w in json.loads(out)["warnings"]))
 
+    def test_backend_url_with_trailing_newline_is_error(self):
+        code, _, _ = self.run_main(str(self.src), "--backend-url", "https://api.example.com\n")
+        self.assertEqual(code, 1)
+
+    def test_backend_url_ignored_without_deliverable_frontend_warns(self):
+        (self.src / "frontend/package-lock.json").unlink()
+        _, out, _ = self.run_main(str(self.src), "--backend-url", "https://api.example.com")
+        self.assertTrue(any("--backend-url" in w for w in json.loads(out)["warnings"]))
+
+    def test_site_url_from_parameters_and_path_urls_are_warned(self):
+        (self.src / "backend/config.py").write_text('import os\nos.getenv("CLIENT_URL")\n', encoding="utf-8")
+        self.write_params()
+        _, out, _ = self.run_main(str(self.src))
+        warnings = json.loads(out)["warnings"]
+        self.assertTrue(any("parameters.json" in w and "https://portfolio.example.com" in w for w in warnings))
+        self.assertTrue(any("CLIENT_URL" in w and "CORS" in w for w in warnings))
+
     def test_site_url_option_wins_over_parameters(self):
         self.write_params()
         self.run_main(str(self.src), "--site-url", "https://other.example.com")
