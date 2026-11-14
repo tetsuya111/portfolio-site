@@ -166,3 +166,43 @@ def test_parse_detail_empty_raises():
 def test_parse_chart_page_dispatches():
     assert parse_chart_page(_read("detail.html"))[0].title == "A Bar Song (Tipsy)"
     assert parse_chart_page(_read("hot100.html")) == parse_hot100(_read("hot100.html"))
+
+
+def test_unescape_js_string_surrogate_pair_and_controls():
+    assert _unescape_js_string(r"🎵") == "\U0001f3b5"
+    assert _unescape_js_string(r"a\uD83Cb") == "a�b"  # 対のないサロゲートは置換文字に
+    assert _unescape_js_string(r"\0\b\f\v") == "\0\b\f\v"
+
+
+def test_parse_detail_number_wrapped_in_own_div():
+    # div.number だけを包む要素があっても、曲名を含む上位の要素を1行として読む
+    html = _detail(
+        "<td><span class='title'>X</span><div class='h'><div class='number'>1</div></div>"
+        "<span class='artistLink'>Y</span></td>",
+    )
+    assert parse_detail_page(html) == [ChartEntry(1, "X", "Y")]
+
+
+def test_parse_detail_tie_out_of_order():
+    html = _detail(
+        "<div class='number'>3</div><span class='title'>C</span>",
+        "<div class='number'>1</div><span class='title'>A</span>",
+        "<div class='number'>1</div><span class='title'>B</span>",
+    )
+    assert parse_detail_page(html) == [
+        ChartEntry(1, "A", ""),
+        ChartEntry(2, "B", ""),
+        ChartEntry(3, "C", ""),
+    ]
+
+
+def test_parse_chart_page_falls_back_to_table_when_detail_empty():
+    html = _read("hot100.html").replace(
+        "</body>", "<script>$('#data-table').append('<tr><th>h</th></tr>');</script></body>"
+    )
+    assert parse_chart_page(html) == parse_hot100(_read("hot100.html"))
+
+
+def test_parse_chart_page_detail_error_when_both_fail():
+    with pytest.raises(ParseError, match="詳細表示ページから曲を取り出せませんでした"):
+        parse_chart_page("<script>$('#data-table').append('<p>x</p>');</script>")

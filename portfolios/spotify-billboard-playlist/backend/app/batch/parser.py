@@ -24,7 +24,9 @@ _DATA_TABLE_APPEND_RE = re.compile(
     r"\s*\)"
 )
 _JS_ESCAPE_RE = re.compile(r"\\(u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|.)", re.DOTALL)
-_JS_SIMPLE_ESCAPES = {"n": "\n", "t": "\t", "r": "\r"}
+_JS_SIMPLE_ESCAPES = {
+    "n": "\n", "t": "\t", "r": "\r", "0": "\0", "b": "\b", "f": "\f", "v": "\v"
+}
 
 
 @dataclass(frozen=True)
@@ -92,8 +94,13 @@ def _replace_js_escape(match: re.Match[str]) -> str:
 
 
 def _unescape_js_string(body: str) -> str:
-    """JavaScript の文字列リテラルの中身（引用符を除く）のエスケープを戻す。"""
-    return _JS_ESCAPE_RE.sub(_replace_js_escape, body)
+    """JavaScript の文字列リテラルの中身（引用符を除く）のエスケープを戻す。
+
+    \uD83C\uDFB5 のようなサロゲートペアは1文字に結合し、対のないサロゲートは
+    置換文字（U+FFFD）にする（そのままだと DB 保存時に UnicodeEncodeError になるため）。
+    """
+    text = _JS_ESCAPE_RE.sub(_replace_js_escape, body)
+    return text.encode("utf-16", "surrogatepass").decode("utf-16", "replace")
 
 
 def extract_data_table_html(html: str) -> str | None:
@@ -101,6 +108,8 @@ def extract_data_table_html(html: str) -> str | None:
 
     呼び出しが1つもなければ None（詳細表示形式のページではない）。スクリプトは実行しない。
     """
+    if "#data-table" not in html:  # 表形式のページで余計な全体解析をしない
+        return None
     soup = BeautifulSoup(html, "html.parser")
     script = "\n".join(tag.get_text() for tag in soup.find_all("script"))
     parts: list[str] = []
@@ -128,20 +137,19 @@ def _is_artist(tag: Tag) -> bool:
     return _has_class(tag, "span", "artistLink")
 
 
-def _row_parts(number: Tag, numbers_in: dict[int, int]) -> tuple[Tag | None, Tag | None]:
+def _row_parts(number: Tag) -> tuple[Tag | None, Tag | None]:
     """div.number に対応する曲名・アーティストの要素を返す。
 
-    div.number を直接含む要素がその1行だけを含むなら、その中の最初の span.title・
-    span.artistLink を使う（実ページは 曲名 → div.number → アーティスト の順で同じセルに並ぶ）。
+    div.number から親をたどって最初に span.title を含む要素を探し、それが div.number を
+    1つだけ含む（＝1行分の）要素なら、その中の最初の span.title・span.artistLink を使う
+    （実ページは 曲名 → div.number → アーティスト の順で同じセルに並ぶ）。
     複数行が同じ親に平たく並ぶ場合は、次の div.number までに現れたものを使う。
     """
     container = number.parent
-    if container is not None:
-        key = id(container)
-        if key not in numbers_in:
-            numbers_in[key] = len(container.find_all(_is_number))
-        if numbers_in[key] == 1:
-            return container.find(_is_title), container.find(_is_artist)
+    while container is not None and container.find(_is_title) is None:
+        container = container.parent
+    if container is not None and len(container.find_all(_is_number, limit=2)) == 1:
+        return container.find(_is_title), container.find(_is_artist)
     title = artist = None
     for tag in number.find_all_next(True):
         if _is_number(tag):
@@ -153,41 +161,55 @@ def _row_parts(number: Tag, numbers_in: dict[int, int]) -> tuple[Tag | None, Tag
     return title, artist
 
 
-def parse_detail_page(html: str) -> list[ChartEntry]:
-    """詳細表示ページの埋め込みHTMLから順位・曲名・アーティストを取り出す。
-
-    div.number ごとに1行を組む（1曲だけ欠けても他の行はずれない）。同順位（タイ）は
-    捨てずに、それまでに採用した最大順位+1 に繰り下げて、DB の主キー（順位）の重複を避ける。
-    """
-    fragment = extract_data_table_html(html) or ""
+def _parse_detail_fragment(fragment: str) -> list[ChartEntry]:
     soup = BeautifulSoup(fragment, "html.parser")
-    numbers_in: dict[int, int] = {}
-    by_rank: dict[int, ChartEntry] = {}
-    max_rank = 0
+    rows: list[tuple[int, str, str]] = []
     for number in soup.find_all(_is_number):
         try:
             rank = int(_clean(number.get_text()))
         except ValueError:
             continue
-        title_tag, artist_tag = _row_parts(number, numbers_in)
+        title_tag, artist_tag = _row_parts(number)
         title = _clean(title_tag.get_text()) if title_tag is not None else ""
         if not title:
             continue
-        if rank in by_rank:
-            rank = max_rank + 1
         artist = _clean(artist_tag.get_text()) if artist_tag is not None else ""
-        by_rank[rank] = ChartEntry(rank=rank, title=title, artist=artist)
-        max_rank = max(max_rank, rank)
-    if not by_rank:
+        rows.append((rank, title, artist))
+    if not rows:
         raise ParseError("詳細表示ページから曲を取り出せませんでした")
-    return [by_rank[rank] for rank in sorted(by_rank)]
+    # 順位で安定ソートし、同順位（タイ）は直前の順位+1 に繰り下げる（DB の主キー重複を避ける）
+    entries: list[ChartEntry] = []
+    for rank, title, artist in sorted(rows, key=lambda row: row[0]):
+        if entries and rank <= entries[-1].rank:
+            rank = entries[-1].rank + 1
+        entries.append(ChartEntry(rank=rank, title=title, artist=artist))
+    return entries
+
+
+def parse_detail_page(html: str) -> list[ChartEntry]:
+    """詳細表示ページの埋め込みHTMLから順位・曲名・アーティストを取り出す。
+
+    div.number ごとに1行を組む（1曲だけ欠けても他の行はずれない）。順位の昇順に並べ、
+    同順位は捨てずに直前の順位+1 に繰り下げる（例: 1, 2, 2, 4 → 1, 2, 3, 4）。
+    """
+    return _parse_detail_fragment(extract_data_table_html(html) or "")
 
 
 def parse_chart_page(html: str) -> list[ChartEntry]:
-    """ページの中身で形式を判定し、詳細表示形式なら parse_detail_page、それ以外は parse_hot100。"""
-    if extract_data_table_html(html) is not None:
-        return parse_detail_page(html)
-    return parse_hot100(html)
+    """ページの中身で形式を判定し、詳細表示形式なら詳細の解析、それ以外は parse_hot100。
+
+    詳細表示形式に見えても曲が取れなければ表の解析も試し、両方だめなら詳細表示の理由で失敗する。
+    """
+    fragment = extract_data_table_html(html)
+    if fragment is None:
+        return parse_hot100(html)
+    try:
+        return _parse_detail_fragment(fragment)
+    except ParseError as detail_error:
+        try:
+            return parse_hot100(html)
+        except ParseError:
+            raise detail_error from None
 
 
 def find_latest_hot100_url(html: str) -> str:
