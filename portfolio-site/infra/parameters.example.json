@@ -1,10 +1,12 @@
-[
-  "DomainName=portfolio.example.com",
-  "HostedZoneId=Z0123456789ABCDEFGHIJ",
-  "GitHubRepoUrl=https://github.com/owner/repo.git",
-  "DeployBranch=main",
-  "GitHubActorAccountId=12345678",
-  "BudgetAlertEmail=you@example.com",
-  "MonthlyBudgetUsd=10",
-  "EnableWaf=false"
-]
+{
+  "Parameters": {
+    "DomainName": "portfolio.example.com",
+    "HostedZoneId": "Z0123456789ABCDEFGHIJ",
+    "GitHubRepoUrl": "https://github.com/owner/repo.git",
+    "DeployBranch": "main",
+    "GitHubActorAccountId": "12345678",
+    "BudgetAlertEmail": "you@example.com",
+    "MonthlyBudgetUsd": "10",
+    "EnableWaf": "false"
+  }
+}

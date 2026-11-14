@@ -55,7 +55,9 @@ flowchart LR
 
 ## パラメーター
 
-値は **パラメーターファイル `infra/parameters.json`** に書き、`aws cloudformation deploy` の `--parameter-overrides file://infra/parameters.json` で読み込む。メールアドレスやホストゾーン ID を含むため git の管理外（`.gitignore` 済み）で、[parameters.example.json](parameters.example.json) をコピーして作る。形式は `"名前=値"` の JSON 配列。
+値は **パラメーターファイル `infra/parameters.json`** に書き、`aws cloudformation deploy` の `--parameter-overrides file://infra/parameters.json` で読み込む。メールアドレスやホストゾーン ID を含むため git の管理外（`.gitignore` 済み）で、[parameters.example.json](parameters.example.json) をコピーして作る。形式は `{ "Parameters": { "名前": "値" } }`（CodePipeline のテンプレート設定ファイルと同じ）。値はすべて文字列で書く。
+
+> **Windows の場合**: AWS CLI は既定で OS の文字コード（日本語環境では cp932）でファイルを読むため、日本語を含む `template.yaml` で `'cp932' codec can't decode` のエラーになる。`aws cloudformation` のコマンドを実行する前に、環境変数 `AWS_CLI_FILE_ENCODING=UTF-8` を設定する（PowerShell: `$env:AWS_CLI_FILE_ENCODING = "UTF-8"`、Git Bash: `export AWS_CLI_FILE_ENCODING=UTF-8`）。
 
 ```bash
 cp infra/parameters.example.json infra/parameters.json  # 値を書き換える
