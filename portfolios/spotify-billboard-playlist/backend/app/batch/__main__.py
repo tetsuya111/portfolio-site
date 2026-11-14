@@ -19,7 +19,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    db = Database(load_settings().db_path)
+    db = Database(load_settings(web=False).db_path)
     for url in args.add:
         db.add_source(url)
     results = process_pending(db, Fetcher())

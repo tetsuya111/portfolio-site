@@ -1,4 +1,4 @@
-from app.ratelimit import RateLimiter
+from app.ratelimit import SWEEP_THRESHOLD, RateLimiter
 
 
 def _limiter(limit=3, window=60.0):
@@ -25,3 +25,12 @@ def test_keys_are_independent():
         limiter.allow("a")
     assert limiter.allow("a") is False
     assert limiter.allow("b") is True
+
+
+def test_stale_keys_are_swept_when_many():
+    now, limiter = _limiter()
+    for i in range(SWEEP_THRESHOLD + 1):
+        limiter.allow(f"k{i}")
+    now[0] += 61
+    limiter.allow("new")
+    assert len(limiter._hits) == 1

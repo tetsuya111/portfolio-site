@@ -9,6 +9,7 @@ from collections.abc import Callable
 
 CHART_RATE_LIMIT = 10  # /api/charts を利用者ごとに CHART_RATE_WINDOW 秒あたり何回まで許すか
 CHART_RATE_WINDOW = 60.0
+SWEEP_THRESHOLD = 1024  # キー数がこれを超えたら、全キーの期限切れの記録をまとめて掃除する
 
 
 class RateLimiter:
@@ -25,15 +26,24 @@ class RateLimiter:
         """許可するなら呼び出しを記録して True、上限を超えていれば False を返す。"""
         now = self._clock()
         with self._lock:
-            # 期限切れの記録を捨て、空になったキーは消す（キー数が増え続けないように）
-            for k in list(self._hits):
-                hits = self._hits[k]
-                while hits and now - hits[0] >= self._window:
-                    hits.popleft()
-                if not hits:
-                    del self._hits[k]
+            # 普段は呼ばれたキーだけを掃除し、キー数が増えたときだけ全体を掃除する
+            if len(self._hits) > SWEEP_THRESHOLD:
+                for k in list(self._hits):
+                    self._prune(k, now)
             hits = self._hits.setdefault(key, deque())
+            self._prune_deque(hits, now)
             if len(hits) >= self._limit:
                 return False
             hits.append(now)
             return True
+
+    def _prune_deque(self, hits: deque[float], now: float) -> None:
+        while hits and now - hits[0] >= self._window:
+            hits.popleft()
+
+    def _prune(self, key: str, now: float) -> None:
+        """期限切れの記録を捨て、空になったキーは消す（ロック内で呼ぶ）。"""
+        hits = self._hits[key]
+        self._prune_deque(hits, now)
+        if not hits:
+            del self._hits[key]

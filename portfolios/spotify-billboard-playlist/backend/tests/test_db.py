@@ -10,3 +10,13 @@ def test_add_source_prunes_oldest():
     assert db.get_source(first) is None
     assert db.tracks(first) == []
     assert all(db.get_source(i) is not None for i in ids)
+
+
+def test_add_source_keeps_pending_sources():
+    db = Database(":memory:", max_sources=2)
+    ids = [db.add_source("https://billboard.mryogaku.com/") for _ in range(4)]
+    assert db.pending_ids() == ids  # 未処理は上限を超えても消さない
+    db.mark_failed(ids[0], "x")
+    db.add_source("https://billboard.mryogaku.com/")
+    assert db.get_source(ids[0]) is None
+    assert db.pending_ids()[0] == ids[1]

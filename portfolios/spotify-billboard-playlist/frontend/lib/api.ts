@@ -38,10 +38,11 @@ function detailMessage(detail: unknown): string | null {
 /** 直近の getMe で受け取った CSRF トークン（未ログインなら null）。 */
 let csrfToken: string | null = null;
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, retryOnForbidden = true): Promise<T> {
   const method = (init?.method ?? "GET").toUpperCase();
-  const headers: Record<string, string> = { ...(init?.headers as Record<string, string> | undefined) };
-  if (method !== "GET" && method !== "HEAD" && csrfToken) headers["X-CSRF-Token"] = csrfToken;
+  const unsafe = method !== "GET" && method !== "HEAD";
+  const headers = new Headers(init?.headers);
+  if (unsafe && csrfToken) headers.set("X-CSRF-Token", csrfToken);
   let res: Response;
   try {
     res = await fetch(path, { credentials: "same-origin", ...init, headers });
@@ -51,6 +52,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (res.status === 204) return undefined as T;
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) {
+    if (res.status === 403 && unsafe && retryOnForbidden) {
+      // 別タブでの再ログインなどでトークンが古い（または未取得の）可能性がある。
+      // 取り直してトークンが変わったときだけ1回再送する（403 は処理前に拒否されるので再送しても安全）
+      const before = csrfToken;
+      await getMe().catch(() => null);
+      if (csrfToken && csrfToken !== before) return request<T>(path, init, false);
+    }
     const detail = body && typeof body === "object" && "detail" in body ? body.detail : null;
     throw new ApiError(res.status, detailMessage(detail) ?? `エラーが発生しました（HTTP ${res.status}）`);
   }

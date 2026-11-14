@@ -65,16 +65,31 @@ def test_session_access_extends_idle():
         assert store.get(sid) is not None
 
 
-def test_oldest_session_evicted_at_capacity():
+def test_least_recently_used_session_evicted_at_capacity():
     now, clock = _clock()
     store = SessionStore(clock=clock, max_sessions=2)
-    sids = []
-    for _ in range(3):
-        sids.append(store.create(Session("a", "r", 1.0, "u", "n")))
+    first = store.create(Session("a", "r", 1.0, "u1", "n"))
+    now[0] += 1
+    second = store.create(Session("a", "r", 1.0, "u2", "n"))
+    now[0] += 1
+    assert store.get(first) is not None  # first を使うと second の方が古くなる
+    now[0] += 1
+    third = store.create(Session("a", "r", 1.0, "u3", "n"))
+    assert store.get(second) is None
+    assert store.get(first) is not None
+    assert store.get(third) is not None
+
+
+def test_one_user_cannot_evict_other_users():
+    now, clock = _clock()
+    store = SessionStore(clock=clock, max_sessions=4, max_per_user=2)
+    victim = store.create(Session("a", "r", 1.0, "victim", "n"))
+    attacker = []
+    for _ in range(10):
         now[0] += 1
-    assert store.get(sids[0]) is None
-    assert store.get(sids[1]) is not None
-    assert store.get(sids[2]) is not None
+        attacker.append(store.create(Session("a", "r", 1.0, "attacker", "n")))
+    assert store.get(victim) is not None
+    assert [store.get(sid) is not None for sid in attacker[-3:]] == [False, True, True]
 
 
 def test_csrf_token_set_and_unique():

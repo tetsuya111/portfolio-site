@@ -22,10 +22,28 @@ def test_cookie_secure_explicit_true(monkeypatch):
     assert load_settings().cookie_secure is True
 
 
-def test_cookie_secure_explicit_false_with_https(monkeypatch):
+def test_cookie_secure_false_rejected_for_non_loopback(monkeypatch):
     _https(monkeypatch)
     monkeypatch.setenv("COOKIE_SECURE", "false")
+    with pytest.raises(ConfigError):
+        load_settings()
+
+
+def test_cookie_secure_false_allowed_for_loopback(monkeypatch):
+    monkeypatch.setenv("COOKIE_SECURE", "false")
     assert load_settings().cookie_secure is False
+
+
+def test_cookie_secure_default_ignores_scheme_case(monkeypatch):
+    monkeypatch.setenv("FRONTEND_URL", "HTTPS://example.com")
+    monkeypatch.setenv("SPOTIFY_REDIRECT_URI", HTTPS_REDIRECT)
+    assert load_settings().cookie_secure is True
+
+
+def test_batch_settings_skip_web_validation(monkeypatch):
+    monkeypatch.setenv("FRONTEND_URL", "http://example.com")
+    monkeypatch.setenv("COOKIE_SECURE", "yes")
+    assert load_settings(web=False).cookie_secure is False
 
 
 def test_cookie_secure_default_follows_https(monkeypatch):

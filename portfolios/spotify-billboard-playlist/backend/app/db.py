@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS chart_tracks (
 """
 
 
-MAX_SOURCES = 1000  # 保持するチャートURLの件数。超えたら古い順に削除する
+MAX_SOURCES = 1000  # 保持するチャートURLの件数。超えたら処理済みのものを古い順に削除する
 
 
 def _now() -> str:
@@ -52,9 +52,10 @@ class Database:
             cur = self._conn.execute(
                 "INSERT INTO chart_sources (url, created_at) VALUES (?, ?)", (url, _now())
             )
-            # 曲データは ON DELETE CASCADE で一緒に消える
+            # 処理済み（done / failed）のうち古いものを削除する。曲データは ON DELETE CASCADE で
+            # 一緒に消える。未処理（pending）は処理中・バッチ待ちのため消さない
             self._conn.execute(
-                "DELETE FROM chart_sources WHERE id NOT IN "
+                "DELETE FROM chart_sources WHERE status != 'pending' AND id NOT IN "
                 "(SELECT id FROM chart_sources ORDER BY id DESC LIMIT ?)",
                 (self._max_sources,),
             )
