@@ -1,6 +1,7 @@
 ---
-// 英大文字の小見出し（eyebrow）＋日本語の見出し。
-// 小見出しは飾りとして読み上げず、見出しのアクセシブルな名前は title だけにする。
+// 英大文字の小見出し（eyebrow）＋日本語の見出し。見出しのアクセシブルな名前は title だけ。
+import Eyebrow from "./Eyebrow.astro";
+
 interface Props {
   eyebrow: string;
   title: string;
@@ -13,6 +14,6 @@ const size = Tag === "h1" ? "text-3xl sm:text-4xl" : "text-2xl";
 ---
 
 <div class:list={["flex flex-col gap-1", className]}>
-  <p aria-hidden="true" class="font-eyebrow text-xs font-bold tracking-[0.2em] text-link uppercase">{eyebrow}</p>
+  <Eyebrow>{eyebrow}</Eyebrow>
   <Tag class:list={["font-heading font-bold tracking-tight", size]}>{title}</Tag>
 </div>

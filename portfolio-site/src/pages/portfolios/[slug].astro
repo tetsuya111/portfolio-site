@@ -2,6 +2,7 @@
 import { getCollection, render } from "astro:content";
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import TagList from "../../components/TagList.astro";
+import Eyebrow from "../../components/Eyebrow.astro";
 
 export async function getStaticPaths() {
   const items = await getCollection("portfolios");
@@ -15,7 +16,7 @@ const { Content } = await render(entry);
 <BaseLayout title={entry.data.title}>
   <a href="/portfolios/" class="text-sm font-semibold text-link hover:underline">← ポートフォリオ一覧</a>
   <header class="mt-6 border-b border-line pb-6">
-    <p aria-hidden="true" class="font-eyebrow text-xs font-bold tracking-[0.2em] text-link uppercase">Works</p>
+    <Eyebrow>Works</Eyebrow>
     <h1 class="mt-2 font-heading text-3xl font-bold tracking-tight break-words sm:text-4xl">{entry.data.title}</h1>
     <div class="mt-4"><TagList tags={entry.data.tags} /></div>
     {
@@ -24,7 +25,7 @@ const { Content } = await render(entry);
           href={entry.data.url}
           target="_blank"
           rel="noopener noreferrer"
-          class="mt-5 inline-block rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-on-accent shadow-sm hover:opacity-90"
+          class="btn-accent mt-5 px-4 py-1.5 text-sm"
         >
           ポートフォリオのURL ↗
         </a>

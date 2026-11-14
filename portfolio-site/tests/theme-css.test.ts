@@ -72,6 +72,9 @@ const TEXT_PAIRS: [string, string][] = [
   ["fg", "hero-to"],
   ["muted", "hero-from"],
   ["muted", "hero-to"],
+  // 冒頭のパネルの小見出し（Hello・Profile）
+  ["link", "hero-from"],
+  ["link", "hero-to"],
 ];
 // フォーカス枠など文字以外の要素は 3:1（WCAG 2.1 1.4.11）
 const NON_TEXT_PAIRS: [string, string][] = [

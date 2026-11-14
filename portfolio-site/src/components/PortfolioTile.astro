@@ -27,7 +27,7 @@ const { slug, title, tags, url } = Astro.props;
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        class="relative z-10 mt-auto self-start rounded-full bg-accent px-3.5 py-1 text-sm font-semibold text-on-accent shadow-sm hover:opacity-90"
+        class="btn-accent relative z-10 mt-auto self-start px-3.5 py-1 text-sm"
       >
         {/* 読み上げ名は見える文字を含める（WCAG 2.5.3）。どのポートフォリオか・別タブで開くことは読み上げ用に補う */}
         ポートフォリオのURL ↗<span class="sr-only">（{title}、新しいタブで開く）</span>

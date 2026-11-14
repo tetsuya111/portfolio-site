@@ -2,6 +2,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { resolveTheme } from "../src/lib/theme";
+import { siteConfig } from "../src/site.config";
 
 const dist = join(import.meta.dirname, "..", "dist");
 const html = (p: string) => readFileSync(join(dist, p, "index.html"), "utf8");
@@ -55,9 +57,11 @@ describe("build output", () => {
     expect(existsSync(join(dist, "admin"))).toBe(false);
   });
 
-  it("applies the default design theme to every page", () => {
+  it("applies the selected design theme to every page", () => {
+    // ビルドと同じ規則で期待値を決める（PUBLIC_THEME を指定したビルドでも通るように）
+    const theme = resolveTheme(process.env.PUBLIC_THEME, siteConfig.theme);
     for (const p of [".", "about", "portfolios", "articles"]) {
-      expect(html(p)).toMatch(/<html lang="ja" data-theme="minimal"/);
+      expect(html(p)).toContain(`<html lang="ja" data-theme="${theme}"`);
     }
   });
 

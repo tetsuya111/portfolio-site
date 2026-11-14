@@ -1,6 +1,8 @@
 # デザインテーマ
 
-公開ページの見た目（色・書体・角丸）はテーマで切り替えられる。レイアウトの構造は全テーマで共通で、変わるのは見た目だけ。テーマはビルド時に1つに決まり、閲覧者がページ上で切り替えることはできない。管理画面（`/admin/`）には適用しない。
+公開ページの見た目（色・書体・角丸）はテーマで切り替えられる。レイアウトの構造は全テーマで共通で、変わるのは見た目だけ。テーマはビルド時に1つに決まり、閲覧者がページ上で切り替えることはできない。
+
+管理画面（`/admin/`）は `data-theme` を付けないのでテーマは切り替わらないが、同じ `global.css` を読むため、`:root` の値（既定テーマ）・本文の書体（`--font-sans`）・フォーカス枠は管理画面にも効く。`global.css` のこれらを変えるときは管理画面の見た目も確認する。
 
 ## テーマの一覧
 
@@ -13,8 +15,10 @@
 
 次の順に、空でない最初の値を使う。どちらも空なら `minimal`。存在しない名前を指定するとビルドがエラーで止まる。
 
-1. 環境変数 `PUBLIC_THEME`（例: `PUBLIC_THEME=campus npm run build`）。環境ごとに変えたいとき（CodeBuild のプロジェクトの環境変数など）に使う。
-2. [`src/site.config.ts`](../src/site.config.ts) の `theme`。リポジトリで既定を変えたいときに使う。
+1. 環境変数 `PUBLIC_THEME`（例: `PUBLIC_THEME=campus npm run build`）。手元で別のテーマを試すときに使う。
+2. [`src/site.config.ts`](../src/site.config.ts) の `theme`。公開するサイトのテーマはここで決める（コミットして push すればデプロイに反映される）。
+
+AWS の CodeBuild（[infra/template.yaml](../infra/template.yaml)）には `PUBLIC_THEME` を渡す設定がない。コンソールで CodeBuild のプロジェクトに環境変数を足しても、スタックを更新すると消えるので、公開するサイトのテーマは `site.config.ts` で指定する。
 
 テーマ名の決定は [`src/lib/theme.ts`](../src/lib/theme.ts) の `resolveTheme()`、`<html data-theme="...">` の出力は [`src/layouts/BaseLayout.astro`](../src/layouts/BaseLayout.astro)。
 
@@ -35,7 +39,9 @@
 | `font-body` / `font-heading` / `font-eyebrow` | 本文 / 見出し / 英大文字の小見出しの書体 | `font-sans` `font-heading` `font-eyebrow` |
 | `radius` | カードの角丸 | `rounded-card` |
 
-記事・自己紹介の本文（typography プラグイン）は `prose prose-themed` で同じ変数を使う。
+記事・自己紹介の本文（typography プラグイン）は `prose prose-themed`、塗りつぶしのボタン型リンクは `btn-accent`、英大文字の小見出しは `components/Eyebrow.astro` で同じ変数を使う。
+
+ファビコン（`public/favicon.svg`）はテーマに関係なく同じ色にしている。
 
 ## テーマを追加する
 

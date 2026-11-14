@@ -98,7 +98,8 @@ portfolio-site/
 | 部品 | 内容 |
 |---|---|
 | `layouts/BaseLayout.astro` | `<html data-theme>`・ファビコン・ヘッダー・フッターと、`global.css` の読み込み |
-| `components/SectionHeading.astro` | 英大文字の小見出し（読み上げない）と日本語の見出し |
+| `components/SectionHeading.astro` | 英大文字の小見出しと日本語の見出し |
+| `components/Eyebrow.astro` | 見出しに添える英大文字の小見出し（飾りなので読み上げない） |
 | `components/SiteHeader.astro` | サイト名とナビゲーション（ホーム・自己紹介・ポートフォリオ・記事） |
 | `components/PortfolioTile.astro` | ポートフォリオのタイル。タイトルのリンクをタイル全体に広げ（stretched link）、URL ボタンは入れ子にせず手前に重ねる |
 | `components/TagList.astro` | タグの一覧（タグがなければ何も出さない） |

@@ -48,7 +48,7 @@ npm run dev        # http://localhost:4321/ （管理画面は http://localhost:
 
 ## デザインテーマの切り替え
 
-公開ページのデザインは `minimal`（既定）と `campus` から選べます。`src/site.config.ts` の `theme` を変えるか、ビルド時に環境変数で指定します（環境変数が優先）。
+公開ページのデザインは `minimal`（既定）と `campus` から選べます。公開するサイトのテーマは `src/site.config.ts` の `theme` で指定します。手元で別のテーマを試すときは、ビルド時に環境変数で上書きできます。
 
 ```bash
 PUBLIC_THEME=campus npm run build

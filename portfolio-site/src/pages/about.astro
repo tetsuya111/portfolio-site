@@ -1,6 +1,7 @@
 ---
 import { getEntry, render } from "astro:content";
 import BaseLayout from "../layouts/BaseLayout.astro";
+import Eyebrow from "../components/Eyebrow.astro";
 
 const profile = await getEntry("profile", "profile");
 if (!profile) throw new Error("src/content/profile/profile.md がありません");
@@ -9,7 +10,7 @@ const { Content } = await render(profile);
 
 <BaseLayout title="自己紹介" description={profile.data.summary}>
   <header class="rounded-card bg-linear-to-br from-hero-from to-hero-to px-6 py-10 sm:px-10">
-    <p aria-hidden="true" class="font-eyebrow text-xs font-bold tracking-[0.2em] text-link uppercase">Profile</p>
+    <Eyebrow>Profile</Eyebrow>
     <h1 class="mt-2 font-heading text-3xl font-bold tracking-tight break-words sm:text-4xl">{profile.data.name}</h1>
     <p class="mt-2 text-lg font-medium text-muted">{profile.data.role}</p>
     {
