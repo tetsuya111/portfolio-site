@@ -12,6 +12,12 @@ describe("buildspec.yml", () => {
     expect(commands("install").join("\n")).toContain("npm ci");
   });
 
+  it("does not run dependency install scripts with deploy credentials", () => {
+    const installs = commands("install").filter((l) => l.includes("npm ci"));
+    expect(installs.length).toBeGreaterThan(0);
+    for (const l of installs) expect(l).toContain("--ignore-scripts");
+  });
+
   it("runs test, lint and build with output checks in order", () => {
     const build = commands("build");
     const idx = ["npm test", "npm run lint", "npm run test:build"].map((c) => build.findIndex((l) => l.includes(c)));

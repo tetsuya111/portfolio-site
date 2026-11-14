@@ -13,8 +13,19 @@ const one = (type: string) => {
 
 describe("infra/template.yaml", () => {
   it("declares the parameters", () => {
-    expect(Object.keys(t.Parameters).sort()).toEqual(["DeployBranch", "DomainName", "GitHubRepoUrl", "HostedZoneId"]);
+    expect(Object.keys(t.Parameters).sort()).toEqual([
+      "BudgetAlertEmail",
+      "DeployBranch",
+      "DomainName",
+      "EnableWaf",
+      "GitHubActorAccountId",
+      "GitHubRepoUrl",
+      "HostedZoneId",
+      "MonthlyBudgetUsd",
+    ]);
     expect(t.Parameters.DeployBranch.Default).toBe("main");
+    expect(t.Parameters.GitHubActorAccountId.AllowedPattern).toBe("^[0-9]+$");
+    expect(t.Parameters.EnableWaf.AllowedValues).toEqual(["true", "false"]);
   });
 
   it("requires us-east-1", () => {
@@ -92,6 +103,10 @@ describe("infra/template.yaml", () => {
       expect(groups).toHaveLength(1);
       expect(eventOf(groups[0])).toBe("PULL_REQUEST_CREATED,PULL_REQUEST_UPDATED,PULL_REQUEST_REOPENED");
       expect(filePathOf(groups[0])).toBe("^portfolio-site/");
+      // fork からの第三者の PR でビルドしない（指定した GitHub アカウントの PR だけ）
+      expect(groups[0].find((f: any) => f.Type === "ACTOR_ACCOUNT_ID").Pattern).toEqual({
+        "Fn::Sub": "^${GitHubActorAccountId}$",
+      });
       // デプロイ先の情報を渡さない
       expect(testProject.Environment.EnvironmentVariables ?? []).toEqual([]);
     });
@@ -115,11 +130,62 @@ describe("infra/template.yaml", () => {
       expect(actionsOf("CodeBuildRole")).toContain("cloudfront:CreateInvalidation");
     });
 
+    it("limits concurrent builds to one per project", () => {
+      expect(testProject.ConcurrentBuildLimit).toBe(1);
+      expect(deployProject.ConcurrentBuildLimit).toBe(1);
+    });
+
+    it("writes test and deploy logs to separate log groups", () => {
+      expect(testProject.LogsConfig.CloudWatchLogs.GroupName).toEqual({ Ref: "TestLogGroup" });
+      expect(deployProject.LogsConfig.CloudWatchLogs.GroupName).toEqual({ Ref: "BuildLogGroup" });
+      const logResources = (roleId: string) =>
+        R[roleId].Properties.Policies.flatMap((p: any) => p.PolicyDocument.Statement)
+          .filter((s: any) => s.Sid === "WriteBuildLogs")
+          .map((s: any) => JSON.stringify(s.Resource));
+      expect(logResources("CodeBuildTestRole")).toEqual([JSON.stringify({ "Fn::Sub": "${TestLogGroup.Arn}" })]);
+      expect(logResources("CodeBuildRole")).toEqual([JSON.stringify({ "Fn::Sub": "${BuildLogGroup.Arn}" })]);
+    });
+
+    it("lets CodeBuild assume each role only for its own project in this account", () => {
+      for (const [roleId, suffix] of [["CodeBuildTestRole", "-test"], ["CodeBuildRole", "-deploy"]]) {
+        const stmt = R[roleId].Properties.AssumeRolePolicyDocument.Statement[0];
+        expect(stmt.Condition.StringEquals["aws:SourceAccount"]).toEqual({ Ref: "AWS::AccountId" });
+        expect(JSON.stringify(stmt.Condition.ArnLike["aws:SourceArn"])).toContain(`project/\${AWS::StackName}${suffix}`);
+      }
+    });
+
     it("grants no wildcard actions", () => {
       for (const roleId of ["CodeBuildTestRole", "CodeBuildRole"]) {
         for (const a of actionsOf(roleId)) expect(a).not.toContain("*");
       }
     });
+  });
+
+  it("alerts by email when the monthly cost approaches the budget", () => {
+    const b = one("AWS::Budgets::Budget").Properties;
+    expect(b.Budget.BudgetType).toBe("COST");
+    expect(b.Budget.TimeUnit).toBe("MONTHLY");
+    expect(b.Budget.BudgetLimit).toEqual({ Amount: { Ref: "MonthlyBudgetUsd" }, Unit: "USD" });
+    expect(b.NotificationsWithSubscribers.map((n: any) => n.Notification.NotificationType).sort()).toEqual([
+      "ACTUAL",
+      "FORECASTED",
+    ]);
+    for (const n of b.NotificationsWithSubscribers) {
+      expect(n.Subscribers).toEqual([{ SubscriptionType: "EMAIL", Address: { Ref: "BudgetAlertEmail" } }]);
+    }
+  });
+
+  it("optionally attaches a rate-limiting WAF to the distribution", () => {
+    expect(t.Conditions.UseWaf).toEqual({ "Fn::Equals": [{ Ref: "EnableWaf" }, "true"] });
+    const acl = R.WebAcl;
+    expect(acl.Type).toBe("AWS::WAFv2::WebACL");
+    expect(acl.Condition).toBe("UseWaf");
+    expect(acl.Properties.Scope).toBe("CLOUDFRONT");
+    const rate = acl.Properties.Rules.find((r: any) => r.Statement.RateBasedStatement);
+    expect(rate.Action).toEqual({ Block: {} });
+    expect(rate.Statement.RateBasedStatement.AggregateKeyType).toBe("IP");
+    const d = one("AWS::CloudFront::Distribution").Properties.DistributionConfig;
+    expect(d.WebACLId).toEqual({ "Fn::If": ["UseWaf", { "Fn::GetAtt": ["WebAcl", "Arn"] }, { Ref: "AWS::NoValue" }] });
   });
 
   it("outputs the site url, apps base url, bucket and distribution id", () => {

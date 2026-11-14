@@ -20,6 +20,31 @@ Parameters:
     Type: String
     Default: main
     Description: push されたときに本番へデプロイするブランチ
+  GitHubActorAccountId:
+    Type: String
+    Description: >-
+      プルリクエストのビルドを許可する GitHub アカウントの数値 ID（`gh api users/<ユーザー名> -q .id` で確認）。
+      公開リポジトリのため、これ以外のアカウント（fork からの第三者）の PR ではビルドしない
+    AllowedPattern: "^[0-9]+$"
+  BudgetAlertEmail:
+    Type: String
+    Description: 月額料金のアラートを受け取るメールアドレス（AWS Budgets から確認メールは届かず、そのまま通知される）
+    AllowedPattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$'
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    Description: 月額料金の予算（USD）。実績が 80% を超えたとき、または予測が 100% を超えたときにメールで通知する
+  EnableWaf:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      CloudFront に AWS WAF（IP ごとのレート制限）を付けるか。付けると Web ACL とルールの月額固定費がかかる
+      （料金の歯止めは BudgetAlertEmail の通知が基本）
+
+Conditions:
+  UseWaf: !Equals [!Ref EnableWaf, "true"]
 
 Rules:
   RegionMustBeUsEast1:
@@ -162,10 +187,39 @@ Resources:
             ResponseCode: 404
             ResponsePagePath: /404.html
             ErrorCachingMinTTL: 60
+        WebACLId: !If [UseWaf, !GetAtt WebAcl.Arn, !Ref "AWS::NoValue"]
         ViewerCertificate:
           AcmCertificateArn: !Ref Certificate
           SslSupportMethod: sni-only
           MinimumProtocolVersion: TLSv1.2_2021
+
+  # 大量アクセス（DDoS・クローラー）でそのまま料金が増えないよう、IP ごとにリクエスト数を制限する（任意）
+  WebAcl:
+    Type: AWS::WAFv2::WebACL
+    Condition: UseWaf
+    Properties:
+      Name: !Sub "${AWS::StackName}-web-acl"
+      Scope: CLOUDFRONT
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub "${AWS::StackName}-web-acl"
+      Rules:
+        - Name: RateLimitPerIp
+          Priority: 0
+          Action:
+            Block: {}
+          Statement:
+            RateBasedStatement:
+              # 5分間に同じ IP から 1000 リクエストを超えたら遮断する（静的サイトの通常の閲覧では届かない値）
+              Limit: 1000
+              AggregateKeyType: IP
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub "${AWS::StackName}-rate-limit"
 
   AliasRecordA:
     Type: AWS::Route53::RecordSet
@@ -194,6 +248,13 @@ Resources:
       LogGroupName: !Sub "/aws/codebuild/${AWS::StackName}"
       RetentionInDays: 30
 
+  # テスト用（信頼できないコードも動きうる）はデプロイ用とロググループを分け、デプロイのログに書き込めないようにする
+  TestLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/codebuild/${AWS::StackName}-test"
+      RetentionInDays: 30
+
   # --- テスト用（プルリクエスト）: ログ出力の権限だけを持ち、デプロイ先には触れない ---
   CodeBuildTestRole:
     Type: AWS::IAM::Role
@@ -205,6 +266,12 @@ Resources:
             Principal:
               Service: codebuild.amazonaws.com
             Action: sts:AssumeRole
+            # このアカウントのテスト用プロジェクトからだけ引き受けられるようにする（confused deputy 対策）
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub "arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:project/${AWS::StackName}-test"
       Policies:
         - PolicyName: portfolio-site-test
           PolicyDocument:
@@ -215,7 +282,7 @@ Resources:
                 Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub "${BuildLogGroup.Arn}"
+                Resource: !Sub "${TestLogGroup.Arn}"
 
   CodeBuildTestProject:
     Type: AWS::CodeBuild::Project
@@ -224,6 +291,8 @@ Resources:
       Description: portfolio-site のプルリクエストのテスト・lint・ビルド（デプロイしない）
       ServiceRole: !GetAtt CodeBuildTestRole.Arn
       TimeoutInMinutes: 20
+      # PR の連続更新などでビルドが並行して増え、料金が膨らむのを防ぐ
+      ConcurrentBuildLimit: 1
       Artifacts:
         Type: NO_ARTIFACTS
       Source:
@@ -239,7 +308,7 @@ Resources:
       LogsConfig:
         CloudWatchLogs:
           Status: ENABLED
-          GroupName: !Ref BuildLogGroup
+          GroupName: !Ref TestLogGroup
       Triggers:
         Webhook: true
         FilterGroups:
@@ -247,6 +316,9 @@ Resources:
               Pattern: PULL_REQUEST_CREATED,PULL_REQUEST_UPDATED,PULL_REQUEST_REOPENED
             - Type: FILE_PATH
               Pattern: ^portfolio-site/
+            # 公開リポジトリのため、fork から第三者が出した PR のコードを実行しない
+            - Type: ACTOR_ACCOUNT_ID
+              Pattern: !Sub "^${GitHubActorAccountId}$"
 
   # --- デプロイ用（DeployBranch への push）---
   CodeBuildRole:
@@ -259,6 +331,12 @@ Resources:
             Principal:
               Service: codebuild.amazonaws.com
             Action: sts:AssumeRole
+            # このアカウントのデプロイ用プロジェクトからだけ引き受けられるようにする（confused deputy 対策）
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub "arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:project/${AWS::StackName}-deploy"
       Policies:
         - PolicyName: portfolio-site-build
           PolicyDocument:
@@ -293,6 +371,8 @@ Resources:
       Description: portfolio-site の DeployBranch への push 時のテスト・lint・ビルドとデプロイ
       ServiceRole: !GetAtt CodeBuildRole.Arn
       TimeoutInMinutes: 20
+      # デプロイ（s3 sync）が並行して走り、古い成果物で上書きされるのを防ぐ
+      ConcurrentBuildLimit: 1
       Artifacts:
         Type: NO_ARTIFACTS
       Source:
@@ -326,6 +406,36 @@ Resources:
               Pattern: !Sub "^refs/heads/${DeployBranch}$"
             - Type: FILE_PATH
               Pattern: ^portfolio-site/
+
+  # ===== 料金 =====
+  # 料金の上限は無いため、予算を超えそうになったらメールで気づけるようにする
+  CostBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub "${AWS::StackName}-monthly"
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetAlertEmail
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetAlertEmail
 
 Outputs:
   SiteUrl:

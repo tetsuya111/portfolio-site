@@ -32,26 +32,27 @@ flowchart LR
 | `DirectoryIndexFunction` | CloudFront Function | `/about/` や `/about` へのリクエストを `/about/index.html` に置き換える（Astro の出力形式に合わせる） |
 | `Distribution` | CloudFront | HTTPS へリダイレクト、TLS 1.2 以上、HTTP/2・HTTP/3、IPv6。キャッシュはマネージドの CachingOptimized、レスポンスヘッダーは SecurityHeadersPolicy。403/404 は `/404.html` を 404 で返す |
 | `AliasRecordA` / `AliasRecordAAAA` | Route 53 | `DomainName` から CloudFront へのエイリアス |
-| `BuildLogGroup` | CloudWatch Logs | CodeBuild のログ（30日保存） |
-| `CodeBuildTestRole` | IAM ロール | テスト用。ログの書き込みだけを許可（S3・CloudFront には触れない） |
-| `CodeBuildTestProject` | CodeBuild | `<スタック名>-test`。プルリクエストでテスト・lint・ビルドを実行する |
-| `CodeBuildRole` | IAM ロール | デプロイ用。ログの書き込み、`SiteBucket` の一覧・読み書き・削除、このディストリビューションの無効化だけを許可 |
-| `CodeBuildProject` | CodeBuild | `<スタック名>-deploy`。`DeployBranch` への push でビルドし、成功したらデプロイする |
+| `BuildLogGroup` / `TestLogGroup` | CloudWatch Logs | CodeBuild のログ（デプロイ用・テスト用で分ける。30日保存） |
+| `CodeBuildTestRole` | IAM ロール | テスト用。`TestLogGroup` への書き込みだけを許可（S3・CloudFront には触れない）。このアカウントの `<スタック名>-test` からだけ引き受けられる |
+| `CodeBuildTestProject` | CodeBuild | `<スタック名>-test`。`GitHubActorAccountId` のアカウントが出したプルリクエストだけで、テスト・lint・ビルドを実行する（同時実行は1件） |
+| `CodeBuildRole` | IAM ロール | デプロイ用。`BuildLogGroup` への書き込み、`SiteBucket` の一覧・読み書き・削除、このディストリビューションの無効化だけを許可。このアカウントの `<スタック名>-deploy` からだけ引き受けられる |
+| `CodeBuildProject` | CodeBuild | `<スタック名>-deploy`。`DeployBranch` への push でビルドし、成功したらデプロイする（同時実行は1件） |
+| `WebAcl` | AWS WAF | `EnableWaf=true` のときだけ作る。IP ごとに 5 分間 1000 リクエストを超えたら遮断する |
+| `CostBudget` | AWS Budgets | 月額料金が予算の 80% を超えた（実績）・100% を超えそう（予測）なときに `BudgetAlertEmail` へメールする |
 
-## 前提
+## セットアップ
 
-1. **AWS CLI**（v2）と、スタックを作成できる権限（IAM ロールを作るため `CAPABILITY_IAM` が必要）。
-2. **Route 53 のホストゾーン**: サイトのドメインを管理するホストゾーンが作成済みであること。ドメインをほかのレジストラで取得した場合は、ネームサーバーをこのホストゾーンに向けておく。
-3. **CodeBuild への GitHub 認証情報の登録**: Webhook の作成に必要。**us-east-1 で**登録する（認証情報はリージョンごと）。
-   - コンソール: CodeBuild →（任意のプロジェクト作成画面の）ソースで「GitHub に接続」
-   - CLI（個人用アクセストークンの場合）:
-     ```bash
-     aws codebuild import-source-credentials --region us-east-1 \
-       --server-type GITHUB --auth-type PERSONAL_ACCESS_TOKEN --token <トークン>
-     ```
-   - トークンはリポジトリやテンプレートに置かないこと。
+前提の準備（AWS CLI・Route 53 ホストゾーン・CodeBuild への GitHub 認証情報の登録）から、スタックの作成・出力の確認・初回デプロイまでの手順は [../docs/infra-setup.md](../docs/infra-setup.md) にまとめています。
 
 ## パラメーター
+
+値は **パラメーターファイル `infra/parameters.json`** に書き、`aws cloudformation deploy` の `--parameter-overrides file://infra/parameters.json` で読み込む。メールアドレスやホストゾーン ID を含むため git の管理外（`.gitignore` 済み）で、[parameters.example.json](parameters.example.json) をコピーして作る。形式は `{ "Parameters": { "名前": "値" } }`（CodePipeline のテンプレート設定ファイルと同じ）。値はすべて文字列で書く。
+
+> **Windows の場合**: AWS CLI は既定で OS の文字コード（日本語環境では cp932）でファイルを読むため、日本語を含む `template.yaml` で `'cp932' codec can't decode` のエラーになる。`aws cloudformation` のコマンドを実行する前に、環境変数 `AWS_CLI_FILE_ENCODING=UTF-8` を設定する（PowerShell: `$env:AWS_CLI_FILE_ENCODING = "UTF-8"`、Git Bash: `export AWS_CLI_FILE_ENCODING=UTF-8`）。
+
+```bash
+cp infra/parameters.example.json infra/parameters.json  # 値を書き換える
+```
 
 | 名前 | 必須 | 既定値 | 内容 |
 |---|---|---|---|
@@ -59,54 +60,17 @@ flowchart LR
 | `HostedZoneId` | ○ | — | `DomainName` を管理している Route 53 ホストゾーンの ID |
 | `GitHubRepoUrl` | ○ | — | GitHub リポジトリの HTTPS URL（例 `https://github.com/<owner>/<repo>.git`） |
 | `DeployBranch` | | `main` | push されたときに本番へデプロイするブランチ |
+| `GitHubActorAccountId` | ○ | — | プルリクエストのビルドを許可する GitHub アカウントの数値 ID（`gh api users/<ユーザー名> -q .id` で確認）。公開リポジトリのため、ほかのアカウントの PR ではビルドしない |
+| `BudgetAlertEmail` | ○ | — | 料金アラートの送り先メールアドレス |
+| `MonthlyBudgetUsd` | | `10` | 月額料金の予算（USD） |
+| `EnableWaf` | | `false` | `true` で CloudFront に WAF（レート制限）を付ける。Web ACL とルールの月額固定費（数 USD）がかかる |
 
-## スタックの作成
+## セキュリティ上の前提（テンプレートの外で設定するもの）
 
-CloudFront で使う ACM 証明書は us-east-1 でしか作れないため、**必ず us-east-1 に**作成します。ほかのリージョンを指定すると、テンプレートの `Rules` によって作成前に失敗します。
-
-コマンドはすべて `portfolio-site/` で実行します。
-
-```bash
-# 1. テンプレートの構文チェック
-aws cloudformation validate-template --region us-east-1 --template-body file://infra/template.yaml
-
-# 2. 作成（2回目以降は同じコマンドで更新になる）
-aws cloudformation deploy \
-  --region us-east-1 \
-  --stack-name portfolio-site \
-  --template-file infra/template.yaml \
-  --capabilities CAPABILITY_IAM \
-  --parameter-overrides \
-    DomainName=portfolio.example.com \
-    HostedZoneId=Z0123456789ABCDEFGHIJ \
-    GitHubRepoUrl=https://github.com/<owner>/<repo>.git \
-    DeployBranch=main
-
-# 3. 出力（サイト URL・バケット名・ディストリビューション ID）を確認
-aws cloudformation describe-stacks --region us-east-1 --stack-name portfolio-site \
-  --query "Stacks[0].Outputs" --output table
-```
-
-証明書の DNS 検証と CloudFront の配置に時間がかかるため、初回の作成は数分〜数十分かかります。
-
-| 出力 | 内容 |
-|---|---|
-| `SiteUrl` | サイトの URL（`https://<DomainName>/`） |
-| `BucketName` | サイトのファイルを置く S3 バケット名 |
-| `DistributionId` | CloudFront ディストリビューション ID |
-| `AppsBaseUrl` | ポートフォリオのフロントエンドの配信先（`https://<DomainName>/apps/`）。各アプリは `<AppsBaseUrl><スラッグ>/`（[../docs/apps.md](../docs/apps.md)） |
-
-## 初回デプロイ
-
-スタックを作っただけではバケットは空です。`portfolio-site/` 配下を変更するコミットを `DeployBranch` に push すると、CodeBuild がビルドしてデプロイします。
-
-すぐに反映したい場合は、ローカルでビルドして直接同期することもできます。
-
-```bash
-npm run build
-aws s3 sync dist "s3://<BucketName>" --delete
-aws cloudfront create-invalidation --distribution-id <DistributionId> --paths "/*"
-```
+- **GitHub の認証情報は、このリポジトリだけに絞る**: CodeBuild に登録した認証情報は、そのアカウント・リージョンのすべての CodeBuild プロジェクトで共有される。AWS CodeConnections（GitHub App）を使うか、個人用アクセストークンならこのリポジトリだけを対象にした fine-grained トークンにする（classic トークンの `repo` は全リポジトリへの書き込み権限になる）。
+- **`main` にブランチ保護を付ける**: `DeployBranch` への push はそのまま本番に出る。GitHub の Settings → Branches で、PR 必須・テスト用 CodeBuild の成功必須・force push 禁止にする。
+- **アカウントの監視を有効にする**: CloudTrail（管理イベント）と GuardDuty を有効にしておく（このテンプレートでは作らない）。料金は `CostBudget` のメールで気づけるようにしている。
+- **ビルドで依存のインストールスクリプトを実行しない**: buildspec と `npm run build:apps` は `npm ci --ignore-scripts` で依存を入れる。インストール時のスクリプトが必要な依存を追加するときは、デプロイ用の権限で動くことを踏まえて buildspec に明示的に追加する。
 
 ## CI / デプロイ
 

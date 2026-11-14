@@ -57,7 +57,7 @@ describe("buildApps", () => {
     buildApps([app()], { appsDir: join(root, "apps"), distDir: join(root, "dist"), run });
     const cwd = join(root, "apps", "my-app");
     expect(calls).toEqual([
-      ["npm", "ci", cwd],
+      ["npm", "ci", "--ignore-scripts", cwd],
       ["npm", "run", "build", "--", "--base=/apps/my-app/", cwd],
     ]);
     expect(readFileSync(join(root, "dist", "apps", "my-app", "index.html"), "utf8")).toBe("hi");
@@ -71,7 +71,7 @@ describe("buildApps", () => {
       return 0;
     };
     buildApps([app({ outputDir: "out", buildArgs: [] })], { appsDir: join(root, "apps"), distDir: join(root, "dist"), run });
-    expect(calls).toEqual([["ci"], ["run", "build"]]);
+    expect(calls).toEqual([["ci", "--ignore-scripts"], ["run", "build"]]);
   });
 
   it("refuses to build without a lockfile (versions must be pinned)", () => {
