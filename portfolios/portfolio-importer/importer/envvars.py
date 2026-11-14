@@ -54,19 +54,26 @@ def _backend_url_rank(name: str) -> tuple[int, str]:
     return (_LOCATION_WORDS.index(last) if last in _LOCATION_WORDS else len(_LOCATION_WORDS), name)
 
 
+def _is_origin_name(name: str) -> bool:
+    # ORIGINAL_* などに当たらないよう語で比べる
+    return any(w in ("ORIGIN", "ORIGINS") for w in _words(name))
+
+
 def _is_frontend_url_name(name: str) -> bool:
     # 公開用の名前（VITE_API_ORIGIN など）はフロントエンド向けのため除く
     if PUBLIC_ENV_NAME.fullmatch(name):
         return False
-    words = _words(name)
-    if any(w in ("ORIGIN", "ORIGINS") for w in words):
+    if _is_origin_name(name):
         return True
+    words = _words(name)
     # SPOTIFY_CLIENT_ID・OAUTH_CLIENT_CALLBACK_URL など別の用途の変数を除くため、FRONTEND_URL・CLIENT_URL の並びに限る
     return any(a in ("FRONTEND", "CLIENT") and b == "URL" for a, b in zip(words, words[1:]))
 
 
 def _is_test(rel: Path) -> bool:
-    return any(part in ("tests", "test") for part in rel.parts[:-1]) or rel.name.startswith("test_")
+    name = rel.name
+    return (any(part in ("tests", "test", "__tests__") for part in rel.parts[:-1]) or name.startswith("test_")
+            or re.search(r"\.(test|spec)\.[^.]+$", name) is not None or re.search(r"_test\.py$", name) is not None)
 
 
 def _scan(d: Path, exts: set[str], ref: re.Pattern, skip_tests: bool,
@@ -110,7 +117,8 @@ def read_site_url(repo_root: Path) -> str | None:
     """portfolio-site/infra/parameters.json の DomainName から https://<ドメイン> を返す。判定できなければ None。"""
     path = repo_root / "portfolio-site" / "infra" / "parameters.json"
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        # Windows のエディタ・PowerShell が付ける BOM があっても読めるようにする
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, ValueError):
         return None
     params = data.get("Parameters") if isinstance(data, dict) else None
@@ -129,5 +137,5 @@ def frontend_url_env(names: list[str], site_url: str, slug: str, registered: boo
     parts = urlsplit(site_url)
     origin = f"{parts.scheme}://{parts.netloc}"
     app_url = f"{site_url.rstrip('/')}/apps/{slug}/"
-    env = {n: origin if "ORIGIN" in n or not registered else app_url for n in names}
+    env = {n: origin if _is_origin_name(n) or not registered else app_url for n in names}
     return env if all(_SAFE_URL.fullmatch(v) for v in env.values()) else {}

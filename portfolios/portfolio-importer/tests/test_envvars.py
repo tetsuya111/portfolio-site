@@ -76,6 +76,10 @@ class FindBackendEnvNamesTest(TempDirMixin, unittest.TestCase):
         write(self.tmp / "tests/test_config.py", 'os.getenv("FRONTEND_URL")\n')
         write(self.tmp / "test_main.py", 'os.getenv("CLIENT_URL")\n')
         write(self.tmp / "src/tests/conftest.py", 'os.environ["TEST_CLIENT_URL"]\n')
+        write(self.tmp / "src/__tests__/cors.ts", "process.env.CLIENT_URL\n")
+        write(self.tmp / "src/cors.test.ts", "process.env.CLIENT_URL\n")
+        write(self.tmp / "src/cors.spec.js", "process.env.CLIENT_URL\n")
+        write(self.tmp / "cors_test.py", 'os.getenv("CLIENT_URL")\n')
         self.assertEqual(find_backend_env_names(self.tmp), [])
 
     def test_ignores_unrelated_names_with_similar_words(self):
@@ -109,6 +113,11 @@ class ReadSiteUrlTest(TempDirMixin, unittest.TestCase):
         write_json(self.params(), {"Parameters": {"DomainName": "Portfolio.Example.com"}})
         self.assertEqual(read_site_url(self.tmp), "https://portfolio.example.com")
 
+    def test_reads_file_with_bom(self):
+        self.params().parent.mkdir(parents=True)
+        self.params().write_bytes(b"\xef\xbb\xbf" + b'{"Parameters": {"DomainName": "p.example.com"}}')
+        self.assertEqual(read_site_url(self.tmp), "https://p.example.com")
+
 
 class FrontendUrlEnvTest(unittest.TestCase):
     def test_origin_names_get_origin_and_others_get_app_url(self):
@@ -119,6 +128,10 @@ class FrontendUrlEnvTest(unittest.TestCase):
     def test_site_url_path_is_kept_for_app_url(self):
         self.assertEqual(frontend_url_env(["FRONTEND_URL"], "https://p.example.com/pf/", "a", True),
                          {"FRONTEND_URL": "https://p.example.com/pf/apps/a/"})
+
+    def test_origin_is_decided_by_whole_word(self):
+        self.assertEqual(frontend_url_env(["ORIGINAL_CLIENT_URL"], "https://p.example.com", "a", True),
+                         {"ORIGINAL_CLIENT_URL": "https://p.example.com/apps/a/"})
 
     def test_unregistered_frontend_gets_origin(self):
         self.assertEqual(frontend_url_env(["FRONTEND_URL"], "https://p.example.com/x", "my-app", False),

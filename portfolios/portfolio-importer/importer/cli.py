@@ -104,16 +104,14 @@ def run_import(args: argparse.Namespace, repo_root: Path, run, today: date) -> d
     backend = detect_backend(project, frontend)
     frontend_out = None
     registered = False
+    deliverable = frontend is not None and frontend.kind is not None
+    if args.backend_url is not None and not deliverable:
+        warnings.append(_BACKEND_URL_UNUSED)
     if frontend is not None:
         # ルートにフロントエンドがある場合に、バックエンドまで apps/ にコピーしないようにする
         exclude = [backend.dir] if backend is not None and frontend.dir in backend.dir.parents else []
-        names: list[str] = []
-        if frontend.kind is None:
-            if args.backend_url is not None:
-                warnings.append(_BACKEND_URL_UNUSED)
-        else:
-            names = find_frontend_env_names(frontend.dir, skip_dirs=exclude)
-        env, w = _frontend_env(names, args.backend_url if frontend.kind is not None else None)
+        names = find_frontend_env_names(frontend.dir, skip_dirs=exclude) if deliverable else []
+        env, w = _frontend_env(names, args.backend_url if deliverable else None)
         warnings += w
         registered, w, env = register_frontend(frontend, target.slug, repo_root, project, exclude=exclude, env=env)
         warnings += w
@@ -124,8 +122,6 @@ def run_import(args: argparse.Namespace, repo_root: Path, run, today: date) -> d
                             "ファイルも含まれています。不要なファイルは apps/ から削除してください")
         frontend_out = {"dir": _rel(frontend.dir, repo_root), "kind": frontend.kind, "registered": registered,
                         "env": env}
-    elif args.backend_url is not None:
-        warnings.append(_BACKEND_URL_UNUSED)
 
     backend_out = None
     if backend is not None:

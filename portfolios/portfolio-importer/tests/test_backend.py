@@ -200,6 +200,15 @@ class WriteDockerFilesEnvTest(TempDirMixin, unittest.TestCase):
         r = write_docker_files(Backend(self.tmp, "python"), {"FRONTEND_URL": "https://p.example.com"})
         self.assertFalse(any("ENV" in w for w in r.warnings))
 
+    def test_existing_dockerfile_with_other_value_asks_to_update(self):
+        write(self.tmp / "requirements.txt", "")
+        write(self.tmp / "Dockerfile", "FROM scratch\nENV FRONTEND_URL=https://old.example.com\nCMD [\"x\"]\n")
+        r = write_docker_files(Backend(self.tmp, "python"), {"FRONTEND_URL": "https://p.example.com"})
+        w = [x for x in r.warnings if "FRONTEND_URL" in x]
+        self.assertEqual(len(w), 1)
+        self.assertIn("直して", w[0])
+        self.assertNotIn("追記", w[0])
+
 
 if __name__ == "__main__":
     unittest.main()
