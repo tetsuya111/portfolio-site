@@ -116,6 +116,10 @@ describe("infra/template.yaml", () => {
       expect(groups[0].find((f: any) => f.Type === "ACTOR_ACCOUNT_ID").Pattern).toEqual({
         "Fn::Sub": "^${GitHubActorAccountId}$",
       });
+      // DeployBranch を指定したらそのブランチ向けの PR だけ、未指定なら任意のブランチ向け
+      expect(groups[0].find((f: any) => f.Type === "BASE_REF")?.Pattern).toEqual({
+        "Fn::If": ["HasDeployBranch", { "Fn::Sub": "^refs/heads/${DeployBranch}$" }, "^refs/heads/"],
+      });
       // デプロイ先の情報を渡さない
       expect(testProject.Environment.EnvironmentVariables ?? []).toEqual([]);
     });
