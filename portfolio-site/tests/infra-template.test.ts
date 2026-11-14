@@ -23,7 +23,9 @@ describe("infra/template.yaml", () => {
       "HostedZoneId",
       "MonthlyBudgetUsd",
     ]);
-    expect(t.Parameters.DeployBranch.Default).toBe("main");
+    // 未指定（空）なら任意のブランチへの push でデプロイする
+    expect(t.Parameters.DeployBranch.Default).toBe("");
+    expect(t.Conditions.HasDeployBranch).toEqual({ "Fn::Not": [{ "Fn::Equals": [{ Ref: "DeployBranch" }, ""] }] });
     expect(t.Parameters.GitHubActorAccountId.AllowedPattern).toBe("^[0-9]+$");
     expect(t.Parameters.EnableWaf.AllowedValues).toEqual(["true", "false"]);
   });
@@ -117,7 +119,10 @@ describe("infra/template.yaml", () => {
       expect(groups).toHaveLength(1);
       expect(eventOf(groups[0])).toBe("PUSH");
       expect(filePathOf(groups[0])).toBe("^portfolio-site/");
-      expect(JSON.stringify(groups[0].find((f: any) => f.Type === "HEAD_REF").Pattern)).toContain("refs/heads/");
+      // DeployBranch を指定したらそのブランチだけ、未指定なら任意のブランチ
+      expect(groups[0].find((f: any) => f.Type === "HEAD_REF").Pattern).toEqual({
+        "Fn::If": ["HasDeployBranch", { "Fn::Sub": "^refs/heads/${DeployBranch}$" }, "^refs/heads/"],
+      });
       const env = Object.fromEntries(deployProject.Environment.EnvironmentVariables.map((v: any) => [v.Name, v.Value]));
       expect(Object.keys(env).sort()).toEqual(["DEPLOY_BRANCH", "DISTRIBUTION_ID", "SITE_BUCKET"]);
     });
