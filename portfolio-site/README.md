@@ -9,7 +9,7 @@
 ## 必要なもの
 
 - Node.js 22.23.4 以上（Astro 7 の要件）
-- AWS へデプロイする場合: [infra/README.md](infra/README.md) の「前提」を参照
+- AWS へデプロイする場合: [docs/infra-setup.md](docs/infra-setup.md) を参照
 
 ## ディレクトリ構成
 
@@ -48,7 +48,7 @@ npm run dev        # http://localhost:4321/ （管理画面は http://localhost:
 
 ## AWS への構築・デプロイ
 
-S3 + CloudFront での配信と、CodeBuild による CI/CD の構成・構築手順・削除方法は [infra/README.md](infra/README.md) にまとめています。
+S3 + CloudFront での配信と、CodeBuild による CI/CD の構成・削除方法は [infra/README.md](infra/README.md)、構築手順は [docs/infra-setup.md](docs/infra-setup.md) にまとめています。
 
 概要だけ示すと、us-east-1 に CloudFormation スタックを1つ作成したあと、`portfolio-site/` 配下の変更を次のように扱います。
 

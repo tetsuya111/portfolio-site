@@ -1,6 +1,6 @@
 # プロジェクト構成
 
-`portfolio-site/` のディレクトリ構成と、各ファイルの役割・つながりをまとめる。使い方（起動・コンテンツの追加）は [../README.md](../README.md)、AWS の構成と構築手順は [../infra/README.md](../infra/README.md) を参照。
+`portfolio-site/` のディレクトリ構成と、各ファイルの役割・つながりをまとめる。使い方（起動・コンテンツの追加）は [../README.md](../README.md)、AWS の構成は [../infra/README.md](../infra/README.md)、構築手順は [infra-setup.md](infra-setup.md) を参照。
 
 ## 全体像
 
@@ -32,7 +32,8 @@ portfolio-site/
 ├── docs/
 │   ├── project-structure.md      # このファイル
 │   ├── content-files.md          # コンテンツファイル（自己紹介・ポートフォリオ・記事）の書式と追加方法
-│   └── apps.md                   # ポートフォリオのフロントエンド（apps/）の配信
+│   ├── apps.md                   # ポートフォリオのフロントエンド（apps/）の配信
+│   └── infra-setup.md            # AWS 環境（infra/template.yaml）のセットアップ手順
 ├── package.json                  # 依存と npm scripts
 ├── astro.config.mjs              # Astro の設定（静的出力、末尾スラッシュ、Tailwind、管理画面インテグレーション）
 ├── tsconfig.json                 # TypeScript の設定（astro/tsconfigs/strict を継承）
