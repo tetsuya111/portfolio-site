@@ -14,7 +14,7 @@
 | A4 | S3 で配信できるのは静的ファイルを出力できるフロントエンドだけ。Vite・Astro・`output: "export"` を設定した Next.js を対象とし、それ以外（サーバー機能が必要な Next.js など）は配信登録をせず警告する | S3 は静的配信のみ。ビルドできないアプリを登録するとサイト全体のデプロイが止まるため |
 | A5 | Docker イメージは `docker save` した tar を `portfolios/docker-images/<スラッグ>-backend.tar` に置き、git の管理対象にしない（同ディレクトリに `.gitignore` を置く） | イメージは数百MBになりうり、git で扱うのに向かない |
 | A6 | `docker build` はベースイメージを外部から取得するため、スキルは実行前にユーザーへ確認する。コマンドは明示オプション指定時のみイメージを作る | メモの「外部のサイトにアクセスする場合は確認」 |
-| A7 | ポートフォリオの URL は、サイトの URL（`--site-url`）が与えられ、かつフロントエンドを配信登録した場合だけ `<サイトURL>/apps/<スラッグ>/` を入れる。リポジトリにサイトのドメインの記載がないため、未指定なら URL を入れない | `astro.config.mjs` に `site` がなく、ドメインは CloudFormation のパラメーターでのみ決まる |
+| A7 | ポートフォリオの URL は、サイトの URL（`--site-url`）が与えられ、かつフロントエンドを配信登録した場合だけ `<サイトURL>/apps/<スラッグ>/` を入れる。リポジトリにサイトのドメインの記載がないため、未指定なら URL を入れない（[add-portfolio-relative-url](../add-portfolio-relative-url/requirements.md) で変更: 未指定なら `/apps/<スラッグ>/` を入れる） | `astro.config.mjs` に `site` がなく、ドメインは CloudFormation のパラメーターでのみ決まる |
 | A8 | 既存の `portfolios/<スラッグ>/` や `portfolio-site/src/content/portfolios/<スラッグ>.md` は上書きしない | 手で書き足した内容を消さないため |
 
 ## 背景・課題
@@ -70,7 +70,7 @@
 
 - **R4-1**: THE SYSTEM SHALL `portfolio-site/src/content/portfolios/<スラッグ>.md` を、サイトのスキーマ（`title` 必須、`tags`、`url`、`date`）に合う形で作成する。
 - **R4-2**: WHEN `portfolios/docs/<スラッグ>.md` がある, THE SYSTEM SHALL そのタイトル・タグ・本文を使う。ない場合は README の見出しと本文、検出した技術をタグに使う。
-- **R4-3**: WHEN サイト URL が指定され、フロントエンドを配信登録した, THE SYSTEM SHALL `url` に `<サイトURL>/apps/<スラッグ>/` を入れる。http/https 以外の URL は入れない。
+- **R4-3**: WHEN サイト URL が指定され、フロントエンドを配信登録した, THE SYSTEM SHALL `url` に `<サイトURL>/apps/<スラッグ>/` を入れる。http/https 以外の URL は入れない。（サイト URL 未指定時の扱いは [add-portfolio-relative-url](../add-portfolio-relative-url/requirements.md) の R1-1〜R1-3 で変更: 配信登録時は `/apps/<スラッグ>/` を入れる）
 - **R4-4**: IF 掲載用 md が既に存在する, THEN THE SYSTEM SHALL 上書きせず警告する。
 
 ### スキル

@@ -87,7 +87,7 @@
 
 **Interfaces:** Produces `main(argv: list[str], repo_root: Path, run=subprocess.run, today=None) -> int`。
 
-- [ ] テスト: 外部プロジェクト（vite フロント + python バックエンド）で全成果物が作られ JSON が出る / `--site-url https://ex.com` で url が `https://ex.com/apps/<slug>/` / `--build-image` で run が呼ばれる・CMD なしなら呼ばれない / エラー時は終了コード 1
+- [ ] テスト: 外部プロジェクト（vite フロント + python バックエンド）で全成果物が作られ JSON が出る / `--site-url https://ex.com` で url が `https://ex.com/apps/<slug>/`（未指定時は [add-portfolio-relative-url](../add-portfolio-relative-url/tasks.md) で `/apps/<slug>/` に変更） / `--build-image` で run が呼ばれる・CMD なしなら呼ばれない / エラー時は終了コード 1
 - [ ] 失敗確認 → 実装 → 成功 → コミット
 
 ### Task 8: portfolio-site の配信（R2-3, R2-4）
