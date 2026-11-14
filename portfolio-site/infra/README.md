@@ -55,6 +55,12 @@ flowchart LR
 
 ## パラメーター
 
+値は **パラメーターファイル `infra/parameters.json`** に書き、`aws cloudformation deploy` の `--parameter-overrides file://infra/parameters.json` で読み込む。メールアドレスやホストゾーン ID を含むため git の管理外（`.gitignore` 済み）で、[parameters.example.json](parameters.example.json) をコピーして作る。形式は `"名前=値"` の JSON 配列。
+
+```bash
+cp infra/parameters.example.json infra/parameters.json  # 値を書き換える
+```
+
 | 名前 | 必須 | 既定値 | 内容 |
 |---|---|---|---|
 | `DomainName` | ○ | — | サイトのドメイン名（例 `portfolio.example.com`）。`HostedZoneId` のゾーン内の名前にする |
@@ -83,21 +89,18 @@ CloudFront で使う ACM 証明書は us-east-1 でしか作れないため、**
 # 1. テンプレートの構文チェック
 aws cloudformation validate-template --region us-east-1 --template-body file://infra/template.yaml
 
-# 2. 作成（2回目以降は同じコマンドで更新になる）
+# 2. パラメーターファイルを作り、値を書き換える（初回のみ）
+cp infra/parameters.example.json infra/parameters.json
+
+# 3. 作成（2回目以降は同じコマンドで更新になる）
 aws cloudformation deploy \
   --region us-east-1 \
   --stack-name portfolio-site \
   --template-file infra/template.yaml \
   --capabilities CAPABILITY_IAM \
-  --parameter-overrides \
-    DomainName=portfolio.example.com \
-    HostedZoneId=Z0123456789ABCDEFGHIJ \
-    GitHubRepoUrl=https://github.com/<owner>/<repo>.git \
-    DeployBranch=main \
-    GitHubActorAccountId=<GitHub の数値 ID> \
-    BudgetAlertEmail=<メールアドレス>
+  --parameter-overrides file://infra/parameters.json
 
-# 3. 出力（サイト URL・バケット名・ディストリビューション ID）を確認
+# 4. 出力（サイト URL・バケット名・ディストリビューション ID）を確認
 aws cloudformation describe-stacks --region us-east-1 --stack-name portfolio-site \
   --query "Stacks[0].Outputs" --output table
 ```
