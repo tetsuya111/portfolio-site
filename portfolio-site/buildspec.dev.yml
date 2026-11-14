@@ -1,0 +1,32 @@
+# CodeBuild 用・dev 環境へのアップロード（infra/template.dev.yaml の CodeBuildProject から参照）
+# DEPLOY_BRANCH（既定 dev-release）への push で実行し、テスト・lint・ビルドが成功したときだけ
+# dev 用 S3 バケット（SITE_BUCKET）の DEPLOY_PATH 以下（空ならバケット直下）にアップロードする。
+# install・build は本番の buildspec.yml と同じ（テストで一致を確認している）。CloudFront は使わない。
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 22
+    commands:
+      - cd portfolio-site
+      # 依存のインストールスクリプト（postinstall など）は実行しない。デプロイ用の権限があるビルドで、
+      # 乗っ取られた依存のスクリプトが動かないようにするため（esbuild のバイナリは optionalDependencies で入る）
+      - npm ci --ignore-scripts
+  build:
+    commands:
+      - npm test
+      - npm run lint
+      # astro build と、成果物に管理画面が含まれないことなどの検証
+      - npm run test:build
+      # apps/apps.json に登録したポートフォリオのフロントエンドを dist/apps/<スラッグ>/ にビルドする
+      - npm run build:apps
+  post_build:
+    commands:
+      # Webhook の PUSH で DEPLOY_BRANCH に push されたときだけアップロードする（手動開始・タグ・他ブランチは除く）
+      - |
+        if [ "$CODEBUILD_BUILD_SUCCEEDING" = "1" ] && [ "$CODEBUILD_WEBHOOK_EVENT" = "PUSH" ] && [ -n "$DEPLOY_BRANCH" ] && [ "$CODEBUILD_WEBHOOK_HEAD_REF" = "refs/heads/$DEPLOY_BRANCH" ]; then
+          aws s3 sync dist "s3://$SITE_BUCKET/${DEPLOY_PATH:+$DEPLOY_PATH/}" --delete
+        else
+          echo "dev 環境へのアップロード対象のビルドではないため、アップロードを省略します"
+        fi

@@ -73,3 +73,34 @@ describe("buildspec.test.yml", () => {
     expect(all).not.toMatch(/SITE_BUCKET|DISTRIBUTION_ID/);
   });
 });
+
+describe("buildspec.dev.yml", () => {
+  const devSpec = parse(readFileSync(join(import.meta.dirname, "..", "buildspec.dev.yml"), "utf8"));
+  const devCommands = (phase: string): string[] => devSpec.phases[phase]?.commands ?? [];
+
+  it("installs and checks exactly like the deploy buildspec", () => {
+    expect(String(devSpec.phases.install["runtime-versions"].nodejs)).toBe("22");
+    expect(devCommands("install")).toEqual(commands("install"));
+    expect(devCommands("build")).toEqual(commands("build"));
+  });
+
+  it("uploads only for a successful push to the (non-empty) deploy branch", () => {
+    const post = devCommands("post_build").join("\n");
+    const guard = post.indexOf("CODEBUILD_WEBHOOK_EVENT");
+    expect(guard).toBeGreaterThanOrEqual(0);
+    expect(post).toContain("CODEBUILD_BUILD_SUCCEEDING");
+    expect(post).toContain('-n "$DEPLOY_BRANCH"');
+    expect(post).toContain('"$CODEBUILD_WEBHOOK_HEAD_REF" = "refs/heads/$DEPLOY_BRANCH"');
+    expect(post.indexOf("aws s3 sync")).toBeGreaterThan(guard);
+  });
+
+  it("syncs dist to the bucket root or DEPLOY_PATH without a double slash", () => {
+    const post = devCommands("post_build").join("\n");
+    expect(post).toContain('aws s3 sync dist "s3://$SITE_BUCKET/${DEPLOY_PATH:+$DEPLOY_PATH/}" --delete');
+  });
+
+  it("never touches CloudFront", () => {
+    const all = Object.keys(devSpec.phases).flatMap(devCommands).join("\n");
+    expect(all).not.toMatch(/cloudfront|DISTRIBUTION_ID/);
+  });
+});
