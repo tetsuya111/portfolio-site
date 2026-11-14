@@ -98,20 +98,16 @@ Resources:
                   - logs:PutLogEvents
                 Resource: !Sub "${BuildLogGroup.Arn}"
               # DeployPath 指定時は、一覧もそのパス以下に限る
-              - !If
-                - HasDeployPath
-                - Sid: ListDevBucket
-                  Effect: Allow
-                  Action: s3:ListBucket
-                  Resource: !GetAtt DevSiteBucket.Arn
-                  Condition:
-                    StringLike:
+              - Sid: ListDevBucket
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt DevSiteBucket.Arn
+                Condition: !If
+                  - HasDeployPath
+                  - StringLike:
                       s3:prefix:
                         - !Sub "${DeployPath}/*"
-                - Sid: ListDevBucket
-                  Effect: Allow
-                  Action: s3:ListBucket
-                  Resource: !GetAtt DevSiteBucket.Arn
+                  - !Ref AWS::NoValue
               - Sid: SyncDevObjects
                 Effect: Allow
                 Action:
