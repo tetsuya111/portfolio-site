@@ -51,7 +51,7 @@ def run_import(args: argparse.Namespace, repo_root: Path, run, today: date) -> d
     if frontend is not None:
         # ルートにフロントエンドがある場合に、バックエンドまで apps/ にコピーしないようにする
         exclude = [backend.dir] if backend is not None and frontend.dir in backend.dir.parents else []
-        registered, w = register_frontend(frontend, target.slug, repo_root, project, exclude=exclude)
+        registered, w, _ = register_frontend(frontend, target.slug, repo_root, project, exclude=exclude)
         warnings += w
         if registered and backend is not None and backend.dir == frontend.dir:
             warnings.append("フロントエンドとバックエンドが同じディレクトリにあるため、portfolio-site/apps/ にバックエンドの"
