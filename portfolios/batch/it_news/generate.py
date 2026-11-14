@@ -1,0 +1,90 @@
+"""題材選定 → 重複除外 → 記事執筆 → md の書き出し。"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Callable
+
+from .files import choose_file_name, load_existing, normalize_url
+from .markdown import build_article_markdown
+from .perplexity import PerplexityError, Post, call_perplexity
+from .prompts import article_request, topics_request, validate_article, validate_topics
+
+JST = timezone(timedelta(hours=9))
+
+
+@dataclass
+class Result:
+    written: list[str] = field(default_factory=list)
+    failed: list[str] = field(default_factory=list)
+    skipped: int = 0  # 既存記事・同じ実行内で出典が重なったため除いた題材の数
+
+
+def jst_date(now: datetime) -> str:
+    """記事の日付（日本時間の暦日）。"""
+    return now.astimezone(JST).strftime("%Y-%m-%d")
+
+
+def run_generation(
+    *,
+    post: Post,
+    api_key: str,
+    model: str,
+    count: int,
+    out_dir: Path,
+    existing_dirs: list[Path],
+    tags: list[str],
+    now: datetime,
+    log: Callable[[str], None] = print,
+) -> Result:
+    """最大 count 本の記事を out_dir に書き出す。記事ごとの失敗は記録して次へ進む（題材選定の失敗は例外）。"""
+    result = Result()
+    existing = load_existing([out_dir, *existing_dirs])
+    taken = set(existing.names)
+    seen = set(existing.source_urls)
+    date = jst_date(now)
+
+    messages, schema = topics_request(existing.recent_titles)
+    data, _ = call_perplexity(post=post, api_key=api_key, model=model, messages=messages, schema=schema, recency="day")
+    topics = sorted(validate_topics(data), key=lambda t: t["importance"], reverse=True)
+
+    chosen = []
+    for t in topics:
+        key = normalize_url(t["sourceUrl"])
+        if key in seen:
+            result.skipped += 1
+            continue
+        seen.add(key)
+        if len(chosen) < count:
+            chosen.append(t)
+    log(f"題材の候補 {len(topics)} 件から {len(chosen)} 件を選びました（出典の重複で除外 {result.skipped} 件）")
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for t in chosen:
+        try:
+            messages, schema = article_request(t)
+            data, references = call_perplexity(
+                post=post, api_key=api_key, model=model, messages=messages, schema=schema, recency="week"
+            )
+            article = validate_article(data)
+            md = build_article_markdown(
+                article=article,
+                references=references,
+                date=date,
+                source_url=t["sourceUrl"],
+                generator=f"perplexity/{model}",
+                tags=tags,
+            )
+        except (PerplexityError, ValueError) as e:
+            result.failed.append(t["title"])
+            log(f"記事を作れませんでした「{t['title']}」: {e}")
+            continue
+        name = choose_file_name(date, article["slug"], taken)
+        taken.add(name)
+        path = out_dir / f"{name}.md"
+        path.write_text(md, encoding="utf-8", newline="\n")
+        result.written.append(str(path))
+        log(f"書き出しました: {path}")
+    return result
