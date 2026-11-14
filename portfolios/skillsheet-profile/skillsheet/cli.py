@@ -18,7 +18,9 @@ def _extract(source: str) -> str:
 
 def _apply(draft: str, target: Path) -> None:
     if draft == "-":
-        text = sys.stdin.read()
+        # バイト列で受けて UTF-8 → Shift_JIS の順に判別する（Windows で cp932 のまま流し込まれても読めるように）
+        buffer = getattr(sys.stdin, "buffer", None)
+        text = readers.decode_text(buffer.read()) if buffer is not None else sys.stdin.read()
     else:
         path = Path(draft)
         if not path.is_file():

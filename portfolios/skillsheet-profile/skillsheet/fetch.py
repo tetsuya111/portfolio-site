@@ -1,5 +1,6 @@
 """URL のスキルシートを取得する。Google スプレッドシートは公開シートを xlsx でエクスポートする（OAuth は扱わない）。"""
 
+import http.client
 import posixpath
 import re
 import urllib.error
@@ -46,14 +47,15 @@ def fetch(url: str, opener=urllib.request.urlopen) -> tuple[bytes, str]:
     request = urllib.request.Request(export or url, headers={"User-Agent": "skillsheet-profile"})
     try:
         with opener(request, timeout=TIMEOUT_SECONDS) as res:
-            content_type = res.headers.get_content_type()
+            # ヘッダーがないと get_content_type() は text/plain を返すため、ないときは None にして URL の拡張子で決める
+            content_type = res.headers.get_content_type() if res.headers.get("Content-Type") else None
             charset = res.headers.get_content_charset()
             body = res.read(readers.MAX_BYTES + 1)
     except urllib.error.HTTPError as e:
         if export and e.code in (401, 403, 404):
             raise SkillsheetError(_PRIVATE_MESSAGE) from None
         raise SkillsheetError(f"URL を取得できません（HTTP {e.code}）: {url}") from None
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
+    except (urllib.error.URLError, http.client.HTTPException, TimeoutError, OSError) as e:
         raise SkillsheetError(f"URL を取得できません（{e}）: {url}") from None
     if len(body) > readers.MAX_BYTES:
         raise SkillsheetError(f"応答が大きすぎます（上限 {readers.MAX_BYTES // (1024 * 1024)}MB）: {url}")
@@ -63,6 +65,10 @@ def fetch(url: str, opener=urllib.request.urlopen) -> tuple[bytes, str]:
             raise SkillsheetError(_PRIVATE_MESSAGE)
         return body, ".xlsx"
     ext = _ext_for(content_type, url)
+    if ext in readers.HTML_EXTS and not charset:
+        # ヘッダーに charset がなければ <meta charset> / <meta http-equiv="Content-Type"> を見る
+        m = re.search(rb"""<meta[^>]+charset\s*=\s*["']?([A-Za-z0-9_.:-]+)""", body[:4096], re.IGNORECASE)
+        charset = m.group(1).decode("ascii") if m else None
     if ext in readers.TEXT_EXTS | readers.HTML_EXTS and charset:
         body = _to_utf8(body, charset)
     return body, ext
@@ -82,7 +88,7 @@ _CONTENT_TYPE_EXTS = {
 }
 
 
-def _ext_for(content_type: str, url: str) -> str:
+def _ext_for(content_type: str | None, url: str) -> str:
     """応答の Content-Type から読み分けの拡張子を決める。不明なら URL の拡張子、それもなければ HTML として読む。"""
     if content_type in _CONTENT_TYPE_EXTS:
         return _CONTENT_TYPE_EXTS[content_type]

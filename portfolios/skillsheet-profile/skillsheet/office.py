@@ -63,15 +63,23 @@ def _col_index(ref: str) -> int | None:
     return n - 1
 
 
-# 日付の組み込み表示形式の ID（日本語版 Excel の和暦・年月日形式 27〜36・50〜58 を含む）
-_BUILTIN_DATE_FORMATS = set(range(14, 23)) | set(range(27, 37)) | {45, 46, 47} | set(range(50, 59))
+# 日付を含む組み込み表示形式の ID（日本語版 Excel の和暦・年月日形式 27〜31・34〜36・50〜58 を含む）。
+# 時刻だけの形式（18〜21・32・33・45〜47）は含めない（シリアル値の小数部が時刻のため、日付にすると誤る）
+_BUILTIN_DATE_FORMATS = set(range(14, 18)) | {22} | set(range(27, 32)) | set(range(34, 37)) | set(range(50, 59))
 
 
 def _is_date_format(code: str) -> bool:
-    """表示形式のコードが日付・時刻か（"..." の文字列・[...] の色や条件・\\ のエスケープを除いて判定する）。"""
+    """表示形式のコードが日付を含むか（"..." の文字列・[...] の色や条件・\\ のエスケープを除いて判定する）。
+
+    時刻だけの形式（h:mm など）は日付にしない。m は h・s と並ぶと「分」なので、y・d・e・g（和暦）がなく
+    h か s があれば時刻とみなす。
+    """
     code = re.sub(r'"[^"]*"|\[[^\]]*\]|\\.', "", code).lower()
-    code = re.sub(r"general|e[+-]", "", code)  # 「General」と指数表記（0.00E+00）の e は日付ではない
-    return re.search(r"[ymdeg]", code) is not None
+    # 「General」「G/標準」（日本語版の標準）と指数表記（0.00E+00）の e・g は日付ではない
+    code = re.sub(r"general|g/標準|e[+-]", "", code)
+    if re.search(r"[ydeg]", code):
+        return True
+    return "m" in code and not re.search(r"[hs]", code)
 
 
 def _date_styles(pkg: "_Package") -> set[int]:
@@ -146,6 +154,8 @@ def xlsx_to_text(data: bytes) -> str:
         for row in pkg.xml(path).iter(_S + "row"):
             cells: list[str] = []
             for c in row.iter(_S + "c"):
+                if c.find(_S + "v") is None and c.find(_S + "is") is None:
+                    continue  # 書式だけのセル（遠い列にあると行を無駄に埋めるため飛ばす）
                 idx = _col_index(c.get("r", ""))
                 if idx is None or idx < len(cells):
                     idx = len(cells)

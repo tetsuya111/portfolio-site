@@ -102,5 +102,80 @@ class ProfileEdgeTest(TempDirMixin, unittest.TestCase):
         self.assertEqual(stat.S_IMODE(os.stat(target).st_mode), 0o644)
 
 
+class Round3Test(TempDirMixin, unittest.TestCase):
+    def test_html_source_tabs(self):
+        html = "<table>\n\t<tr>\n\t\t<td>a</td>\n\t\t<td>b</td>\n\t</tr>\n</table>"
+        self.assertEqual(html_to_text(html), "a\tb")
+
+    def test_html_nested_table(self):
+        html = "<table><tr><td><table><tr><td>x</td></tr></table>a<br>b</td><td>c</td></tr></table>"
+        self.assertTrue(html_to_text(html).endswith("a b\tc"), html_to_text(html))
+
+    def test_japanese_general_format_is_not_date(self):
+        self.assertFalse(office._is_date_format('G/標準"年"'))
+        self.assertFalse(office._is_date_format("h:mm"))
+        self.assertTrue(office._is_date_format("ggge年m月"))
+        self.assertTrue(office._is_date_format("yyyy/m/d h:mm"))
+
+    def test_time_builtin_is_not_date(self):
+        styles = '<cellXfs count="2"><xf numFmtId="20"/><xf numFmtId="14"/></cellXfs>'
+        rows = '<row r="1"><c r="A1" s="0"><v>0.395833</v></c><c r="B1" s="1"><v>43922.5</v></c></row>'
+        self.assertIn("0.395833\t2020-04-01", office.xlsx_to_text(make_xlsx({"s": rows}, styles=styles)))
+
+    def test_styled_empty_far_cell(self):
+        rows = '<row r="1"><c r="A1"><v>1</v></c><c r="XFD1" s="0"/></row>'
+        self.assertEqual(office.xlsx_to_text(make_xlsx({"s": rows})), "# シート: s\n1")
+
+    def test_missing_content_type_uses_url_ext(self):
+        import email.message
+        from tests.test_fetch import FakeOpener
+
+        class NoTypeResponse:
+            headers = email.message.Message()
+
+            def read(self, n=-1):
+                return b"PK"
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        _, ext = fetch.fetch("https://host/sheet.xlsx", opener=FakeOpener(NoTypeResponse()))
+        self.assertEqual(ext, ".xlsx")
+
+    def test_meta_charset(self):
+        from tests.test_fetch import FakeOpener, FakeResponse
+        from skillsheet import readers
+
+        body = '<meta charset="EUC-JP"><p>山田</p>'.encode("euc_jp")
+        data, ext = fetch.fetch("https://host/", opener=FakeOpener(FakeResponse(body, "text/html")))
+        self.assertEqual(readers.read_bytes(data, ext), "山田")
+
+    def test_incomplete_read(self):
+        import http.client
+        from tests.test_fetch import FakeOpener
+
+        with self.assertRaises(SkillsheetError):
+            fetch.fetch("https://host/", opener=FakeOpener(error=http.client.IncompleteRead(b"")))
+
+    def test_lone_surrogate_is_validation_error(self):
+        errors = profile.validate(replace("name: 山田 太郎", 'name: "\\ud83d"'))
+        self.assertTrue(any("name" in e for e in errors), errors)
+
+    def test_stdin_cp932(self):
+        import sys
+        from unittest import mock
+        from tests.helpers import run_main
+
+        target = self.tmp / "profile.md"
+        target.write_text("old", encoding="utf-8")
+        fake_stdin = io.TextIOWrapper(io.BytesIO(VALID.encode("cp932")), encoding="utf-8")
+        with mock.patch.object(sys, "stdin", fake_stdin):
+            code, out, err = run_main("apply", "-", "--target", str(target))
+        self.assertEqual(code, 0, err)
+
+
 if __name__ == "__main__":
     unittest.main()

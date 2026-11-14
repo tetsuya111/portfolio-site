@@ -48,7 +48,8 @@ def _scalar(raw: str | None) -> str | None:
             raise _ScalarError("ダブルクォートが閉じていません")
         try:
             value = json.loads(raw)
-        except json.JSONDecodeError:
+            value.encode("utf-8")  # 孤立したサロゲート（"\ud83d" など）は UTF-8 で書けない
+        except (json.JSONDecodeError, AttributeError, UnicodeEncodeError):
             raise _ScalarError("ダブルクォートの中身を解釈できません") from None
         return value
     if raw.startswith("'"):
