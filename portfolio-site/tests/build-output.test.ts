@@ -60,6 +60,11 @@ describe("build output", () => {
     expect(html("articles")).toMatch(/<a href="\/it-news\/"/);
   });
 
+  it("lists the IT news generator as a portfolio", () => {
+    expect(html("portfolios")).toContain('href="/portfolios/it-news-auto-articles/"');
+    expect(html("portfolios/it-news-auto-articles")).toContain("IT ニュース自動作成");
+  });
+
   it("keeps the back link on hand-written article pages", () => {
     expect(html("articles/hello-world")).toMatch(/<a href="\/articles\/"[^>]*>← 記事一覧<\/a>/);
   });
