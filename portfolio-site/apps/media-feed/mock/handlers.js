@@ -15,36 +15,43 @@
 // });
 
 // ---------------------------------------------------------------------------------------------
-// フィードに流すサンプル動画。実体は portfolio-site/apps/media-feed/public/mock-media/ に手で置く
-// （git-lfs で管理する。置き方は同ディレクトリの README.md）。ファイルがなくても画面は壊れず、
-// 動画が再生されないだけになる。ファイルを増やしたら、ここに1行足す。
+// フィードに流すサンプル動画。動画の URL（https://...）を MOCK_VIDEOS に手で書く。
+// - src: 動画の URL（https:// で始まるもの。それ以外の行は無視する）。ブラウザが直接取得する。
+// - title・poster（ポスター画像の https:// の URL）は省略できる。
+// - 1件もなければ一覧の API は 404 を返し、フィードは空になる（画面は壊れない）。
 // タイトル・ユーザー名・タグは公開されるため、架空のもの（サンプル・demo など）にすること。
 // ---------------------------------------------------------------------------------------------
-const MEDIA_BASE = "/apps/media-feed/mock-media/";
-const MOCK_MEDIA = [
-  { type: "video", file: "sample01.mp4", poster: "sample01.jpg", title: "サンプル動画 01" },
-  { type: "video", file: "sample02.mp4", poster: "sample02.jpg", title: "サンプル動画 02" },
-  { type: "video", file: "sample03.mp4", poster: "sample03.jpg", title: "サンプル動画 03" },
+const MOCK_VIDEOS = [
+  // { src: "https://example.com/media-feed/output_000.mp4", title: "サンプル動画 01" },
+  // { src: "https://example.com/media-feed/output_001.mp4", poster: "https://example.com/media-feed/output_001.jpg" },
 ];
 
-const MOCK_CONTENTS = MOCK_MEDIA.map((m, i) => ({
-  id: `mock-${i + 1}`,
-  type: m.type,
-  title: m.title,
-  path: "",
-  link: MEDIA_BASE + m.file,
-  source_url: "",
-  user: "demo",
-  description: "ポートフォリオ用のサンプルです。",
-  tags: [{ name: "サンプル" }],
-  created_at: "2026-01-01T00:00:00Z",
-  media_url: MEDIA_BASE + m.file,
-  poster_url: m.poster ? MEDIA_BASE + m.poster : undefined,
-}));
+const isHttps = (u) => typeof u === "string" && u.startsWith("https://");
+
+const MOCK_CONTENTS = MOCK_VIDEOS.filter((v) => v && isHttps(v.src)).map((v, i) => {
+  const url = v.src;
+  return {
+    id: `mock-${i + 1}`,
+    type: "video",
+    title: v.title || `サンプル動画 ${String(i + 1).padStart(2, "0")}`,
+    path: "",
+    link: url,
+    source_url: "",
+    user: "demo",
+    description: "ポートフォリオ用のサンプルです。",
+    tags: [{ name: "サンプル" }],
+    created_at: "2026-01-01T00:00:00Z",
+    media_url: url,
+    poster_url: isHttps(v.poster) ? v.poster : undefined,
+  };
+});
 
 // コンテンツ一覧（フィード・検索）。絞り込み・ページングは再現せず、常に同じ一覧を返す。
-// FeedPlayer は一覧が空だと描画のたびに再取得するため、空の結果は返さない。
-portfolioMock.handle("GET", "/api/contents/", () => ({ results: MOCK_CONTENTS, count: MOCK_CONTENTS.length }));
+// FeedPlayer は一覧が空の 200 だと描画のたびに再取得するため、0件のときは 404 にする。
+portfolioMock.handle("GET", "/api/contents/", () =>
+  MOCK_CONTENTS.length > 0
+    ? { results: MOCK_CONTENTS, count: MOCK_CONTENTS.length }
+    : portfolioMock.notFound());
 
 // 以下はすべて 404 のまま。FeedPlayer・各画面は失敗を catch して「データなし」・エラー表示として扱う。
 // コンテンツ
