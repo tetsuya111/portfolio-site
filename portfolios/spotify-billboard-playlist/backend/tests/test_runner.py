@@ -4,7 +4,7 @@ import pytest
 
 from app.batch.fetcher import FetchError
 from app.batch.parser import ParseError
-from app.batch.runner import process_pending, process_source
+from app.batch.runner import process_chart_page, process_pending, process_source
 from app.batch.urls import InvalidChartUrl
 from app.db import Database
 
@@ -137,3 +137,11 @@ def test_detail_page_without_rows_marked_failed(db):
     source = db.get_source(sid)
     assert source["status"] == "failed"
     assert source["error"] == "詳細表示ページから曲を取り出せませんでした"
+
+
+def test_process_chart_page_returns_title_of_parsed_page(db):
+    sid = db.add_source("https://billboard.mryogaku.com/php/chart.php?date=2025-11-15")
+    page = process_chart_page(db, sid, FakeFetcher({HOT_URL: _hot100()}))
+    assert page.title == "ビルボード Hot 100 全順位（2025年11月15日付）"
+    assert [e.rank for e in page.entries] == [1, 2, 99]
+    assert db.tracks(sid) == page.entries

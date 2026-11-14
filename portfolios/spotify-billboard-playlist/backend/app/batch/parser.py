@@ -221,6 +221,18 @@ def parse_chart_page(html: str) -> list[ChartEntry]:
             raise detail_error from None
 
 
+# <title> の「ページ名｜サイト名」の区切り（全角・半角）
+_TITLE_SEPARATOR_RE = re.compile(r"[｜|]")
+
+
+def parse_page_title(html: str) -> str:
+    """<title> からページ名を取り出す（「｜サイト名」以降は除く）。無ければ空文字。"""
+    title = BeautifulSoup(html, "html.parser").title
+    if title is None:
+        return ""
+    return _clean(_TITLE_SEPARATOR_RE.split(title.get_text(), maxsplit=1)[0])
+
+
 def find_latest_hot100_url(html: str) -> str:
     """トップページから最新週の Hot 100 全順位ページのURLを探す。"""
     soup = BeautifulSoup(html, "html.parser")

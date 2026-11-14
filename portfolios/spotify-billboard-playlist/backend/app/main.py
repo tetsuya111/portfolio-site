@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 from app.batch.fetcher import Fetcher, FetchError
 from app.batch.parser import ParseError
-from app.batch.runner import PageFetcher, process_source
+from app.batch.runner import PageFetcher, process_chart_page
 from app.batch.urls import MAX_URL_LENGTH, InvalidChartUrl
 from app.config import Settings, load_settings
 from app.db import Database
@@ -44,6 +44,7 @@ class ChartTrack(Track):
 class ChartResponse(BaseModel):
     id: int
     url: str
+    title: str  # ページの <title>（サイト名を除く。無ければ空文字）。プレイリスト名に使う
     tracks: list[ChartTrack]
 
 
@@ -94,7 +95,7 @@ def create_app(
     def post_chart(body: ChartRequest) -> ChartResponse:
         source_id = db.add_source(body.url.strip())
         try:
-            entries = process_source(db, source_id, fetcher)
+            page = process_chart_page(db, source_id, fetcher)
         except InvalidChartUrl as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except (FetchError, ParseError) as exc:
@@ -102,7 +103,8 @@ def create_app(
         return ChartResponse(
             id=source_id,
             url=body.url.strip(),
-            tracks=[ChartTrack(rank=e.rank, title=e.title, artist=e.artist) for e in entries],
+            title=page.title,
+            tracks=[ChartTrack(rank=e.rank, title=e.title, artist=e.artist) for e in page.entries],
         )
 
     # ---- 認証 ----

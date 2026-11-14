@@ -13,6 +13,7 @@ def test_post_chart_returns_tracks(client, db):
     first = {"rank": 1, "title": "The Fate Of Ophelia", "artist": "Taylor Swift"}
     assert body["tracks"][0] == first
     assert len(body["tracks"]) == 3
+    assert body["title"] == "ビルボード Hot 100 全順位（2025年11月15日付）"
     assert db.get_source(body["id"])["status"] == "done"
 
 

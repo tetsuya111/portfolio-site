@@ -19,7 +19,7 @@ describe("api", () => {
   });
 
   it("fetchChart posts the url as JSON", async () => {
-    const fn = mockFetch(200, { id: 1, url: "u", tracks: [] });
+    const fn = mockFetch(200, { id: 1, url: "u", title: "", tracks: [] });
     await fetchChart("https://billboard.mryogaku.com/");
     const [path, init] = fn.mock.calls[0];
     expect(path).toBe("/api/charts");

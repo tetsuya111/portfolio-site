@@ -11,6 +11,7 @@ from app.batch.parser import (
     parse_chart_page,
     parse_detail_page,
     parse_hot100,
+    parse_page_title,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -244,3 +245,15 @@ def test_parse_chart_page_keeps_missing_chart_message():
     )
     with pytest.raises(ParseError, match="この日付のチャートデータがありません"):
         parse_chart_page(html)
+
+
+def test_parse_page_title_strips_site_name():
+    page = "ビルボード歴代ヒット曲ランキング 1〜20位（オールタイム・チャート）"
+    assert parse_page_title(f"<title>{page}｜ビルボード・データベース</title>") == page
+    assert parse_page_title("<title> A  B | Site </title>") == "A B"
+
+
+def test_parse_page_title_from_fixture_and_missing():
+    assert parse_page_title(_read("hot100.html")) == "ビルボード Hot 100 全順位（2025年11月15日付）"
+    assert parse_page_title("<html><body>no title</body></html>") == ""
+    assert parse_page_title("<title>｜Site</title>") == ""

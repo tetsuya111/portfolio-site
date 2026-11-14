@@ -105,7 +105,7 @@ chart_tracks(source_id INTEGER REFERENCES chart_sources(id), rank INTEGER, title
 
 | メソッド・パス | 説明 | 主な応答 |
 |---|---|---|
-| `POST /api/charts` `{url}` | URL を `pending` で登録し、その場で `process_source` を実行（R7） | 200 `{id, url, tracks:[{rank,title,artist}]}` ／ 400 不正URL（R8）／ 502 取得・解析失敗（R9） |
+| `POST /api/charts` `{url}` | URL を `pending` で登録し、その場で `process_chart_page` を実行（R7） | 200 `{id, url, title, tracks:[{rank,title,artist}]}`（`title` はページ名） ／ 400 不正URL（R8）／ 502 取得・解析失敗（R9） |
 | `GET /auth/login` | `state` を生成し `oauth_state` Cookie（HttpOnly, 10分）に保存、Spotify 認可URLへ 302（R10） | 302 |
 | `GET /auth/callback?code&state` | `state` を Cookie と `secrets.compare_digest` で照合（R12）→トークン交換→`GET /me`→セッション作成、`sid` Cookie を設定し `FRONTEND_URL` へ 302（R11） | 302 ／ 400 |
 | `GET /api/me` | ログイン状態（R13） | `{authenticated:false}` ／ `{authenticated:true, id, display_name}` |
@@ -148,7 +148,7 @@ chart_tracks(source_id INTEGER REFERENCES chart_sources(id), rank INTEGER, title
 ```
 
 - `AuthStatus`: マウント時に `GET /api/me`。ログインは `<a href="/auth/login">`（ページ遷移）、ログアウトは `POST /auth/logout` 後に再取得。
-- `PlaylistForm`: 送信で `POST /api/charts` → 成功なら `POST /api/playlists`（名前は `ビルボード Hot 100-yyyy/mm/dd` 形式で自動生成。日付はURLの `date`、なければ今日）。各段階の失敗時はバックエンドの `detail` を表示（R23）。
+- `PlaylistForm`: 送信で `POST /api/charts` → 成功なら `POST /api/playlists`（名前は `{ページ名}-yyyy/mm/dd` 形式で自動生成。ページ名は `POST /api/charts` が返す `title`＝解析したページの `<title>` から「｜サイト名」以降を除いたもの、日付は末尾に付けるため、ページ名内の日付表記（`（2025年11月15日付）`・`2025/11/15`・`2025-11-15` など。括弧で囲まれていれば括弧ごと）は除く。何も残らなければ `ビルボード Hot 100`。名前が100文字を超えないようページ名を切り詰める。日付はURLの `date`、なければ今日）。各段階の失敗時はバックエンドの `detail` を表示（R23）。
 - `lib/api.ts`: `fetch` の薄いラッパー。エラー時は `ApiError(status, detail)` を投げる。
 - `next.config.ts` の `rewrites` で `/api/:path*`・`/auth/:path*` を `BACKEND_URL`（既定 `http://127.0.0.1:8000`）へ。
 

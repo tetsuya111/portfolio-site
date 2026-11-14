@@ -17,7 +17,8 @@ export type Me ={ authenticated: false } | { authenticated: true; id: string; di
 
 export type Track = { title: string; artist: string };
 export type ChartTrack = Track & { rank: number };
-export type Chart = { id: number; url: string; tracks: ChartTrack[] };
+/** title はページの <title>（サイト名を除く）。古いバックエンドは返さないため省略可。 */
+export type Chart = { id: number; url: string; title?: string; tracks: ChartTrack[] };
 export type PlaylistResult = { playlist_id: string; url: string; added: number; not_found: Track[] };
 
 function detailMessage(detail: unknown): string | null {
