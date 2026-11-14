@@ -3,6 +3,7 @@ import unittest
 
 from importer.detect import Frontend
 from importer.frontend import register_frontend
+from importer.mock import Route
 from tests.helpers import TempDirMixin, write, write_json
 
 
@@ -21,7 +22,7 @@ class RegisterFrontendTest(TempDirMixin, unittest.TestCase):
         return json.loads((self.apps / "apps.json").read_text(encoding="utf-8"))
 
     def test_copies_source_and_creates_manifest(self):
-        registered, warnings = register_frontend(self.fe, "my-app", self.repo, self.tmp / "proj")
+        registered, warnings, _ = register_frontend(self.fe, "my-app", self.repo, self.tmp / "proj")
         self.assertTrue(registered)
         self.assertEqual(warnings, [])
         self.assertTrue((self.apps / "my-app/index.html").is_file())
@@ -32,26 +33,34 @@ class RegisterFrontendTest(TempDirMixin, unittest.TestCase):
     def test_appends_to_existing_manifest_once(self):
         write_json(self.apps / "apps.json", {"apps": [{"slug": "a", "outputDir": "dist", "buildArgs": []}]})
         register_frontend(self.fe, "my-app", self.repo, self.tmp / "proj")
-        registered, warnings = register_frontend(self.fe, "my-app", self.repo, self.tmp / "proj")
+        registered, warnings, _ = register_frontend(self.fe, "my-app", self.repo, self.tmp / "proj")
         self.assertTrue(registered)
         self.assertEqual([a["slug"] for a in self.manifest()["apps"]], ["a", "my-app"])
         self.assertTrue(any("既に" in w for w in warnings))
 
     def test_mock_is_added_to_new_entry(self):
-        registered, warnings = register_frontend(self.fe, "my-app", self.repo, self.tmp / "proj", mock=True)
+        registered, warnings, _ = register_frontend(self.fe, "my-app", self.repo, self.tmp / "proj",
+                                                 mock_routes=[Route("GET", "/api/me")])
         self.assertTrue(registered)
         self.assertEqual(warnings, [])
         self.assertEqual(self.manifest()["apps"][0]["mock"], True)
+        self.assertIn('"/api/me"', (self.apps / "my-app/mock/handlers.js").read_text(encoding="utf-8"))
+
+    def test_manifest_is_untouched_when_handlers_cannot_be_written(self):
+        write(self.src / "mock", "not a directory")
+        with self.assertRaises(OSError):
+            register_frontend(self.fe, "my-app", self.repo, self.tmp / "proj", mock_routes=[Route("GET", "/a")])
+        self.assertFalse((self.apps / "apps.json").exists())
 
     def test_warns_when_registered_entry_lacks_mock(self):
         write_json(self.apps / "apps.json", {"apps": [{"slug": "my-app", "outputDir": "dist", "buildArgs": []}]})
-        _, warnings = register_frontend(self.fe, "my-app", self.repo, self.tmp / "proj", mock=True)
+        _, warnings, _ = register_frontend(self.fe, "my-app", self.repo, self.tmp / "proj", mock_routes=[])
         self.assertNotIn("mock", self.manifest()["apps"][0])
         self.assertTrue(any('"mock": true' in w for w in warnings))
 
     def test_no_mock_warning_when_registered_entry_has_mock(self):
         write_json(self.apps / "apps.json", {"apps": [{"slug": "my-app", "outputDir": "dist", "buildArgs": [], "mock": True}]})
-        _, warnings = register_frontend(self.fe, "my-app", self.repo, self.tmp / "proj", mock=True)
+        _, warnings, _ = register_frontend(self.fe, "my-app", self.repo, self.tmp / "proj", mock_routes=[])
         self.assertFalse(any('"mock": true' in w for w in warnings))
 
     def test_existing_app_dir_is_not_overwritten(self):
@@ -77,7 +86,7 @@ class RegisterFrontendTest(TempDirMixin, unittest.TestCase):
 
     def test_undeliverable_frontend_is_skipped_with_reason(self):
         fe = Frontend(self.src, None, None, [], "静的出力できません")
-        registered, warnings = register_frontend(fe, "my-app", self.repo, self.tmp / "proj")
+        registered, warnings, _ = register_frontend(fe, "my-app", self.repo, self.tmp / "proj")
         self.assertFalse(registered)
         self.assertEqual(warnings, ["フロントエンドを配信登録しませんでした: 静的出力できません"])
         self.assertFalse(self.apps.exists())

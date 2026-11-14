@@ -2,7 +2,7 @@
 // 検証とビルド。デプロイ時に scripts/build-apps.mjs から呼び、成果物を dist/apps/<スラッグ>/ に置く
 // （dist は buildspec の s3 sync でそのまま配信される）。apps.json は portfolio-importer が追記する。
 import { cpSync, existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { isAbsolute, join, normalize } from "node:path";
+import { isAbsolute, join, normalize, sep } from "node:path";
 import { isValidSlug } from "./slug";
 
 export interface AppEntry {
@@ -65,6 +65,9 @@ function htmlFiles(dir: string): string[] {
     .map((e) => join(e.parentPath, e.name));
 }
 
+/** HTML 文書か（部分 HTML（fetch して差し込む断片など）にはスクリプトを入れない） */
+const HTML_DOCUMENT = /<!doctype\s|<html[\s>]|<head[\s>]/i;
+
 /** <head> の直後（なければ doctype の後、それもなければ先頭）にタグを差し込む */
 export function injectIntoHead(html: string, tags: string): string {
   for (const re of [/<head(?:\s[^>]*)?>/i, /^\s*<!doctype[^>]*>/i]) {
@@ -85,8 +88,9 @@ function installMock(slug: string, cwd: string, out: string, runtime: string): v
     `<script src="${base}/__mock__/runtime.js" data-base="${base}"></script>` +
     `<script src="${base}/__mock__/handlers.js"></script>`;
   for (const file of htmlFiles(out)) {
-    if (file.startsWith(dir)) continue;
-    writeFileSync(file, injectIntoHead(readFileSync(file, "utf8"), tags));
+    if (file.startsWith(dir + sep)) continue;
+    const html = readFileSync(file, "utf8");
+    if (HTML_DOCUMENT.test(html)) writeFileSync(file, injectIntoHead(html, tags));
   }
 }
 
@@ -104,7 +108,8 @@ export function buildApps(apps: AppEntry[], { appsDir, distDir, run, mockRuntime
     if (app.mock && !existsSync(join(cwd, MOCK_HANDLERS))) {
       throw new Error(`${app.slug}: apps/${app.slug}/mock/handlers.js がありません（mock: true のため必要です）`);
     }
-    if (app.mock && (mockRuntime === undefined || !existsSync(mockRuntime))) {
+    const runtime = app.mock ? mockRuntime : undefined;
+    if (app.mock && (runtime === undefined || !existsSync(runtime))) {
       throw new Error(`${app.slug}: モックのランタイムが見つかりません`);
     }
     const build = ["run", "build", ...(app.buildArgs.length ? ["--", ...app.buildArgs] : [])];
@@ -119,6 +124,6 @@ export function buildApps(apps: AppEntry[], { appsDir, distDir, run, mockRuntime
     }
     const dest = join(distDir, "apps", app.slug);
     cpSync(out, dest, { recursive: true });
-    if (app.mock && mockRuntime !== undefined) installMock(app.slug, cwd, dest, mockRuntime);
+    if (runtime !== undefined) installMock(app.slug, cwd, dest, runtime);
   }
 }

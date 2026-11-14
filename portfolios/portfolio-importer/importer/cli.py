@@ -13,8 +13,8 @@ from importer import PortfolioError
 from importer.content import write_portfolio_md
 from importer.copier import copy_tree, resolve_target
 from importer.detect import detect_backend, detect_frontend
-from importer.frontend import apps_dir, register_frontend
-from importer.mock import extract_routes, write_mock_handlers
+from importer.frontend import register_frontend
+from importer.mock import extract_routes
 
 _SITE_URL = re.compile(r"^https?://[^\s/?#]+(?:/[^\s?#]*)?$")
 
@@ -43,26 +43,25 @@ def run_import(args: argparse.Namespace, repo_root: Path, today: date) -> dict:
 
     frontend = detect_frontend(project, target.slug, require_lockfile=True)
     backend = detect_backend(project, frontend)
-    routes = extract_routes(backend) if backend is not None else []
+    routes: list = []
+    if backend is not None:
+        # バックエンドの配下にあるフロントエンド（ルートにバックエンドがある場合など）の API 呼び出しを拾わない
+        inner = [frontend.dir] if frontend is not None and frontend.dir != backend.dir else []
+        routes = extract_routes(backend, exclude=inner)
     frontend_out = None
     registered = False
     if frontend is not None:
         # ルートにフロントエンドがある場合に、バックエンドまで apps/ にコピーしないようにする
         exclude = [backend.dir] if backend is not None and frontend.dir in backend.dir.parents else []
-        registered, w = register_frontend(frontend, target.slug, repo_root, project, exclude=exclude,
-                                          mock=backend is not None)
+        # バックエンドは配信できないため、ブラウザ内で応答するモックに置き換える
+        registered, w, mock_path = register_frontend(frontend, target.slug, repo_root, project, exclude=exclude,
+                                                     mock_routes=routes if backend is not None else None)
         warnings += w
         if registered and backend is not None and backend.dir == frontend.dir:
             warnings.append("フロントエンドとバックエンドが同じディレクトリにあるため、portfolio-site/apps/ にバックエンドの"
                             "ファイルも含まれています。不要なファイルは apps/ から削除してください")
-        mock = None
-        if registered and backend is not None:
-            # バックエンドは配信できないため、ブラウザ内で応答するモックに置き換える
-            path, w = write_mock_handlers(apps_dir(repo_root) / target.slug, routes)
-            warnings += w
-            mock = _rel(path, repo_root)
         frontend_out = {"dir": _rel(frontend.dir, repo_root), "kind": frontend.kind, "registered": registered,
-                        "mock": mock}
+                        "mock": _rel(mock_path, repo_root) if mock_path else None}
 
     backend_out = None
     if backend is not None:

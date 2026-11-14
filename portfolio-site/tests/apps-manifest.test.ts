@@ -111,6 +111,7 @@ describe("buildApps", () => {
       "sub/page.html": '<!DOCTYPE html><HTML><HEAD lang="ja"><title>x</title></HEAD></HTML>',
       "nohead.html": "<!doctype html><p>x</p>",
       "bare.html": "<p>x</p>",
+      "__mock__s/index.html": "<html><head></head></html>",
     };
     const build = (run = (_c: string, args: string[], cwd: string) => {
       if (args[0] === "run") {
@@ -141,7 +142,8 @@ describe("buildApps", () => {
       expect(out("index.html")).toBe(`<!doctype html><html><head>${tags}<meta charset="utf-8"></head><body></body></html>`);
       expect(out("sub/page.html")).toBe(`<!DOCTYPE html><HTML><HEAD lang="ja">${tags}<title>x</title></HEAD></HTML>`);
       expect(out("nohead.html")).toBe(`<!doctype html>${tags}<p>x</p>`);
-      expect(out("bare.html")).toBe(`${tags}<p>x</p>`);
+      expect(out("bare.html")).toBe("<p>x</p>");
+      expect(out("__mock__s/index.html")).toBe(`<html><head>${tags}</head></html>`);
       expect(out("app.js")).toBe("<head>");
     });
 

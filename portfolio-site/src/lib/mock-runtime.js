@@ -14,12 +14,20 @@
     return path.replace(/\/+$/, "").split("/").filter((s) => s !== "");
   }
 
+  function decode(segment) {
+    try {
+      return decodeURIComponent(segment);
+    } catch {
+      return segment; // 不正な % エスケープはそのまま渡す
+    }
+  }
+
   function match(pattern, path) {
     const actual = segments(path);
     if (pattern.length !== actual.length) return null;
     const params = {};
     for (let i = 0; i < pattern.length; i++) {
-      if (pattern[i].startsWith(":")) params[pattern[i].slice(1)] = decodeURIComponent(actual[i]);
+      if (pattern[i].startsWith(":")) params[pattern[i].slice(1)] = decode(actual[i]);
       else if (pattern[i] !== actual[i]) return null;
     }
     return params;

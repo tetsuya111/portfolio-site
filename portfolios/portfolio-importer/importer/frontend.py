@@ -8,6 +8,7 @@ from pathlib import Path
 from importer import PortfolioError
 from importer.copier import copy_tree
 from importer.detect import Frontend
+from importer.mock import Route, write_mock_handlers
 
 
 def apps_dir(repo_root: Path) -> Path:
@@ -27,14 +28,18 @@ def _load_manifest(path: Path) -> dict:
 
 
 def register_frontend(frontend: Frontend, slug: str, repo_root: Path, project: Path,
-                      exclude: list[Path] | None = None, mock: bool = False) -> tuple[bool, list[str]]:
-    """配信登録したか（既に登録済みも True）と、警告を返す。
+                      exclude: list[Path] | None = None,
+                      mock_routes: list[Route] | None = None) -> tuple[bool, list[str], Path | None]:
+    """配信登録したか（既に登録済みも True）、警告、モックの handlers.js のパス（作らなければ None）を返す。
 
     exclude（バックエンドのディレクトリなど）は apps/ へのコピーから除く。
-    mock なら、新しく追加する項目に "mock": true（ビルド時にモックを差し込む）を入れる。
+    mock_routes（バックエンドのルート）を渡すと apps/<スラッグ>/mock/handlers.js の雛形を作り、新しく追加する項目に
+    "mock": true（ビルド時にモックを差し込む）を入れる。handlers.js がないのに mock: true が残るとサイト全体の
+    ビルドが止まるため、雛形を書いてから apps.json を更新する。
     """
     if frontend.kind is None:
-        return False, [f"フロントエンドを配信登録しませんでした: {frontend.reason}"]
+        return False, [f"フロントエンドを配信登録しませんでした: {frontend.reason}"], None
+    mock = mock_routes is not None
     warnings: list[str] = []
     apps = apps_dir(repo_root)
     manifest_path = apps / "apps.json"
@@ -45,6 +50,11 @@ def register_frontend(frontend: Frontend, slug: str, repo_root: Path, project: P
         warnings.append(f"portfolio-site/apps/{slug} が既にあるため、フロントエンドをコピーしませんでした")
     else:
         copy_tree(frontend.dir, dest, root=project, exclude=exclude)
+
+    mock_path = None
+    if mock_routes is not None:
+        mock_path, w = write_mock_handlers(dest, mock_routes)
+        warnings += w
 
     existing = next((a for a in manifest["apps"] if isinstance(a, dict) and a.get("slug") == slug), None)
     if existing is not None:
@@ -59,4 +69,4 @@ def register_frontend(frontend: Frontend, slug: str, repo_root: Path, project: P
         apps.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
                                  encoding="utf-8", newline="\n")
-    return True, warnings
+    return True, warnings, mock_path

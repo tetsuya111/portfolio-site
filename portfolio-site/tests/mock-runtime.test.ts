@@ -104,6 +104,11 @@ describe("mock-runtime", () => {
     error.mockRestore();
   });
 
+  it("passes a malformed percent-escape through without throwing", async () => {
+    win.portfolioMock.handle("GET", "/api/items/:id", (req) => ({ id: req.params.id }));
+    expect(await (await win.fetch("/api/items/100%")).json()).toEqual({ id: "100%" });
+  });
+
   it("uses the first matching handler", async () => {
     win.portfolioMock.handle("GET", "/api/items/new", () => ({ v: "new" }));
     win.portfolioMock.handle("GET", "/api/items/:id", () => ({ v: "id" }));

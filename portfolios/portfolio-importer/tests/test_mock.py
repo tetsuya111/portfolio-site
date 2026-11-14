@@ -38,6 +38,12 @@ class ExtractRoutesTest(TempDirMixin, unittest.TestCase):
         routes = self.py('@app.get("/a")\n@app.get("/a")\n')
         self.assertEqual(routes, [Route("GET", "/a")])
 
+    def test_node_ignores_http_client_calls_and_excluded_dirs(self):
+        write(self.tmp / "server.js", 'app.get("/a", h)\naxios.get("/b")\nhttp.post("/c")\n')
+        write(self.tmp / "frontend/src/api.js", 'app.get("/front", h)\n')
+        routes = extract_routes(Backend(self.tmp, "node"), exclude=[self.tmp / "frontend"])
+        self.assertEqual(routes, [Route("GET", "/a")])
+
     def test_python_backend_ignores_js(self):
         write(self.tmp / "static/app.js", 'app.get("/js", h)\n')
         self.assertEqual(self.py('@app.get("/a")\n'), [Route("GET", "/a")])
@@ -60,6 +66,15 @@ class WriteMockHandlersTest(TempDirMixin, unittest.TestCase):
         self.assertIn("// portfolioMock.handle(", text)
         self.assertEqual(len(warnings), 1)
         self.assertIn("ルート", warnings[0])
+
+    def test_skips_routes_without_a_fixed_segment(self):
+        path, warnings = write_mock_handlers(self.tmp, [Route("GET", "/"), Route("GET", "/:slug"), Route("GET", "/a")])
+        text = path.read_text(encoding="utf-8")
+        self.assertIn('"/a"', text)
+        self.assertNotIn('"/"', text)
+        self.assertNotIn('"/:slug"', text)
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("GET /:slug", warnings[0])
 
     def test_does_not_overwrite(self):
         write(self.tmp / "mock/handlers.js", "// mine")

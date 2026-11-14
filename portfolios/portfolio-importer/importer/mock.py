@@ -22,7 +22,9 @@ _PY_METHOD = re.compile(rf"""@\w+(?:\.\w+)*\.({_METHODS})\(\s*["']([^"']+)["']""
 _PY_ROUTE = re.compile(r"""@\w+(?:\.\w+)*\.route\(\s*["']([^"']+)["']([^)]*)\)""")
 _PY_ROUTE_METHODS = re.compile(r"""methods\s*=\s*[\[(]([^\])]*)[\])]""")
 # Express・Fastify・Hono など: app.get("/x", ...) / router.post(`/x`, ...)
-_NODE_METHOD = re.compile(rf"""\b\w+\.({_METHODS})\(\s*(["'`])(/[^"'`]*)\2""")
+_NODE_METHOD = re.compile(rf"""\b(\w+)\.({_METHODS})\(\s*(["'`])(/[^"'`]*)\3""")
+# ルートの定義ではなく、HTTP クライアントの呼び出しとみなす名前（axios.get("/x") など）
+_NODE_CLIENTS = {"axios", "ky", "got", "superagent", "request", "http", "https", "fetch", "client", "instance"}
 _NODE_SUFFIXES = {".js", ".mjs", ".cjs", ".ts", ".mts", ".cts"}
 # パスの引数: {name} / {name:path} / <name> / <int:name>
 _PARAM = re.compile(r"\{(\w+)(?::[^}]*)?\}|<(?:\w+:)?(\w+)>")
@@ -54,14 +56,20 @@ def _python_routes(text: str) -> list[tuple[int, Route]]:
 
 
 def _node_routes(text: str) -> list[tuple[int, Route]]:
-    return [(m.start(), Route(m.group(1).upper(), _normalize(m.group(3)))) for m in _NODE_METHOD.finditer(text)]
+    return [(m.start(), Route(m.group(2).upper(), _normalize(m.group(4)))) for m in _NODE_METHOD.finditer(text)
+            if m.group(1) not in _NODE_CLIENTS]
 
 
-def extract_routes(backend: Backend) -> list[Route]:
-    """バックエンドのソース（テストを除く）から、ルートのメソッドとパスを見つけた順に返す（重複は除く）。"""
+def extract_routes(backend: Backend, exclude: list[Path] | None = None) -> list[Route]:
+    """バックエンドのソース（テストと exclude 配下を除く）から、ルートのメソッドとパスを見つけた順に返す（重複は除く）。
+
+    exclude には、バックエンドの配下にあるフロントエンドのディレクトリを渡す（API の呼び出しをルートと誤認しないため）。
+    """
     routes: list[Route] = []
+    skipped = [p.resolve() for p in exclude or []]
     for rel in iter_files(backend.dir):
-        if _is_test(rel):
+        path = (backend.dir / rel).resolve()
+        if _is_test(rel) or any(path.is_relative_to(s) for s in skipped):
             continue
         if backend.kind == "python" and rel.suffix == ".py":
             parse = _python_routes
@@ -69,7 +77,7 @@ def extract_routes(backend: Backend) -> list[Route]:
             parse = _node_routes
         else:
             continue
-        text = (backend.dir / rel).read_text(encoding="utf-8", errors="replace")
+        text = path.read_text(encoding="utf-8", errors="replace")
         for _, route in sorted(parse(text), key=lambda x: x[0]):
             if route not in routes:
                 routes.append(route)
@@ -108,6 +116,12 @@ def write_mock_handlers(app_dir: Path, routes: list[Route]) -> tuple[Path, list[
     if path.exists():
         return path, [f"{MOCK_HANDLERS.as_posix()} が既にあるため上書きしませんでした"]
     warnings: list[str] = []
+    # 固定の区間がないパス（"/" や "/:slug"）は、アプリ自身のページ・静的ファイルの取得まで横取りするため書かない
+    wildcard = [r for r in routes if all(s.startswith(":") for s in r.path.strip("/").split("/") if s)]
+    routes = [r for r in routes if r not in wildcard]
+    if wildcard:
+        names = "、".join(f"{r.method} {r.path}" for r in wildcard)
+        warnings.append(f"固定の区間がないルート（{names}）は、静的ファイルの取得も横取りするためモックに書きませんでした")
     if routes:
         body = "".join(_handler(r) for r in routes)
     else:
