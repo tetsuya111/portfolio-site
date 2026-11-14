@@ -55,6 +55,17 @@ describe("build output", () => {
     expect(existsSync(join(dist, "admin"))).toBe(false);
   });
 
+  it("applies the default design theme to every page", () => {
+    for (const p of [".", "about", "portfolios", "articles"]) {
+      expect(html(p)).toMatch(/<html lang="ja" data-theme="minimal"/);
+    }
+  });
+
+  it("has an svg favicon linked from the pages", () => {
+    expect(existsSync(join(dist, "favicon.svg"))).toBe(true);
+    expect(html(".")).toMatch(/<link rel="icon" type="image\/svg\+xml" href="\/favicon.svg"/);
+  });
+
   it("has a 404 page", () => {
     expect(existsSync(join(dist, "404.html"))).toBe(true);
   });
