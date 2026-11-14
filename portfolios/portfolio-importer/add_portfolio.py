@@ -1,6 +1,6 @@
 """ポートフォリオ取り込みコマンドの入口（実装は importer/cli.py）。
 
-使い方: python portfolios/portfolio-importer/add_portfolio.py <プロジェクトのパス> [--slug] [--site-url] [--build-image]
+使い方: python portfolios/portfolio-importer/add_portfolio.py <プロジェクトのパス> [--slug] [--site-url]
 """
 
 import sys

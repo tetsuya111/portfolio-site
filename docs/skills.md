@@ -9,7 +9,7 @@
 | [code-review-ocr](../.claude/skills/code-review-ocr/SKILL.md) | OpenCodeReview（`npm run ocr`）で git 差分を AI コードレビューする | `/code-review-ocr` で即実行。レビュー依頼から自動で読み込まれた場合は、外部LLMへの送信・課金がありうるため実行前に確認する |
 | [security-statics-review-of-trailofbits](../.claude/skills/security-statics-review-of-trailofbits/SKILL.md) | Trail of Bits 製スキル群を組み合わせた、アプリケーションコードの静的セキュリティレビュー | `/security-statics-review-of-trailofbits`、または「セキュリティレビューして」などの依頼で自動 |
 | [security-infra-review-of-trailofbits](../.claude/skills/security-infra-review-of-trailofbits/SKILL.md) | CI/CD・Docker・IaC・デプロイ設定・シークレット管理など、インフラ設定のセキュリティレビュー | `/security-infra-review-of-trailofbits`、またはインフラ設定のレビュー依頼で自動 |
-| [add-portfolio](../.claude/skills/add-portfolio/SKILL.md) | 指定プロジェクトを `portfolios/` に取り込み、フロントエンドの S3 配信登録・バックエンドの Dockerfile／イメージ作成・portfolio-site への掲載を行う（本体は [portfolio-importer](../portfolios/portfolio-importer/README.md)） | `/add-portfolio <パス>` で明示起動のみ。`docker build` などの外部アクセスは実行前に確認する |
+| [add-portfolio](../.claude/skills/add-portfolio/SKILL.md) | 指定プロジェクトを `portfolios/` に取り込み、フロントエンドの S3 配信登録・バックエンドのモック作成・portfolio-site への掲載を行う（本体は [portfolio-importer](../portfolios/portfolio-importer/README.md)） | `/add-portfolio <パス>` で明示起動のみ。`npm install` などの外部アクセスは実行前に確認する |
 | [superpowers-create-design](../.claude/skills/superpowers-create-design/SKILL.md) | superpowers を無人実行モードで使い、`requirements.md`・`design.md`・`tasks.md` を確認なしで作成する | `/superpowers-create-design` で明示起動のみ |
 | [superpowers-create-from-design-to-pr](../.claude/skills/superpowers-create-from-design-to-pr/SKILL.md) | 設計→ブランチ作成→TDD実装→テスト・レビュー→修正ループ→push・PR作成までを一気通貫で実行する | `/superpowers-create-from-design-to-pr` で明示起動のみ |
 

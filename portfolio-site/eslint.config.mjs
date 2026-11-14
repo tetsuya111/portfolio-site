@@ -27,7 +27,7 @@ export default defineConfig([
   },
   // 管理画面のブラウザ側スクリプト
   {
-    files: ["src/admin/**"],
+    files: ["src/admin/**", "src/lib/mock-runtime.js"],
     languageOptions: { globals: { ...globals.browser } },
   },
   // テンプレートの構造を自由形式で扱うテストでは any を許可する

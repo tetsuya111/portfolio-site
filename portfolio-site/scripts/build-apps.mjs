@@ -18,7 +18,7 @@ const run = (cmd, args, cwd) => {
 
 try {
   const apps = validateManifest(JSON.parse(readFileSync(join(appsDir, "apps.json"), "utf8")));
-  buildApps(apps, { appsDir, distDir: join(root, "dist"), run });
+  buildApps(apps, { appsDir, distDir: join(root, "dist"), run, mockRuntime: join(root, "src", "lib", "mock-runtime.js") });
   console.log(`${apps.length} 件のアプリをビルドしました`);
 } catch (e) {
   console.error(`apps のビルドに失敗しました: ${e instanceof Error ? e.message : e}`);

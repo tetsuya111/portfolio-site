@@ -101,7 +101,7 @@ CodeBuild コンソール（us-east-1）→「ビルドプロジェクトを作�
 | `DomainName` | `portfolio.example.com` | 手順 2 のホストゾーン内の名前。小文字のみ |
 | `HostedZoneId` | `Z0123456789ABCDEFGHIJ` | 手順 2 で確認した ID |
 | `GitHubRepoUrl` | `https://github.com/<owner>/<repo>.git` | このリポジトリの HTTPS URL |
-| `DeployBranch` | `main` | 本番へデプロイするブランチ（省略時 `main`） |
+| `DeployBranch` | `main` | 本番へデプロイするブランチ（省略時・空なら任意のブランチへの push でデプロイする） |
 
 スタック名は以下では `portfolio-site` とする。CodeBuild のプロジェクト名（`<スタック名>-test`・`<スタック名>-deploy`）やロググループ名に使われる。
 

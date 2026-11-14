@@ -1,0 +1,61 @@
+:root {
+  --bg: #f7f7f8;
+  --fg: #18181b;
+  --muted: #52525b;
+  --card: #ffffff;
+  --border: #e4e4e7;
+  --accent: #1db954;
+  --accent-fg: #ffffff;
+  --error: #b91c1c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111113;
+    --fg: #f4f4f5;
+    --muted: #a1a1aa;
+    --card: #1c1c1f;
+    --border: #2e2e33;
+    --error: #f87171;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+  line-height: 1.6;
+}
+
+.container { max-width: 640px; margin: 0 auto; padding: 32px 16px; }
+h1 { font-size: 1.6rem; margin: 0 0 8px; }
+.lead { color: var(--muted); margin: 0 0 24px; }
+
+.auth { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.badge { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); font-size: 0.9rem; }
+.badge.on { border-color: var(--accent); }
+.badge.off { color: var(--muted); }
+
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+form { display: grid; gap: 8px; }
+label { font-weight: 600; }
+input {
+  width: 100%; padding: 10px 12px; font-size: 1rem;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--fg);
+}
+
+.button {
+  display: inline-block; padding: 10px 16px; border-radius: 999px; border: 1px solid transparent;
+  font-size: 1rem; font-weight: 600; text-decoration: none; cursor: pointer;
+}
+.button.primary, .button.spotify { background: var(--accent); color: var(--accent-fg); }
+.button.secondary { background: transparent; color: var(--fg); border-color: var(--border); }
+.button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.hint { color: var(--muted); font-size: 0.9rem; margin: 0; }
+.error { color: var(--error); }
+.result { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
+.result ul { margin: 0; padding-left: 20px; color: var(--muted); }
