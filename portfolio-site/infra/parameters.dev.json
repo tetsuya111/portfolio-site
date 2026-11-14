@@ -1,0 +1,16 @@
+{
+  "Parameters": {
+    "DomainName": "dev.portfolio-t-ohori.link",
+    "HostedZoneId": "Z06788141W4K2MTZZ3JRQ",
+    "GitHubRepoUrl": "https://github.com/tetsuya111/portfolio-site",
+    "DeployBranch": "dev-release",
+    "GitHubActorAccountId": "19755011",
+    "BudgetAlertEmail": "tetsuya1729itjob@gmail.com",
+    "MonthlyBudgetUsd": "10",
+    "EnableWaf": "false",
+    "EnableCloudFront": "true",
+    "SiteBucketName": "dev-portfolio-site-t-ohori-bucket",
+    "DeployPath": "",
+    "EnablePrTests": "true"
+  }
+}
