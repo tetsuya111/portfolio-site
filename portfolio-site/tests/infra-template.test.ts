@@ -24,7 +24,12 @@ describe("infra/template.yaml", () => {
       "GitHubActorAccountId",
       "GitHubRepoUrl",
       "HostedZoneId",
+      "ItArticlesPerRun",
+      "ItArticlesSchedule",
+      "ItArticlesScheduleState",
       "MonthlyBudgetUsd",
+      "PerplexityApiKeyParameterName",
+      "PerplexityModel",
       "SiteBucketName",
     ]);
     // 未指定（空）なら任意のブランチへの push でデプロイする
@@ -41,7 +46,7 @@ describe("infra/template.yaml", () => {
   });
 
   it("keeps the bucket private and encrypted", () => {
-    const b = one("AWS::S3::Bucket").Properties;
+    const b = R.SiteBucket.Properties;
     expect(b.PublicAccessBlockConfiguration).toEqual({
       BlockPublicAcls: true,
       BlockPublicPolicy: true,
@@ -52,7 +57,7 @@ describe("infra/template.yaml", () => {
   });
 
   it("allows only CloudFront of this distribution to read the bucket", () => {
-    const stmts = one("AWS::S3::BucketPolicy").Properties.PolicyDocument.Statement;
+    const stmts = R.SiteBucketPolicy.Properties.PolicyDocument.Statement;
     const read = stmts.find((s: any) => s["Fn::If"])["Fn::If"][1];
     expect(read.Principal).toEqual({ Service: "cloudfront.amazonaws.com" });
     expect(read.Condition.StringEquals["AWS:SourceArn"]).toBeDefined();
@@ -99,7 +104,7 @@ describe("infra/template.yaml", () => {
       statementsOf(roleId).flatMap((s: any) => (Array.isArray(s.Action) ? s.Action : [s.Action]));
 
     it("has a test project and a deploy project", () => {
-      expect(ofType("AWS::CodeBuild::Project")).toHaveLength(2);
+      expect(ofType("AWS::CodeBuild::Project")).toHaveLength(3);
       for (const p of [testProject, deployProject]) {
         expect(p.Source.Type).toBe("GITHUB");
         expect(p.Environment.Image).toBe("aws/codebuild/amazonlinux-x86_64-standard:5.0");
@@ -141,7 +146,9 @@ describe("infra/template.yaml", () => {
         "Fn::If": ["HasDeployBranch", { "Fn::Sub": "^refs/heads/${DeployBranch}$" }, "^refs/heads/"],
       });
       const env = Object.fromEntries(deployProject.Environment.EnvironmentVariables.map((v: any) => [v.Name, v.Value]));
-      expect(Object.keys(env).sort()).toEqual(["DEPLOY_BRANCH", "DEPLOY_PATH", "DISTRIBUTION_ID", "SITE_BUCKET"]);
+      expect(Object.keys(env).sort()).toEqual(["DEPLOY_BRANCH", "DEPLOY_PATH", "DISTRIBUTION_ID", "IT_ARTICLES_BUCKET", "SITE_BUCKET"]);
+      // 定期実行で作った IT 記事を、push のデプロイでも取り込む（buildspec.yml の pre_build）
+      expect(env.IT_ARTICLES_BUCKET).toEqual({ Ref: "ItArticlesBucket" });
       expect(env.DEPLOY_PATH).toEqual({ Ref: "DeployPath" });
       // CloudFront を作らないときは空にし、buildspec はキャッシュ無効化を省略する
       expect(env.DISTRIBUTION_ID).toEqual({ "Fn::If": ["UseCloudFront", { Ref: "Distribution" }, ""] });
@@ -207,9 +214,106 @@ describe("infra/template.yaml", () => {
     });
 
     it("grants no wildcard actions", () => {
-      for (const roleId of ["CodeBuildTestRole", "CodeBuildRole"]) {
+      for (const roleId of ["CodeBuildTestRole", "CodeBuildRole", "ItArticlesRole", "ItArticlesSchedulerRole"]) {
         for (const a of actionsOf(roleId)) expect(a).not.toContain("*");
       }
+    });
+  });
+
+  describe("IT 記事の定期作成", () => {
+    const project = R.ItArticlesProject?.Properties;
+    const schedule = R.ItArticlesSchedule?.Properties;
+    const stmts = (roleId: string): any[] =>
+      R[roleId].Properties.Policies.flatMap((p: any) => p.PolicyDocument.Statement)
+        .flatMap((s: any) => (s["Fn::If"] ? s["Fn::If"].slice(1) : [s]))
+        .filter((s: any) => s.Ref !== "AWS::NoValue");
+    const actions = (roleId: string): string[] => stmts(roleId).flatMap((s: any) => [s.Action].flat());
+
+    it("declares the schedule parameters (daily, off until the API key is registered, 5 articles)", () => {
+      const P = t.Parameters;
+      expect(P.ItArticlesSchedule.Default).toBe("rate(1 day)");
+      expect(P.ItArticlesScheduleState.Default).toBe("DISABLED");
+      expect(P.ItArticlesScheduleState.AllowedValues).toEqual(["ENABLED", "DISABLED"]);
+      expect(P.ItArticlesPerRun.Default).toBe(5);
+      expect(P.ItArticlesPerRun.MinValue).toBe(1);
+      expect(P.ItArticlesPerRun.MaxValue).toBe(10);
+      expect(P.PerplexityModel.Default).toBe("sonar");
+      expect(P.PerplexityModel.AllowedValues).toEqual(["sonar", "sonar-pro"]);
+      expect(P.PerplexityApiKeyParameterName.Default).toBe("/portfolio-site/perplexity-api-key");
+      const re = new RegExp(P.PerplexityApiKeyParameterName.AllowedPattern);
+      expect(re.test("/portfolio-site/perplexity-api-key")).toBe(true);
+      for (const ng of ["no-slash", "/a b", ""]) expect(re.test(ng), ng).toBe(false);
+    });
+
+    it("keeps the article bucket private, encrypted, versioned and retained", () => {
+      const b = R.ItArticlesBucket;
+      expect(b.DeletionPolicy).toBe("Retain");
+      expect(b.Properties.PublicAccessBlockConfiguration).toEqual(R.SiteBucket.Properties.PublicAccessBlockConfiguration);
+      expect(b.Properties.BucketEncryption).toBeDefined();
+      expect(b.Properties.VersioningConfiguration).toEqual({ Status: "Enabled" });
+      expect(JSON.stringify(R.ItArticlesBucketPolicy.Properties.PolicyDocument)).toContain("aws:SecureTransport");
+    });
+
+    it("runs the IT article buildspec without a webhook, one build at a time", () => {
+      expect(project.Name).toEqual({ "Fn::Sub": "${AWS::StackName}-it-articles" });
+      expect(project.Source.BuildSpec).toBe("portfolio-site/buildspec.it-articles.yml");
+      expect(project.Source.Type).toBe("GITHUB");
+      expect(project.Triggers).toBeUndefined();
+      expect(project.ConcurrentBuildLimit).toBe(1);
+      expect(project.SourceVersion).toEqual({ "Fn::If": ["HasDeployBranch", { Ref: "DeployBranch" }, { Ref: "AWS::NoValue" }] });
+      expect(project.ServiceRole).toEqual({ "Fn::GetAtt": ["ItArticlesRole", "Arn"] });
+    });
+
+    it("passes the API key from SSM Parameter Store, never as plain text", () => {
+      const env = project.Environment.EnvironmentVariables;
+      const key = env.find((v: any) => v.Name === "PERPLEXITY_API_KEY");
+      expect(key).toEqual({ Name: "PERPLEXITY_API_KEY", Type: "PARAMETER_STORE", Value: { Ref: "PerplexityApiKeyParameterName" } });
+      const names = env.map((v: any) => v.Name).sort();
+      expect(names).toEqual([
+        "DEPLOY_PATH",
+        "DISTRIBUTION_ID",
+        "IT_ARTICLES_BUCKET",
+        "IT_ARTICLES_PER_RUN",
+        "PERPLEXITY_API_KEY",
+        "PERPLEXITY_MODEL",
+        "SITE_BUCKET",
+      ]);
+    });
+
+    it("gives the IT article role no delete permission and only its own SSM parameter", () => {
+      expect(actions("ItArticlesRole")).not.toContain("s3:DeleteObject");
+      const ssm = stmts("ItArticlesRole").find((s: any) => [s.Action].flat().includes("ssm:GetParameters"));
+      expect(ssm.Resource).toEqual({
+        "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${PerplexityApiKeyParameterName}",
+      });
+      const stmt = R.ItArticlesRole.Properties.AssumeRolePolicyDocument.Statement[0];
+      expect(stmt.Condition.StringEquals["aws:SourceAccount"]).toEqual({ Ref: "AWS::AccountId" });
+      expect(JSON.stringify(stmt.Condition.ArnLike["aws:SourceArn"])).toContain("project/${AWS::StackName}-it-articles");
+    });
+
+    it("starts the build on the schedule in Asia/Tokyo, with the state from the parameter", () => {
+      expect(schedule.ScheduleExpression).toEqual({ Ref: "ItArticlesSchedule" });
+      expect(schedule.ScheduleExpressionTimezone).toBe("Asia/Tokyo");
+      expect(schedule.State).toEqual({ Ref: "ItArticlesScheduleState" });
+      expect(schedule.FlexibleTimeWindow).toEqual({ Mode: "OFF" });
+      expect(schedule.Target.Arn).toBe("arn:aws:scheduler:::aws-sdk:codebuild:startBuild");
+      expect(schedule.Target.RoleArn).toEqual({ "Fn::GetAtt": ["ItArticlesSchedulerRole", "Arn"] });
+      expect(JSON.stringify(schedule.Target.Input)).toContain("ProjectName");
+    });
+
+    it("lets the scheduler start only the IT article project", () => {
+      const s = stmts("ItArticlesSchedulerRole");
+      expect(s).toHaveLength(1);
+      expect(s[0].Action).toBe("codebuild:StartBuild");
+      expect(s[0].Resource).toEqual({ "Fn::GetAtt": ["ItArticlesProject", "Arn"] });
+      expect(R.ItArticlesSchedulerRole.Properties.AssumeRolePolicyDocument.Statement[0].Principal).toEqual({
+        Service: "scheduler.amazonaws.com",
+      });
+    });
+
+    it("lets the push deploy read (not write) the article bucket", () => {
+      const read = stmts("CodeBuildRole").filter((s: any) => JSON.stringify(s.Resource).includes("ItArticlesBucket"));
+      expect(read.flatMap((s: any) => [s.Action].flat()).sort()).toEqual(["s3:GetObject", "s3:ListBucket"]);
     });
   });
 
@@ -310,8 +414,16 @@ describe("infra/template.yaml", () => {
     expect(d.WebACLId).toEqual({ "Fn::If": ["UseWaf", { "Fn::GetAtt": ["WebAcl", "Arn"] }, { Ref: "AWS::NoValue" }] });
   });
 
-  it("outputs the site url, apps base url, bucket and distribution id", () => {
-    expect(Object.keys(t.Outputs).sort()).toEqual(["AppsBaseUrl", "BucketName", "DeployUri", "DistributionId", "SiteUrl"]);
+  it("outputs the site url, apps base url, buckets, the IT article project and distribution id", () => {
+    expect(Object.keys(t.Outputs).sort()).toEqual([
+      "AppsBaseUrl",
+      "BucketName",
+      "DeployUri",
+      "DistributionId",
+      "ItArticlesBucketName",
+      "ItArticlesProjectName",
+      "SiteUrl",
+    ]);
     for (const k of ["AppsBaseUrl", "DistributionId", "SiteUrl"]) expect(t.Outputs[k].Condition).toBe("UseCloudFront");
     expect(JSON.stringify(t.Outputs.AppsBaseUrl.Value)).toContain("/apps/");
   });

@@ -11,6 +11,11 @@
     "EnableCloudFront": "true",
     "SiteBucketName": "portfolio-site-dev-example",
     "DeployPath": "",
-    "EnablePrTests": "false"
+    "EnablePrTests": "false",
+    "ItArticlesSchedule": "rate(1 day)",
+    "ItArticlesScheduleState": "DISABLED",
+    "ItArticlesPerRun": "5",
+    "PerplexityModel": "sonar",
+    "PerplexityApiKeyParameterName": "/portfolio-site-dev/perplexity-api-key"
   }
 }
