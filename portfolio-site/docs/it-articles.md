@@ -15,7 +15,7 @@ EventBridge Scheduler（ItArticlesScheduleExpression、既定 rate(1 day)。ItAr
 
 - 記事の正本は S3 の記事バケット（`ItArticlesBucketName` の出力）。git には `src/content/it-articles/.gitkeep` だけを置き、`*.md` は `.gitignore` で除外している。
 - push 時のデプロイ（`buildspec.yml`）も、ビルドの前に記事バケットから記事を取り込む（取り込まないと `s3 sync --delete` で公開中の記事のページが消える）。
-- 定期実行と push のデプロイが同時に走ると、push 側の `s3 sync --delete` が、その間に公開された新しい記事のページを消すことがある（記事の md は S3 に保存済みなので、次の定期実行で自動的に戻る）。気になる場合は、定期実行の時刻（`cron(...)`）を push しない時間帯にする。
+- 定期実行と push のデプロイが同時に走ると、push 側の `s3 sync --delete` が、その間に公開された新しい記事のページを消すことがある（記事の md は S3 に保存済みなので、次の定期実行で自動的に戻る）。また、定期実行の途中で push のデプロイが終わると、定期実行が古いコードでビルドしたページを上書きすることがある（次の push か定期実行で直る）。どちらも、定期実行の時刻（`cron(...)`）を push しない時間帯にすると避けられる。
 - 定期実行では `apps/` をビルドしないため、配信用バケットのファイルは削除しない。不要になったファイルの掃除は push 時のデプロイに任せる。
 
 ## 初期設定
@@ -30,7 +30,7 @@ EventBridge Scheduler（ItArticlesScheduleExpression、既定 rate(1 day)。ItAr
    | 名前 | 既定 | 内容 |
    |---|---|---|
    | `ItArticlesScheduleExpression` | `rate(1 day)` | 実行間隔。`rate(...)` か `cron(...)`（タイムゾーンは Asia/Tokyo。例 `cron(0 6 * * ? *)` で毎日 6:00） |
-   | `ItArticlesScheduleState` | `DISABLED` | `ENABLED` で定期実行を ON。API キーを登録してから ON にする |
+   | `ItArticlesScheduleState` | `DISABLED` | `ENABLED` で定期実行を ON。API キーを登録してから ON にする。`DeployBranch` が空のスタックでは、push のデプロイと公開するブランチが食い違うため常に OFF になる |
    | `ItArticlesPerRun` | `5` | 1回で作る記事の数（1〜10） |
    | `PerplexityModel` | `sonar` | `sonar` か `sonar-pro` |
    | `PerplexityApiKeyParameterName` | `/portfolio-site/perplexity-api-key` | 手順 1 のパラメーター名 |

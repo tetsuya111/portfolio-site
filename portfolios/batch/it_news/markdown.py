@@ -13,12 +13,20 @@ from datetime import datetime
 # - 許すリンクは、1行の中で完結する [文字](http(s)://… または #id) だけ。それ以外の [ ] はすべて \[ \] にエスケープするので、
 #   参照形式・複数行・タイトル付き・入れ子のかっこ・文字参照（&#106;avascript:）など、どの書き方でもリンクや画像にならない。
 # - コードの外の < はすべて &lt; にする（生の HTML・自動リンクにならない）。\ も \\ にして、エスケープを打ち消せないようにする。
-# - コードの中は Markdown がエスケープするのでそのまま残す。コードの判定は CommonMark の規則に合わせる。
-_SAFE_LINK = re.compile(r"(!?)\[([^\[\]\n`\\<]+)\]\((https?://[^\s()<>\\]+|#[A-Za-z0-9_-]+)\)")
+# - コードの中は Markdown がエスケープするのでそのまま残す。コードの判定は CommonMark の規則に合わせ、
+#   判定がずれうる書き方はコードとして扱わない（安全側）:
+#   - インラインコードは1行の中で閉じるものだけ。閉じていない ` はエスケープし、次の行に続くコードを作らせない
+#   - コードブロックは行頭（字下げなし）の ``` / ~~~ で始まるものだけ（リストの中などは容器の終わりで閉じるため）
+# - 画像（![…](…)）は残さない（外部のサーバーへ閲覧者のブラウザから接続させないため）
+_SAFE_LINK = re.compile(r"(?<!!)\[([^\[\]\n`\\<]+)\]\((https?://[^\s()<>\\]+|#[A-Za-z0-9_-]+)\)")
 # インラインコード: 同じ長さのバッククォートの並びで囲む（前後にバッククォートが続かない。\` は開始にならない）
 _CODE_SPAN = re.compile(r"(?<![`\\])(`+)(?!`)(.+?)(?<!`)\1(?!`)")
-# コードブロックの開始: 3 つ以上の ` か ~（` の場合、情報文字列に ` を含むものはコードブロックにならない）
-_FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+# コードブロックの開始: 行頭の 3 つ以上の ` か ~（` の場合、情報文字列に ` を含むものはコードブロックにならない）
+_FENCE_OPEN = re.compile(r"^(`{3,}|~{3,})(.*)$")
+# 見出しの h1: ATX（# 見出し。引用 > の中を含む）と setext（次の行が ===）
+_ATX_H1 = re.compile(r"^((?: {0,3}>[ ]?)*)( {0,3})#(?=\s|$)")
+_SETEXT_H1 = re.compile(r"^( {0,3})(=+)([ \t]*)$")
+_REFERENCE_URL = re.compile(r"^https?://[^\s<>\"\\\x00-\x1f\x7f]+$")
 _PLACEHOLDER = "\x00{}\x00"
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _MAX_ARTICLE_TAGS = 5
@@ -34,28 +42,36 @@ def _escape_text(text: str) -> str:
         return _PLACEHOLDER.format(len(links) - 1)
 
     text = _SAFE_LINK.sub(keep, text)
-    text = text.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]").replace("<", "&lt;")
+    text = (
+        text.replace("\\", "\\\\")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+        .replace("`", "\\`")  # 1行の中で閉じていない `（コードを次の行へ続かせない）
+        .replace("<", "&lt;")
+    )
     for i, link in enumerate(links):
         text = text.replace(_PLACEHOLDER.format(i), link)
     return text
 
 
-def _sanitize_line(line: str) -> str:
-    """コードブロックの外の1行。"""
-    if re.match(r"^ {0,3}#(\s|$)", line):
-        line = "#" + line.lstrip(" ")  # ページの h1 と重ならないよう、本文の見出しは h2 以下にする
+def _sanitize_text(text: str) -> str:
+    """1行の中の文字列を無害化する。1行の中で閉じるインラインコードだけをそのまま残す。"""
     out, pos = [], 0
-    for m in _CODE_SPAN.finditer(line):
-        out.append(_escape_text(line[pos : m.start()]))
+    for m in _CODE_SPAN.finditer(text):
+        out.append(_escape_text(text[pos : m.start()]))
         out.append(m.group(0))
         pos = m.end()
-    out.append(_escape_text(line[pos:]))
+    out.append(_escape_text(text[pos:]))
     return "".join(out)
 
 
-def _sanitize_text(text: str) -> str:
-    """見出し以外の1行分の短い文字列（用語解説など）。"""
-    return _sanitize_line(text) if not text.lstrip(" ").startswith("#") else _escape_text(text)
+def _sanitize_line(line: str) -> str:
+    """コードブロックの外の1行。ページの h1 と重ならないよう、本文の h1 は h2 にする。"""
+    setext = _SETEXT_H1.match(line)
+    if setext:
+        return setext.group(1) + "-" * len(setext.group(2)) + setext.group(3)
+    line = _ATX_H1.sub(r"\1\2##", line, count=1)
+    return _sanitize_text(line)
 
 
 def _fence_open(line: str) -> tuple[str, int] | None:
@@ -133,7 +149,8 @@ def build_article_markdown(
         raise ValueError("タイトルが空です")
     if not _valid_date(date):
         raise ValueError(f"日付が不正です: {date}")
-    refs = [r for r in references if str(r.get("url", "")).startswith(("https://", "http://"))]
+    # 空白・改行・制御文字・<>"\ を含む URL は、リンクの行を壊して HTML を差し込めるため使わない
+    refs = [r for r in references if _REFERENCE_URL.match(str(r.get("url", "")))]
     if not refs:
         raise ValueError("参考リンク（http/https）がありません")
     glossary = [g for g in article.get("glossary", []) if _one_line(g.get("term", "")) and _one_line(g.get("description", ""))]
@@ -168,6 +185,6 @@ def build_article_markdown(
     lines += ["", "## 参考リンク", ""]
     for i, r in enumerate(refs, 1):
         label = _sanitize_text(_one_line(r.get("title") or r["url"])).replace("[", "［").replace("]", "］")
-        url = str(r["url"]).replace(" ", "%20").replace("(", "%28").replace(")", "%29")
+        url = str(r["url"]).replace("(", "%28").replace(")", "%29")
         lines.append(f"{i}. [{label}]({url})")
     return "\n".join(lines) + "\n"

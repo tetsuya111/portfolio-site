@@ -18,6 +18,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 MAX_INVALIDATION_PATHS = 100
 IMMUTABLE_PREFIX = "_astro/"  # ファイル名に内容のハッシュが付くアセット
@@ -52,8 +53,8 @@ def cache_control(rel: str) -> str:
 
 
 def invalidation_paths(rel: str) -> list[str]:
-    """articles/foo/index.html → /articles/foo/index.html と /articles/foo/"""
-    p = "/" + rel
+    """articles/foo/index.html → /articles/foo/index.html と /articles/foo/（CloudFront はエンコード後のパスで照合する）"""
+    p = "/" + quote(rel, safe="/-._~")
     if p.endswith("/index.html"):
         return [p, p[: -len("index.html")]]
     return [p]
@@ -105,8 +106,12 @@ def deploy(
                 )
 
     removed = sorted(set(remote) - local)
-    for rel in removed:
-        log(f"{'delete' if delete_removed else 'stale (not deleted)'}: {rel}")
+    if delete_removed:
+        for rel in removed:
+            log(f"delete: {rel}")
+    elif removed:
+        # 削除しない場合（定期実行では apps/ などが常にここに入る）は、ログが膨らまないよう件数だけを出す
+        log(f"フォルダに無いオブジェクト {len(removed)} 件は削除しません")
     if delete_removed and removed and not dry_run:
         for i in range(0, len(removed), 1000):  # 1回の削除は最大 1000 件
             s3.delete_objects(

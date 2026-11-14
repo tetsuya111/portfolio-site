@@ -300,7 +300,8 @@ describe("infra/template.yaml", () => {
     it("starts the build on the schedule in Asia/Tokyo, with the state from the parameter", () => {
       expect(schedule.ScheduleExpression).toEqual({ Ref: "ItArticlesScheduleExpression" });
       expect(schedule.ScheduleExpressionTimezone).toBe("Asia/Tokyo");
-      expect(schedule.State).toEqual({ Ref: "ItArticlesScheduleState" });
+      // DeployBranch が空だと、push のデプロイ（任意のブランチ）と定期実行（デフォルトブランチ）で公開する内容が食い違うため、常に OFF にする
+      expect(schedule.State).toEqual({ "Fn::If": ["HasDeployBranch", { Ref: "ItArticlesScheduleState" }, "DISABLED"] });
       expect(schedule.FlexibleTimeWindow).toEqual({ Mode: "OFF" });
       expect(schedule.Target.Arn).toBe("arn:aws:scheduler:::aws-sdk:codebuild:startBuild");
       expect(schedule.Target.RoleArn).toEqual({ "Fn::GetAtt": ["ItArticlesSchedulerRole", "Arn"] });

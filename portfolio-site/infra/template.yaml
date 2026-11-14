@@ -741,7 +741,8 @@ Resources:
       ScheduleExpressionTimezone: Asia/Tokyo
       FlexibleTimeWindow:
         Mode: "OFF"
-      State: !Ref ItArticlesScheduleState
+      # DeployBranch が空だと push のデプロイは任意のブランチを公開し、定期実行はデフォルトブランチを公開して食い違うため、常に OFF にする
+      State: !If [HasDeployBranch, !Ref ItArticlesScheduleState, DISABLED]
       Target:
         Arn: arn:aws:scheduler:::aws-sdk:codebuild:startBuild
         RoleArn: !GetAtt ItArticlesSchedulerRole.Arn

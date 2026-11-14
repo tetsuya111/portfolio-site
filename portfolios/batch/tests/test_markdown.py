@@ -79,6 +79,24 @@ class SanitizeTest(unittest.TestCase):
     def test_demotes_h1(self):
         self.assertEqual(sanitize_markdown("# 見出し\n## 小見出し"), "## 見出し\n## 小見出し")
 
+    def test_demotes_setext_and_quoted_h1(self):
+        self.assertEqual(sanitize_markdown("概要\n===="), "概要\n----")
+        self.assertEqual(sanitize_markdown("> # 引用"), "> ## 引用")
+
+    def test_code_span_cannot_continue_from_previous_line(self):
+        # 前の行で閉じていない ` があると、次の行の ` はそれを閉じる（CommonMark）。行をまたぐコードを作らせない
+        # 行の中で閉じていない ` はエスケープするので、2行目の `…` は2行目の中だけのコードになる（中の < はコードとして表示される）
+        out = sanitize_markdown("a `\nb` <img src=x onerror=alert(1)> `c")
+        self.assertEqual(out.split("\n"), ["a \\`", "b` <img src=x onerror=alert(1)> `c"])
+        self.assertEqual(sanitize_markdown("x ``` y"), "x \\`\\`\\` y")
+
+    def test_fence_inside_list_item_is_not_trusted(self):
+        out = sanitize_markdown("- item\n  ```\n<img src=x onerror=alert(1)>")
+        self.assertNotIn("<img", out)
+
+    def test_images_are_not_kept(self):
+        self.assertNotRegex(sanitize_markdown("![x](https://tracker.example/p.gif)"), r"!\[")
+
 
 class BuildTest(unittest.TestCase):
     def build(self, **kw):
@@ -106,6 +124,16 @@ class BuildTest(unittest.TestCase):
         md = self.build()
         self.assertIn("1. [Astro Blog](https://astro.build/blog/astro-7/)", md)
         self.assertNotIn("javascript:", md)
+
+    def test_drops_reference_urls_with_whitespace_or_control_chars(self):
+        md = self.build(references=[
+            {"title": "bad", "url": "https://x.example/a\n<script>alert(1)</script>"},
+            {"title": "tab", "url": "https://x.example/\tb"},
+            {"title": "ok", "url": "https://x.example/c(1)"},
+        ])
+        self.assertNotIn("<script>", md)
+        self.assertNotIn("x.example/a", md)
+        self.assertIn("1. [ok](https://x.example/c%281%29)", md)
 
     def test_rejects_without_references(self):
         with self.assertRaises(ValueError):

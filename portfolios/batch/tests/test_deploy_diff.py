@@ -79,6 +79,22 @@ class DeployTest(unittest.TestCase):
         self.assertEqual(sorted(cf.calls[0]["InvalidationBatch"]["Paths"]["Items"]), ["/", "/index.html"])
         self.assertEqual(s3.deletes, [])
 
+    def test_url_encodes_invalidation_paths(self):
+        _, _, cf = self.run_deploy({"articles/日本語 a/index.html": b"x"}, {})
+        self.assertEqual(
+            sorted(cf.calls[0]["InvalidationBatch"]["Paths"]["Items"]),
+            ["/articles/%E6%97%A5%E6%9C%AC%E8%AA%9E%20a/", "/articles/%E6%97%A5%E6%9C%AC%E8%AA%9E%20a/index.html"],
+        )
+
+    def test_logs_only_the_count_of_stale_objects(self):
+        s3, cf, logs = FakeS3({f"apps/x/{i}.js": b"y" for i in range(50)}), FakeCf(), []
+        with tempfile.TemporaryDirectory() as d:
+            make_dist(d, {"a.html": b"x"})
+            deploy(s3, cf, dist=Path(d), bucket="b", prefix="", distribution_id="", delete_removed=False, dry_run=False,
+                   log=logs.append)
+        self.assertFalse(any(line.startswith("stale") and "apps/x/" in line for line in logs))
+        self.assertTrue(any("50" in line for line in logs))
+
     def test_collapses_many_paths(self):
         files = {f"p{i}/index.html": b"x" for i in range(60)}
         _, _, cf = self.run_deploy(files, {})

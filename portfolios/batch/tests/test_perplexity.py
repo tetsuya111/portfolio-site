@@ -41,6 +41,15 @@ class CallTest(unittest.TestCase):
         self.assertIn("401", str(cm.exception))
         self.assertNotIn(KEY, str(cm.exception))
 
+    def test_broken_connection_raises_perplexity_error(self):
+        import http.client
+
+        def post(url, headers, body, timeout):
+            raise http.client.IncompleteRead(b"partial")
+
+        with self.assertRaises(PerplexityError):
+            call(post)
+
     def test_non_json_content_raises(self):
         with self.assertRaises(PerplexityError):
             call(FakePost(response("すみません、わかりません")))

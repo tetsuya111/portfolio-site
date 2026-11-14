@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import re
 import urllib.error
@@ -65,7 +66,8 @@ def call_perplexity(
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "Accept": "application/json"}
     try:
         status, text = post(API_URL, headers, json.dumps(payload, ensure_ascii=False).encode("utf-8"), TIMEOUT_SECONDS)
-    except OSError as e:
+    except (OSError, http.client.HTTPException) as e:
+        # 接続できない・応答の途中で切れた（IncompleteRead など）
         raise PerplexityError(f"Perplexity API に接続できませんでした: {type(e).__name__}") from None
     if status != 200:
         # 応答本文にはキーの一部などが含まれうるため、ステータスだけを伝える

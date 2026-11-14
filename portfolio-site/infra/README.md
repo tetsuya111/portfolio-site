@@ -74,7 +74,7 @@ cp infra/parameters.example.json infra/parameters.json  # 値を書き換える
 | `DeployPath` | | `""`（空） | バケット内のアップロード先のパス（例 `preview`）。CloudFront はこのパスをドメイン直下として配信する（`OriginPath`）。先頭・末尾に `/` を付けない。空ならバケット直下。デプロイ用ロールの S3 権限もこのパス以下に限る |
 | `EnablePrTests` | | `true` | `false` ならプルリクエストのテスト用 CodeBuild（`<スタック名>-test`）とそのロール・ロググループを作らない（dev スタック用） |
 | `ItArticlesScheduleExpression` | | `rate(1 day)` | IT 記事の定期作成の間隔（`rate(...)` か `cron(...)`、タイムゾーンは Asia/Tokyo） |
-| `ItArticlesScheduleState` | | `DISABLED` | `ENABLED` で IT 記事の定期作成を ON。API キーの SSM パラメーターを作ってから ON にする |
+| `ItArticlesScheduleState` | | `DISABLED` | `ENABLED` で IT 記事の定期作成を ON。API キーの SSM パラメーターを作ってから ON にする。`DeployBranch` が空なら常に OFF |
 | `ItArticlesPerRun` | | `5` | 1回で作る IT 記事の数（1〜10） |
 | `PerplexityModel` | | `sonar` | IT 記事の作成に使う Perplexity のモデル（`sonar` / `sonar-pro`） |
 | `PerplexityApiKeyParameterName` | | `/portfolio-site/perplexity-api-key` | Perplexity の API キーを入れた SSM パラメーター（SecureString、手動で作成）。詳細は [../docs/it-articles.md](../docs/it-articles.md) |
