@@ -46,7 +46,7 @@ def run_import(args: argparse.Namespace, repo_root: Path, today: date) -> dict:
     routes: list = []
     if backend is not None:
         # バックエンドの配下にあるフロントエンド（ルートにバックエンドがある場合など）の API 呼び出しを拾わない
-        inner = [frontend.dir] if frontend is not None and frontend.dir != backend.dir else []
+        inner = [frontend.dir] if frontend is not None and backend.dir in frontend.dir.parents else []
         routes = extract_routes(backend, exclude=inner)
     frontend_out = None
     registered = False

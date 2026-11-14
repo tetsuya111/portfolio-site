@@ -29,6 +29,10 @@ class ExtractRoutesTest(TempDirMixin, unittest.TestCase):
                          '@app.route(\n    "/multi",\n    methods=[\n        "PUT",\n    ],\n)\ndef m(): ...\n')
         self.assertEqual(routes, [Route("GET", "/login"), Route("POST", "/login"), Route("PUT", "/multi")])
 
+    def test_flask_stacked_routes_keep_their_own_methods(self):
+        routes = self.py('@app.route("/a")\n@app.route("/b", methods=["POST"])\ndef f(): ...\n')
+        self.assertEqual(routes, [Route("GET", "/a"), Route("POST", "/b")])
+
     def test_node_routes(self):
         write(self.tmp / "src/server.ts", "router.post('/api/x', h)\napp.get(`/api/items/:id`, h)\n"
                                           'app.put("/api/z", h)\n')

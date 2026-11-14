@@ -11,8 +11,8 @@
   const handlers = [];
   // 横取りするオリジン: アプリと同じオリジンと、開発時のバックエンド（localhost）。外部の API はそのまま通信する
   const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
-  // ファイル名に見える区間（例 1.txt）。パスの引数には一致させない（静的ファイル・Next.js のページデータを横取りしない）
-  const FILE_NAME = /\.[A-Za-z][A-Za-z0-9]{0,7}$/;
+  // 静的ファイルに見える区間（例 1.txt）。パスの引数には一致させない（静的ファイル・Next.js のページデータを横取りしない）
+  const FILE_NAME = /\.(?:txt|json|js|mjs|css|html?|map|xml|png|jpe?g|gif|svg|webp|avif|ico|woff2?|ttf|otf|wasm)$/i;
 
   function segments(path) {
     return path.replace(/\/+$/, "").split("/").filter((s) => s !== "");
@@ -82,7 +82,7 @@
     const isRequest = typeof Request !== "undefined" && input instanceof Request;
     const url = new URL(isRequest ? input.url : String(input), window.location.href);
     const method = String((init && init.method) || (isRequest ? input.method : "GET")).toUpperCase();
-    const own = url.origin === new URL(window.location.href).origin || LOCAL_HOSTS.includes(url.hostname);
+    const own = url.origin === window.location.origin || LOCAL_HOSTS.includes(url.hostname);
     const found = own ? find(method, url.pathname) : null;
     if (!found) return realFetch(input, init);
     try {

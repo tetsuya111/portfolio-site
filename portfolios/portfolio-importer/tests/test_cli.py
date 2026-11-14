@@ -67,6 +67,16 @@ class CliTest(TempDirMixin, unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertTrue(any("同じディレクトリ" in w for w in json.loads(out)["warnings"]))
 
+    def test_routes_found_when_frontend_is_at_root(self):
+        root = self.tmp / "rootfe"
+        write_json(root / "package.json", {"scripts": {"build": "vite build"}, "devDependencies": {"vite": "1"}})
+        write(root / "package-lock.json", "{}")
+        write(root / "backend/requirements.txt", "fastapi\n")
+        write(root / "backend/main.py", '@app.get("/api/me")\n')
+        code, out, _ = self.run_main(str(root))
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["backend"]["routes"], 1)
+
     def test_site_url_sets_app_url(self):
         self.run_main(str(self.src), "--site-url", "https://ex.com")
         md = (self.repo / "portfolio-site/src/content/portfolios/my-app.md").read_text(encoding="utf-8")

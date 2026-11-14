@@ -55,6 +55,11 @@ def register_frontend(frontend: Frontend, slug: str, repo_root: Path, project: P
     if mock_routes is not None:
         mock_path, w = write_mock_handlers(dest, mock_routes)
         warnings += w
+        # 既にあった handlers.js がこのモックの書式でなければ（アプリ自身の MSW のモックなど）、差し込むと壊れるため使わない
+        if "portfolioMock" not in mock_path.read_text(encoding="utf-8", errors="replace"):
+            warnings.append("mock/handlers.js が portfolioMock の書式ではないため、モックを接続しませんでした。"
+                            '書き直してから apps.json の項目に "mock": true を追加してください')
+            mock, mock_path = False, None
 
     existing = next((a for a in manifest["apps"] if isinstance(a, dict) and a.get("slug") == slug), None)
     if existing is not None:

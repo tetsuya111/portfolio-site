@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const code = readFileSync(join(__dirname, "..", "src", "lib", "mock-runtime.js"), "utf8");
 
 interface MockWindow {
-  location: { href: string };
+  location: { href: string; origin: string };
   fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   portfolioMock: { handle: (method: string, path: string, fn: (req: any) => unknown) => void };
 }
@@ -13,7 +13,7 @@ interface MockWindow {
 /** ランタイムを偽の window・document で実行し、window を返す */
 function load(base = "/apps/my-app") {
   const realFetch = vi.fn(async () => new Response("real"));
-  const win = { location: { href: "https://example.com/apps/my-app/" }, fetch: realFetch } as unknown as MockWindow;
+  const win = { location: { href: "https://example.com/apps/my-app/", origin: "https://example.com" }, fetch: realFetch } as unknown as MockWindow;
   const doc = { currentScript: { dataset: { base } } };
   new Function("window", "document", code)(win, doc);
   return { win, realFetch };
@@ -95,6 +95,7 @@ describe("mock-runtime", () => {
     win.portfolioMock.handle("GET", "/items/:id", (req) => ({ id: req.params.id }));
     expect(await (await win.fetch("/apps/my-app/items/1.txt?_rsc=x")).text()).toBe("real");
     expect(await (await win.fetch("/items/1")).json()).toEqual({ id: "1" });
+    expect(await (await win.fetch("/items/john.doe")).json()).toEqual({ id: "john.doe" });
   });
 
   it("uses the real fetch when nothing matches", async () => {

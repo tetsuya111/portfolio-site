@@ -46,6 +46,14 @@ class RegisterFrontendTest(TempDirMixin, unittest.TestCase):
         self.assertEqual(self.manifest()["apps"][0]["mock"], True)
         self.assertIn('"/api/me"', (self.apps / "my-app/mock/handlers.js").read_text(encoding="utf-8"))
 
+    def test_existing_unrelated_handlers_is_not_enabled(self):
+        write(self.src / "mock/handlers.js", "import { http } from 'msw';\n")
+        _, warnings, mock_path = register_frontend(self.fe, "my-app", self.repo, self.tmp / "proj",
+                                                   mock_routes=[Route("GET", "/a")])
+        self.assertIsNone(mock_path)
+        self.assertNotIn("mock", self.manifest()["apps"][0])
+        self.assertTrue(any("portfolioMock" in w for w in warnings))
+
     def test_manifest_is_untouched_when_handlers_cannot_be_written(self):
         write(self.src / "mock", "not a directory")
         with self.assertRaises(OSError):
