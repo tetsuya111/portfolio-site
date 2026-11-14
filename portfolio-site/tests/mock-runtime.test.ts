@@ -1,0 +1,112 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const code = readFileSync(join(__dirname, "..", "src", "lib", "mock-runtime.js"), "utf8");
+
+interface MockWindow {
+  location: { href: string };
+  fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  portfolioMock: { handle: (method: string, path: string, fn: (req: any) => unknown) => void };
+}
+
+/** ランタイムを偽の window・document で実行し、window を返す */
+function load(base = "/apps/my-app") {
+  const realFetch = vi.fn(async () => new Response("real"));
+  const win = { location: { href: "https://example.com/apps/my-app/" }, fetch: realFetch } as unknown as MockWindow;
+  const doc = { currentScript: { dataset: { base } } };
+  new Function("window", "document", code)(win, doc);
+  return { win, realFetch };
+}
+
+describe("mock-runtime", () => {
+  let win: MockWindow;
+  let realFetch: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    ({ win, realFetch } = load());
+  });
+
+  it("answers a matching GET with JSON 200 without calling the real fetch", async () => {
+    win.portfolioMock.handle("GET", "/api/me", () => ({ name: "Demo" }));
+    const res = await win.fetch("/api/me");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("application/json");
+    expect(await res.json()).toEqual({ name: "Demo" });
+    expect(realFetch).not.toHaveBeenCalled();
+  });
+
+  it("answers 204 when the handler returns nothing", async () => {
+    win.portfolioMock.handle("post", "/auth/logout", () => undefined);
+    const res = await win.fetch("/auth/logout", { method: "POST" });
+    expect(res.status).toBe(204);
+  });
+
+  it("returns a Response from the handler as is", async () => {
+    win.portfolioMock.handle("GET", "/api/x", () => new Response("nope", { status: 401 }));
+    const res = await win.fetch("/api/x");
+    expect(res.status).toBe(401);
+    expect(await res.text()).toBe("nope");
+  });
+
+  it("passes params, query and the JSON body to the handler", async () => {
+    const seen: any[] = [];
+    win.portfolioMock.handle("POST", "/api/items/:id", async (req) => {
+      seen.push(req);
+      return { ok: true };
+    });
+    const res = await win.fetch("/api/items/42/?q=a", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "x" }),
+    });
+    expect(await res.json()).toEqual({ ok: true });
+    expect(seen[0].method).toBe("POST");
+    expect(seen[0].path).toBe("/api/items/42");
+    expect(seen[0].params).toEqual({ id: "42" });
+    expect(seen[0].query.get("q")).toBe("a");
+    expect(seen[0].body).toEqual({ name: "x" });
+  });
+
+  it("passes a non-JSON body as text and accepts a Request object", async () => {
+    let body: unknown;
+    win.portfolioMock.handle("PUT", "/api/raw", (req) => {
+      body = req.body;
+      return null;
+    });
+    const res = await win.fetch(new Request("https://example.com/api/raw", { method: "PUT", body: "plain" }));
+    expect(res.status).toBe(204);
+    expect(body).toBe("plain");
+  });
+
+  it("matches a path under the app base and other origins", async () => {
+    win.portfolioMock.handle("GET", "/api/me", () => ({ ok: 1 }));
+    expect(await (await win.fetch("api/me")).json()).toEqual({ ok: 1 });
+    expect(await (await win.fetch("http://localhost:8000/api/me")).json()).toEqual({ ok: 1 });
+    expect(realFetch).not.toHaveBeenCalled();
+  });
+
+  it("uses the real fetch when nothing matches", async () => {
+    win.portfolioMock.handle("POST", "/api/me", () => ({}));
+    win.portfolioMock.handle("GET", "/api/items/:id", () => ({}));
+    for (const url of ["/api/me", "/api/other", "/api/items/1/extra"]) {
+      expect(await (await win.fetch(url)).text()).toBe("real");
+    }
+    expect(realFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("answers 500 when the handler throws", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    win.portfolioMock.handle("GET", "/api/boom", () => {
+      throw new Error("boom");
+    });
+    expect((await win.fetch("/api/boom")).status).toBe(500);
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+  });
+
+  it("uses the first matching handler", async () => {
+    win.portfolioMock.handle("GET", "/api/items/new", () => ({ v: "new" }));
+    win.portfolioMock.handle("GET", "/api/items/:id", () => ({ v: "id" }));
+    expect(await (await win.fetch("/api/items/new")).json()).toEqual({ v: "new" });
+  });
+});
