@@ -33,18 +33,3 @@ export function publishedArticles<T extends { data: { date: Date; draft: boolean
     .filter((i) => !i.data.draft)
     .sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
 }
-
-/**
- * 手で書いた記事（articles）と自動作成の記事（itArticles）を1つの一覧にする。
- * どちらも /articles/<id>/ に出るため、id（スラッグ）が重なればビルドを止める。
- */
-export function mergeArticleEntries<T extends { id: string }>(manual: T[], generated: T[]): T[] {
-  const ids = new Set(manual.map((m) => m.id));
-  for (const g of generated) {
-    if (ids.has(g.id)) {
-      throw new Error(`記事のスラッグ「${g.id}」が articles と it-articles で重なっています。どちらかのファイル名を変えてください`);
-    }
-    ids.add(g.id);
-  }
-  return [...manual, ...generated];
-}

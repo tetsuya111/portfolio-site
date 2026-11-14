@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDisplayDate, mergeArticleEntries, publishedArticles, sortPortfolios } from "../src/lib/content-query";
+import { formatDisplayDate, publishedArticles, sortPortfolios } from "../src/lib/content-query";
 
 describe("formatDisplayDate", () => {
   it("shows the authored calendar day regardless of the host timezone", () => {
@@ -29,16 +29,5 @@ describe("publishedArticles", () => {
   it("drops drafts and orders by date desc", () => {
     const r = publishedArticles([a("x", "2025-01-01"), a("d", "2027-01-01", true), a("y", "2026-01-01")]);
     expect(r.map((x) => x.id)).toEqual(["y", "x"]);
-  });
-});
-
-describe("mergeArticleEntries", () => {
-  it("concatenates hand-written and generated articles", () => {
-    const r = mergeArticleEntries([{ id: "a" }], [{ id: "b" }, { id: "c" }]);
-    expect(r.map((x) => x.id)).toEqual(["a", "b", "c"]);
-  });
-
-  it("throws when a generated article has the same slug as another article", () => {
-    expect(() => mergeArticleEntries([{ id: "hello" }], [{ id: "hello" }])).toThrow(/hello/);
   });
 });

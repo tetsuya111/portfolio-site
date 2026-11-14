@@ -1,13 +1,12 @@
 ---
-import { render } from "astro:content";
+import { getCollection, render } from "astro:content";
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import TagList from "../../components/TagList.astro";
 import { formatDisplayDate, publishedArticles } from "../../lib/content-query";
-import { getAllArticles } from "../../lib/articles";
 
 export async function getStaticPaths() {
   // 下書き（draft: true）はページを生成しない
-  const items = publishedArticles(await getAllArticles());
+  const items = publishedArticles(await getCollection("articles"));
   return items.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
 }
 
