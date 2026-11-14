@@ -8,6 +8,8 @@ from app.batch.parser import (
     _unescape_js_string,
     extract_data_table_html,
     find_latest_hot100_url,
+    parse_chart_page,
+    parse_detail_page,
     parse_hot100,
 )
 
@@ -100,3 +102,51 @@ def test_extract_ignores_other_targets():
 
 def test_extract_returns_none_without_append():
     assert extract_data_table_html(_read("hot100.html")) is None
+
+
+def test_parse_detail_page_rows():
+    assert parse_detail_page(_read("detail.html")) == [
+        ChartEntry(1, "A Bar Song (Tipsy)", "Shaboozey"),
+        ChartEntry(2, "Choosin’ Texas", "Ella Langley"),
+        ChartEntry(3, "Rock & Roll", "Simon & Garfunkel"),
+    ]
+
+
+def _detail(*rows: str) -> str:
+    calls = "".join(f'$("#data-table").append("{r}");' for r in rows)
+    return f"<script>{calls}</script>"
+
+
+def test_parse_detail_missing_artist_does_not_shift():
+    html = _detail(
+        "<div class='number'>1</div><span class='title'>A</span>",
+        "<div class='number'>2</div><span class='title'>B</span><span class='artistLink'>X</span>",
+    )
+    assert parse_detail_page(html) == [ChartEntry(1, "A", ""), ChartEntry(2, "B", "X")]
+
+
+def test_parse_detail_duplicate_rank_keeps_first():
+    html = _detail(
+        "<div class='number'>1</div><span class='title'>First</span>",
+        "<div class='number'>1</div><span class='title'>Second</span>",
+    )
+    assert parse_detail_page(html) == [ChartEntry(1, "First", "")]
+
+
+def test_parse_detail_skips_bad_rank_and_empty_title():
+    html = _detail(
+        "<div class='number'>x</div><span class='title'>Bad</span>",
+        "<div class='number'>2</div><span class='title'> </span>",
+        "<div class='number'>3</div><span class='title'>Ok</span>",
+    )
+    assert parse_detail_page(html) == [ChartEntry(3, "Ok", "")]
+
+
+def test_parse_detail_empty_raises():
+    with pytest.raises(ParseError, match="詳細表示ページから曲を取り出せませんでした"):
+        parse_detail_page(_detail("<p>no rows</p>"))
+
+
+def test_parse_chart_page_dispatches():
+    assert parse_chart_page(_read("detail.html"))[0].title == "A Bar Song (Tipsy)"
+    assert parse_chart_page(_read("hot100.html")) == parse_hot100(_read("hot100.html"))
