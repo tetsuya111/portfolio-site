@@ -15,6 +15,7 @@ EventBridge Scheduler（ItArticlesScheduleExpression、既定 rate(1 day)。ItAr
 
 - 記事の正本は S3 の記事バケット（`ItArticlesBucketName` の出力）。git には `src/content/it-articles/.gitkeep` だけを置き、`*.md` は `.gitignore` で除外している。
 - push 時のデプロイ（`buildspec.yml`）も、ビルドの前に記事バケットから記事を取り込む（取り込まないと `s3 sync --delete` で公開中の記事のページが消える）。
+- 定期実行と push のデプロイが同時に走ると、push 側の `s3 sync --delete` が、その間に公開された新しい記事のページを消すことがある（記事の md は S3 に保存済みなので、次の定期実行で自動的に戻る）。気になる場合は、定期実行の時刻（`cron(...)`）を push しない時間帯にする。
 - 定期実行では `apps/` をビルドしないため、配信用バケットのファイルは削除しない。不要になったファイルの掃除は push 時のデプロイに任せる。
 
 ## 初期設定

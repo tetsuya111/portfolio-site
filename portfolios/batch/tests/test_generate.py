@@ -76,6 +76,26 @@ class RunGenerationTest(unittest.TestCase):
             self.assertEqual(len(result.failed), 1)
             self.assertEqual(sorted(p.name for p in Path(d).glob("*.md")), ["2026-11-14-b.md"])
 
+    def test_uses_the_next_topic_when_an_article_fails(self):
+        post = FakePost(
+            response({"topics": [topic("A", "https://e.com/a", 9), topic("B", "https://e.com/b", 8), topic("C", "https://e.com/c", 7)]}),
+            response(article("a"), search_results=[]),  # 失敗
+            response(article("b"), search_results=REFS),
+            response(article("c"), search_results=REFS),
+        )
+        with tempfile.TemporaryDirectory() as d:
+            result = self.run_with(post, d, count=2)
+            self.assertEqual([Path(p).name for p in result.written], ["2026-11-14-b.md", "2026-11-14-c.md"])
+            self.assertEqual(result.failed, ["A"])
+
+    def test_limits_attempts_to_twice_the_count(self):
+        topics = [topic(f"T{i}", f"https://e.com/{i}", 9) for i in range(6)]
+        post = FakePost(response({"topics": topics}), *[response(article(f"t{i}"), search_results=[]) for i in range(2)])
+        with tempfile.TemporaryDirectory() as d:
+            result = self.run_with(post, d, count=1)
+        self.assertEqual(len(result.failed), 2)
+        self.assertEqual(len(post.calls), 3)
+
     def test_does_not_overwrite_existing_names(self):
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as other:
             Path(other, "2026-11-14-a.md").write_text("---\ntitle: x\ndate: 2026-11-14\n---\n", encoding="utf-8")

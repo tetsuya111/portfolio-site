@@ -111,6 +111,9 @@ describe("buildspec.it-articles.yml", () => {
     expect(deploy).toBeGreaterThan(save);
     expect(post).toContain('PREFIX="$DEPLOY_PATH"');
     expect(post).toContain('BUCKET="$SITE_BUCKET"');
+    // 記事の保存に失敗したら、公開しない（保存されていない記事は次の push のデプロイで消えるため）
+    expect(post.indexOf("set -e")).toBeGreaterThan(guard);
+    expect(post.indexOf("set -e")).toBeLessThan(save);
   });
 
   it("never deletes from the buckets (apps/ is not built here)", () => {

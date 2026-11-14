@@ -50,19 +50,21 @@ def run_generation(
     data, _ = call_perplexity(post=post, api_key=api_key, model=model, messages=messages, schema=schema, recency="day")
     topics = sorted(validate_topics(data), key=lambda t: t["importance"], reverse=True)
 
-    chosen = []
+    candidates = []
     for t in topics:
         key = normalize_url(t["sourceUrl"])
         if key in seen:
             result.skipped += 1
             continue
         seen.add(key)
-        if len(chosen) < count:
-            chosen.append(t)
-    log(f"題材の候補 {len(topics)} 件から {len(chosen)} 件を選びました（出典の重複で除外 {result.skipped} 件）")
+        candidates.append(t)
+    log(f"題材の候補 {len(topics)} 件のうち {len(candidates)} 件が未掲載です（出典の重複で除外 {result.skipped} 件）")
 
+    # 重要度の高い順に書き、失敗したら次の候補で補う。API の呼び出しが増えすぎないよう、試すのは count の 2 倍まで
     out_dir.mkdir(parents=True, exist_ok=True)
-    for t in chosen:
+    for t in candidates[: count * 2]:
+        if len(result.written) >= count:
+            break
         try:
             messages, schema = article_request(t)
             data, references = call_perplexity(

@@ -30,6 +30,8 @@ phases:
     commands:
       - |
         if [ "$CODEBUILD_BUILD_SUCCEEDING" = "1" ]; then
+          # 記事の保存に失敗したら公開しない（保存されていない記事のページは、次の push のデプロイで消えてしまう）
+          set -e
           aws s3 sync src/content/it-articles/ "s3://$IT_ARTICLES_BUCKET/it-articles/" --exclude "*" --include "*.md"
           DIST_DIR=dist BUCKET="$SITE_BUCKET" PREFIX="$DEPLOY_PATH" DISTRIBUTION_ID="$DISTRIBUTION_ID" python ../portfolios/batch/deploy_diff.py
         else

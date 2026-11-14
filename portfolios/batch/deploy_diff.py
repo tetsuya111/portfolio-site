@@ -88,7 +88,8 @@ def deploy(
     for path in sorted(p for p in dist.rglob("*") if p.is_file()):
         rel = path.relative_to(dist).as_posix()
         local.add(rel)
-        if remote.get(rel) == md5_of(path):
+        # S3 に無いファイルは必ず送るので、MD5 を計算しない
+        if rel in remote and remote[rel] == md5_of(path):
             continue
         changed.append(rel)
         log(f"upload: {rel}")
