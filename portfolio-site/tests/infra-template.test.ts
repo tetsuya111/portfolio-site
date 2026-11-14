@@ -16,12 +16,16 @@ describe("infra/template.yaml", () => {
     expect(Object.keys(t.Parameters).sort()).toEqual([
       "BudgetAlertEmail",
       "DeployBranch",
+      "DeployPath",
       "DomainName",
+      "EnableCloudFront",
+      "EnablePrTests",
       "EnableWaf",
       "GitHubActorAccountId",
       "GitHubRepoUrl",
       "HostedZoneId",
       "MonthlyBudgetUsd",
+      "SiteBucketName",
     ]);
     // 未指定（空）なら任意のブランチへの push でデプロイする
     expect(t.Parameters.DeployBranch.Default).toBe("");
@@ -49,7 +53,7 @@ describe("infra/template.yaml", () => {
 
   it("allows only CloudFront of this distribution to read the bucket", () => {
     const stmts = one("AWS::S3::BucketPolicy").Properties.PolicyDocument.Statement;
-    const read = stmts.find((s: any) => s.Action === "s3:GetObject");
+    const read = stmts.find((s: any) => s["Fn::If"])["Fn::If"][1];
     expect(read.Principal).toEqual({ Service: "cloudfront.amazonaws.com" });
     expect(read.Condition.StringEquals["AWS:SourceArn"]).toBeDefined();
     expect(JSON.stringify(stmts)).toContain("aws:SecureTransport");
@@ -86,10 +90,13 @@ describe("infra/template.yaml", () => {
     const deployProject = R.CodeBuildProject?.Properties;
     const eventOf = (g: any[]) => g.find((f) => f.Type === "EVENT").Pattern;
     const filePathOf = (g: any[]) => g.find((f) => f.Type === "FILE_PATH").Pattern;
+    // !If で出し分けるステートメントは両方の分岐を対象にする
+    const statementsOf = (roleId: string): any[] =>
+      R[roleId].Properties.Policies.flatMap((p: any) => p.PolicyDocument.Statement)
+        .flatMap((s: any) => (s["Fn::If"] ? s["Fn::If"].slice(1) : [s]))
+        .filter((s: any) => s.Ref !== "AWS::NoValue");
     const actionsOf = (roleId: string): string[] =>
-      R[roleId].Properties.Policies.flatMap((p: any) => p.PolicyDocument.Statement).flatMap((s: any) =>
-        Array.isArray(s.Action) ? s.Action : [s.Action],
-      );
+      statementsOf(roleId).flatMap((s: any) => (Array.isArray(s.Action) ? s.Action : [s.Action]));
 
     it("has a test project and a deploy project", () => {
       expect(ofType("AWS::CodeBuild::Project")).toHaveLength(2);
@@ -109,6 +116,16 @@ describe("infra/template.yaml", () => {
       expect(groups[0].find((f: any) => f.Type === "ACTOR_ACCOUNT_ID").Pattern).toEqual({
         "Fn::Sub": "^${GitHubActorAccountId}$",
       });
+      // DeployBranch を指定したらそのブランチ向けの PR だけ、未指定なら任意のブランチ向け
+      const baseRef = groups[0].find((f: any) => f.Type === "BASE_REF")?.Pattern;
+      expect(baseRef).toEqual({
+        "Fn::If": ["HasDeployBranch", { "Fn::Sub": "^refs/heads/${DeployBranch}$" }, "^refs/heads/"],
+      });
+      const [, withBranch, anyBranch] = baseRef["Fn::If"];
+      const toMain = new RegExp(withBranch["Fn::Sub"].replace("${DeployBranch}", "main"));
+      expect(toMain.test("refs/heads/main")).toBe(true);
+      for (const ng of ["refs/heads/dev-main", "refs/heads/dev-release", "refs/heads/main-old"]) expect(toMain.test(ng), ng).toBe(false);
+      expect(new RegExp(anyBranch).test("refs/heads/dev-release")).toBe(true);
       // デプロイ先の情報を渡さない
       expect(testProject.Environment.EnvironmentVariables ?? []).toEqual([]);
     });
@@ -124,7 +141,10 @@ describe("infra/template.yaml", () => {
         "Fn::If": ["HasDeployBranch", { "Fn::Sub": "^refs/heads/${DeployBranch}$" }, "^refs/heads/"],
       });
       const env = Object.fromEntries(deployProject.Environment.EnvironmentVariables.map((v: any) => [v.Name, v.Value]));
-      expect(Object.keys(env).sort()).toEqual(["DEPLOY_BRANCH", "DISTRIBUTION_ID", "SITE_BUCKET"]);
+      expect(Object.keys(env).sort()).toEqual(["DEPLOY_BRANCH", "DEPLOY_PATH", "DISTRIBUTION_ID", "SITE_BUCKET"]);
+      expect(env.DEPLOY_PATH).toEqual({ Ref: "DeployPath" });
+      // CloudFront を作らないときは空にし、buildspec はキャッシュ無効化を省略する
+      expect(env.DISTRIBUTION_ID).toEqual({ "Fn::If": ["UseCloudFront", { Ref: "Distribution" }, ""] });
     });
 
     it("uses separate roles so pull request builds cannot deploy", () => {
@@ -133,6 +153,33 @@ describe("infra/template.yaml", () => {
       const testActions = actionsOf("CodeBuildTestRole");
       expect(testActions.sort()).toEqual(["logs:CreateLogStream", "logs:PutLogEvents"]);
       expect(actionsOf("CodeBuildRole")).toContain("cloudfront:CreateInvalidation");
+    });
+
+    it("creates the pull request test project only when EnablePrTests is true", () => {
+      expect(t.Parameters.EnablePrTests.Default).toBe("true");
+      expect(t.Parameters.EnablePrTests.AllowedValues).toEqual(["true", "false"]);
+      expect(t.Conditions.UsePrTests).toEqual({ "Fn::Equals": [{ Ref: "EnablePrTests" }, "true"] });
+      for (const id of ["CodeBuildTestProject", "CodeBuildTestRole", "TestLogGroup"]) expect(R[id].Condition, id).toBe("UsePrTests");
+      expect(R.CodeBuildProject.Condition).toBeUndefined();
+    });
+
+    it("limits the deploy role's S3 access to DeployPath when it is set", () => {
+      const stmts = statementsOf("CodeBuildRole");
+      const list = stmts.find((s: any) => s.Action === "s3:ListBucket");
+      expect(list.Condition).toEqual({
+        "Fn::If": ["HasDeployPath", { StringLike: { "s3:prefix": [{ "Fn::Sub": "${DeployPath}/*" }] } }, { Ref: "AWS::NoValue" }],
+      });
+      const objects = stmts.find((s: any) => [s.Action].flat().includes("s3:PutObject"));
+      expect(objects.Resource).toEqual({
+        "Fn::If": ["HasDeployPath", { "Fn::Sub": "${SiteBucket.Arn}/${DeployPath}/*" }, { "Fn::Sub": "${SiteBucket.Arn}/*" }],
+      });
+    });
+
+    it("grants cache invalidation only when CloudFront is enabled", () => {
+      const raw = R.CodeBuildRole.Properties.Policies.flatMap((p: any) => p.PolicyDocument.Statement);
+      const inv = raw.find((s: any) => s["Fn::If"]?.[1]?.Sid === "InvalidateCache");
+      expect(inv["Fn::If"][0]).toBe("UseCloudFront");
+      expect(inv["Fn::If"][2]).toEqual({ Ref: "AWS::NoValue" });
     });
 
     it("limits concurrent builds to one per project", () => {
@@ -166,6 +213,73 @@ describe("infra/template.yaml", () => {
     });
   });
 
+  describe("CloudFront (EnableCloudFront)", () => {
+    it("is enabled by default and creates the delivery resources only when enabled", () => {
+      expect(t.Parameters.EnableCloudFront.Default).toBe("true");
+      expect(t.Parameters.EnableCloudFront.AllowedValues).toEqual(["true", "false"]);
+      expect(t.Conditions.UseCloudFront).toEqual({ "Fn::Equals": [{ Ref: "EnableCloudFront" }, "true"] });
+      for (const id of ["OriginAccessControl", "Certificate", "DirectoryIndexFunction", "Distribution", "AliasRecordA", "AliasRecordAAAA"]) {
+        expect(R[id].Condition, id).toBe("UseCloudFront");
+      }
+      for (const id of ["SiteBucket", "SiteBucketPolicy", "CodeBuildProject", "CodeBuildRole", "BuildLogGroup", "CostBudget"]) {
+        expect(R[id].Condition, id).toBeUndefined();
+      }
+    });
+
+    it("lets CloudFront read the bucket only when enabled, and always denies plain HTTP", () => {
+      const stmts = R.SiteBucketPolicy.Properties.PolicyDocument.Statement;
+      const read = stmts.find((s: any) => s["Fn::If"]);
+      expect(read["Fn::If"][0]).toBe("UseCloudFront");
+      expect(read["Fn::If"][1].Action).toBe("s3:GetObject");
+      expect(read["Fn::If"][2]).toEqual({ Ref: "AWS::NoValue" });
+      expect(stmts.find((s: any) => s.Sid === "DenyInsecureTransport")).toBeDefined();
+    });
+
+    it("requires DomainName and HostedZoneId only when CloudFront is enabled", () => {
+      const domain = new RegExp(t.Parameters.DomainName.AllowedPattern);
+      const zone = new RegExp(t.Parameters.HostedZoneId.AllowedPattern);
+      for (const ok of ["", "dev.example.com"]) expect(domain.test(ok), ok).toBe(true);
+      for (const ok of ["", "Z0123456789ABCDEFGHIJ"]) expect(zone.test(ok), ok).toBe(true);
+      expect(zone.test("not-a-zone")).toBe(false);
+      const rule = t.Rules.DomainRequiredWithCloudFront;
+      expect(rule.RuleCondition).toEqual({ "Fn::Equals": [{ Ref: "EnableCloudFront" }, "true"] });
+      const asserted = JSON.stringify(rule.Assertions);
+      expect(asserted).toContain('"DomainName"');
+      expect(asserted).toContain('"HostedZoneId"');
+    });
+  });
+
+  describe("DeployPath", () => {
+    it("defaults to the bucket root and accepts only relative prefixes without empty or dot segments", () => {
+      expect(t.Parameters.DeployPath.Default).toBe("");
+      expect(t.Conditions.HasDeployPath).toEqual({ "Fn::Not": [{ "Fn::Equals": [{ Ref: "DeployPath" }, ""] }] });
+      const re = new RegExp(t.Parameters.DeployPath.AllowedPattern);
+      for (const ok of ["", "preview", "a/b-c", "v1.2/site_x"]) expect(re.test(ok), ok).toBe(true);
+      for (const ng of ["../x", "/x", "x/", "a/../b", "a//b", ".", "a b"]) expect(re.test(ng), ng).toBe(false);
+    });
+
+    it("serves the DeployPath prefix at the domain root via the origin path", () => {
+      const d = one("AWS::CloudFront::Distribution").Properties.DistributionConfig;
+      expect(d.Origins[0].OriginPath).toEqual({
+        "Fn::If": ["HasDeployPath", { "Fn::Sub": "/${DeployPath}" }, { Ref: "AWS::NoValue" }],
+      });
+    });
+  });
+
+  it("names the bucket from SiteBucketName when it is set", () => {
+    expect(t.Parameters.SiteBucketName.Default).toBe("");
+    expect(t.Conditions.HasSiteBucketName).toEqual({ "Fn::Not": [{ "Fn::Equals": [{ Ref: "SiteBucketName" }, ""] }] });
+    expect(R.SiteBucket.Properties.BucketName).toEqual({
+      "Fn::If": ["HasSiteBucketName", { Ref: "SiteBucketName" }, { Ref: "AWS::NoValue" }],
+    });
+    const re = new RegExp(t.Parameters.SiteBucketName.AllowedPattern);
+    for (const ok of ["", "portfolio-site-dev", "bucket-1"]) expect(re.test(ok), ok).toBe(true);
+    // ドットを含む名前は HTTPS の仮想ホスト形式で証明書が合わないため受け付けない
+    for (const ng of ["UPPER", "ab", "-x-bucket", "bucket-", "my.bucket", "my..bucket", "192.168.1.1"]) {
+      expect(re.test(ng), ng).toBe(false);
+    }
+  });
+
   it("alerts by email when the monthly cost approaches the budget", () => {
     const b = one("AWS::Budgets::Budget").Properties;
     expect(b.Budget.BudgetType).toBe("COST");
@@ -181,7 +295,10 @@ describe("infra/template.yaml", () => {
   });
 
   it("optionally attaches a rate-limiting WAF to the distribution", () => {
-    expect(t.Conditions.UseWaf).toEqual({ "Fn::Equals": [{ Ref: "EnableWaf" }, "true"] });
+    // CloudFront を作らないときは WAF も作らない
+    expect(t.Conditions.UseWaf).toEqual({
+      "Fn::And": [{ "Fn::Equals": [{ Ref: "EnableWaf" }, "true"] }, { Condition: "UseCloudFront" }],
+    });
     const acl = R.WebAcl;
     expect(acl.Type).toBe("AWS::WAFv2::WebACL");
     expect(acl.Condition).toBe("UseWaf");
@@ -194,7 +311,8 @@ describe("infra/template.yaml", () => {
   });
 
   it("outputs the site url, apps base url, bucket and distribution id", () => {
-    expect(Object.keys(t.Outputs).sort()).toEqual(["AppsBaseUrl", "BucketName", "DistributionId", "SiteUrl"]);
+    expect(Object.keys(t.Outputs).sort()).toEqual(["AppsBaseUrl", "BucketName", "DeployUri", "DistributionId", "SiteUrl"]);
+    for (const k of ["AppsBaseUrl", "DistributionId", "SiteUrl"]) expect(t.Outputs[k].Condition).toBe("UseCloudFront");
     expect(JSON.stringify(t.Outputs.AppsBaseUrl.Value)).toContain("/apps/");
   });
 });

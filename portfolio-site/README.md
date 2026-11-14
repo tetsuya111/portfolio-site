@@ -4,7 +4,7 @@
 
 - フロントエンド: [Astro](https://astro.build/)（静的出力）+ [Tailwind CSS](https://tailwindcss.com/) v4
 - 配信: S3（非公開）+ CloudFront（OAC）+ ACM + Route 53
-- CI/CD: CodeBuild（GitHub と連携。PR でテスト、`main` への push でデプロイ）
+- CI/CD: CodeBuild（GitHub と連携。`main` 向けの PR でテスト、`main` への push でデプロイ）
 
 ## 必要なもの
 
@@ -52,5 +52,5 @@ S3 + CloudFront での配信と、CodeBuild による CI/CD の構成・削除�
 
 概要だけ示すと、us-east-1 に CloudFormation スタックを1つ作成したあと、`portfolio-site/` 配下の変更を次のように扱います。
 
-- プルリクエスト: CodeBuild がテスト・lint・ビルドを実行し、結果を GitHub に表示
+- `main`（本番スタックの `DeployBranch`）向けのプルリクエスト: CodeBuild がテスト・lint・ビルドを実行し、結果を GitHub に表示（ほかのブランチ向けの PR ではテストしない）
 - `main` への push: 同じ処理が成功したら、S3 に反映して CloudFront のキャッシュを無効化

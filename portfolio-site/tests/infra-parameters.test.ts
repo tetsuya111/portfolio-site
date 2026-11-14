@@ -30,3 +30,29 @@ describe("infra/parameters.example.json", () => {
     expect(ignore).toContain("infra/parameters.json");
   });
 });
+
+// dev 環境は同じ template.yaml から別スタックとして作る
+describe("infra/parameters.dev.example.json", () => {
+  const dev: any = JSON.parse(readFileSync(join(root, "infra", "parameters.dev.example.json"), "utf8"));
+
+  it("sets every template parameter exactly once as strings", () => {
+    expect(Object.keys(dev)).toEqual(["Parameters"]);
+    for (const value of Object.values(dev.Parameters)) expect(typeof value).toBe("string");
+    expect(Object.keys(dev.Parameters).sort()).toEqual(Object.keys(template.Parameters).sort());
+  });
+
+  it("deploys dev-release to its own domain and bucket with CloudFront, without PR test builds", () => {
+    const p = dev.Parameters;
+    expect(p.DeployBranch).toBe("dev-release");
+    expect(p.EnableCloudFront).toBe("true");
+    expect(p.EnablePrTests).toBe("false");
+    expect(p.DomainName).not.toBe(example.Parameters.DomainName);
+    expect(p.DomainName).not.toBe("");
+    expect(p.SiteBucketName).not.toBe("");
+  });
+
+  it("keeps the real dev parameter file out of git", () => {
+    const ignore = readFileSync(join(root, ".gitignore"), "utf8").split(/\r?\n/);
+    expect(ignore).toContain("infra/parameters.dev.json");
+  });
+});

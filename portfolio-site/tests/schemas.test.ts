@@ -16,6 +16,11 @@ describe("profileSchema", () => {
     });
     expect(r.success).toBe(false);
   });
+
+  it("rejects site-relative links", () => {
+    const r = profileSchema.safeParse({ name: "Taro", role: "Engineer", links: [{ label: "x", url: "/apps/x/" }] });
+    expect(r.success).toBe(false);
+  });
 });
 
 describe("portfolioSchema", () => {
@@ -31,6 +36,23 @@ describe("portfolioSchema", () => {
     expect(portfolioSchema.parse({ title: "App", url: "https://example.com" }).url).toBe(
       "https://example.com",
     );
+  });
+
+  it("accepts a site-relative path", () => {
+    expect(portfolioSchema.parse({ title: "App", url: "/apps/my-app/" }).url).toBe("/apps/my-app/");
+  });
+
+  it.each(["//evil.com/", "/\\evil.com/", "/a b", "/a\\b", "/a\nb", "/a\tb", "/a\u0085b", "/a\u200bb", "/a\ufeffb", "/a\u202eb", "/a\u00adb", "/a\u2066b", "apps/x/", ""])(
+    "rejects an unsafe or non-root path %j",
+    (url) => {
+      expect(portfolioSchema.safeParse({ title: "App", url }).success).toBe(false);
+    },
+  );
+
+  it("explains the accepted url forms when invalid", () => {
+    const r = portfolioSchema.safeParse({ title: "App", url: "ftp://x" });
+    expect(r.success).toBe(false);
+    expect(r.error?.issues[0]?.message).toContain("/ で始まるサイト内のパス");
   });
 
   it("requires title", () => {

@@ -1,4 +1,4 @@
-# CodeBuild 用・デプロイ（infra/template.yaml の CodeBuildProject から参照）
+# CodeBuild 用・デプロイ（infra/template.yaml の CodeBuildProject から参照。本番・dev のスタック共通）
 # DEPLOY_BRANCH への push（DEPLOY_BRANCH が空なら任意のブランチへの push）で実行し、
 # テスト・lint・ビルドが成功したときだけデプロイする。
 # プルリクエストはテスト専用の buildspec.test.yml（権限の小さい別プロジェクト）で実行する。
@@ -27,8 +27,11 @@ phases:
       - |
         case "$CODEBUILD_WEBHOOK_HEAD_REF" in refs/heads/*) IS_BRANCH=1 ;; *) IS_BRANCH=0 ;; esac
         if [ "$CODEBUILD_BUILD_SUCCEEDING" = "1" ] && [ "$CODEBUILD_WEBHOOK_EVENT" = "PUSH" ] && [ "$IS_BRANCH" = "1" ] && { [ -z "$DEPLOY_BRANCH" ] || [ "$CODEBUILD_WEBHOOK_HEAD_REF" = "refs/heads/$DEPLOY_BRANCH" ]; }; then
-          aws s3 sync dist "s3://$SITE_BUCKET" --delete
-          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*"
+          aws s3 sync dist "s3://$SITE_BUCKET/${DEPLOY_PATH:+$DEPLOY_PATH/}" --delete
+          # EnableCloudFront=false のスタックでは DISTRIBUTION_ID が空なので、キャッシュ無効化を省略する
+          if [ -n "$DISTRIBUTION_ID" ]; then
+            aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*"
+          fi
         else
           echo "デプロイ対象のビルドではないため、デプロイを省略します"
         fi

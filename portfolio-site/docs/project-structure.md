@@ -148,7 +148,7 @@ flowchart TD
 
 | ファイル | 内容 |
 |---|---|
-| `buildspec.test.yml` | プルリクエストで実行。`npm ci` → `npm test` → `npm run lint` → `npm run test:build` |
+| `buildspec.test.yml` | `main`（本番スタックの `DeployBranch`）向けのプルリクエストで実行。`npm ci` → `npm test` → `npm run lint` → `npm run test:build` |
 | `buildspec.yml` | `main` への push で実行。上と同じ検証のあと、成功したら S3 に同期して CloudFront のキャッシュを無効化 |
 | `infra/template.yaml` | S3・CloudFront・ACM・Route 53・CodeBuild（テスト用とデプロイ用）を作る CloudFormation テンプレート |
 

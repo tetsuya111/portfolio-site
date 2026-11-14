@@ -46,6 +46,19 @@ describe("buildspec.yml", () => {
     expect(post).toContain("--delete");
   });
 
+  it("syncs to the bucket root or DEPLOY_PATH without a double slash", () => {
+    const post = commands("post_build").join("\n");
+    expect(post).toContain('aws s3 sync dist "s3://$SITE_BUCKET/${DEPLOY_PATH:+$DEPLOY_PATH/}" --delete');
+  });
+
+  it("invalidates CloudFront only when DISTRIBUTION_ID is set (EnableCloudFront=false leaves it empty)", () => {
+    const post = commands("post_build").join("\n");
+    expect(post.indexOf('-n "$DISTRIBUTION_ID"')).toBeGreaterThan(post.indexOf("aws s3 sync"));
+    // 無効化は DISTRIBUTION_ID の if ブロックの中だけで行う
+    expect(post).toMatch(/if \[ -n "\$DISTRIBUTION_ID" \]; then\s*\n\s*aws cloudfront create-invalidation [^\n]*\n\s*fi\n/);
+    expect(post.match(/create-invalidation/g)).toHaveLength(1);
+  });
+
   it("does not run aws commands outside post_build", () => {
     for (const phase of ["install", "build"]) {
       expect(commands(phase).join("\n")).not.toMatch(/\baws\b/);

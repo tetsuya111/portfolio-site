@@ -10,7 +10,7 @@ tags:
   - "OAuth 2.0"
   - "Spotify Web API"
   - "スクレイピング"
-url: "https://portfolio-t-ohori.link/apps/spotify-billboard-playlist/"
+url: "/apps/spotify-billboard-playlist/"
 date: 2026-11-14
 ---
 
