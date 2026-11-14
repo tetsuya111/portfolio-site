@@ -10,7 +10,9 @@ from skillsheet import readers
 from skillsheet.errors import SkillsheetError
 
 TIMEOUT_SECONDS = 30
-_SHEET_RE = re.compile(r"^https://docs\.google\.com/spreadsheets/d/([A-Za-z0-9_-]+)")
+# 「ウェブに公開」の URL（/d/e/<公開 ID>/pubhtml）と通常の URL（/d/<ID>/edit）。ID の大文字・小文字は区別する
+_PUBLISHED_RE = re.compile(r"^https?://docs\.google\.com/spreadsheets/d/e/([A-Za-z0-9_-]+)", re.IGNORECASE)
+_SHEET_RE = re.compile(r"^https?://docs\.google\.com/spreadsheets/d/([A-Za-z0-9_-]+)", re.IGNORECASE)
 _PRIVATE_MESSAGE = (
     "スプレッドシートを取得できません（非公開の可能性があります）。"
     "共有設定を「リンクを知っている全員」にするか、xlsx か csv でダウンロードしてファイルを指定してください"
@@ -29,6 +31,9 @@ def has_scheme(source: str) -> bool:
 
 def to_export_url(url: str) -> str | None:
     """Google スプレッドシートの URL なら xlsx のエクスポート URL を返す。それ以外は None。"""
+    m = _PUBLISHED_RE.match(url)
+    if m:
+        return f"https://docs.google.com/spreadsheets/d/e/{m.group(1)}/pub?output=xlsx"
     m = _SHEET_RE.match(url)
     return f"https://docs.google.com/spreadsheets/d/{m.group(1)}/export?format=xlsx" if m else None
 

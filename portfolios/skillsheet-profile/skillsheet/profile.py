@@ -8,6 +8,7 @@ frontmatter は portfolio-site の profileSchema（portfolio-site/src/lib/schema
 import json
 import os
 import re
+import stat
 import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -56,7 +57,7 @@ def _scalar(raw: str | None) -> str | None:
         return raw[1:-1].replace("''", "'")
     if raw.startswith(_SPECIAL_START):
         raise _ScalarError(f"記号 {raw[0]} で始まる値はダブルクォートで囲んでください")
-    if ": " in raw or raw.endswith(":") or " #" in raw:
+    if re.search(r":\s|\s#", raw) or raw.endswith(":"):
         raise _ScalarError("値に「: 」「 #」を含むときはダブルクォートで囲んでください")
     if _NON_STRING.match(raw):
         raise _ScalarError("数値・真偽値・日付として扱われるため、ダブルクォートで囲んでください")
@@ -78,6 +79,7 @@ def _parse_frontmatter(lines: list[str], errors: list[str]) -> dict:
     data: dict = {}
     links: list[dict] | None = None  # links の並びを読んでいる間だけ list
     dash_col = key_col = None  # 要素の「-」の列と、要素内のキーの列（YAML ではすべての要素でそろう必要がある）
+    bare_links = False  # 値なしの「links:」と書かれたか
     for no, line in enumerate(lines, start=2):  # 1 行目は ---
         if not line.strip() or line.lstrip().startswith("#"):
             continue
@@ -97,6 +99,7 @@ def _parse_frontmatter(lines: list[str], errors: list[str]) -> dict:
                         raise _ScalarError("links は「- label: ...」「url: ...」の並びで書いてください")
                     data[key] = []
                     links = data[key] if raw == "" else None
+                    bare_links = raw == ""
                     dash_col = key_col = None
                     continue
                 data[key] = _scalar(raw)
@@ -125,7 +128,7 @@ def _parse_frontmatter(lines: list[str], errors: list[str]) -> dict:
         except _ScalarError as e:
             where = f"（{key}）" if key else ""
             errors.append(f"frontmatter の {no} 行目{where}を解釈できません: {e}")
-    if links is not None and not links:
+    if bare_links and not data.get("links"):
         # 値のない「links:」は YAML では null になり、スキーマ（配列か省略）に合わない
         errors.append("links: 要素がありません（リンクがなければ行ごと消してください）")
     return data
@@ -184,6 +187,9 @@ def write_profile(text: str, target: Path) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
             f.write(content)
+        # mkstemp は 0600 で作るため、元のファイルのパーミッションを引き継ぐ（新規なら 0644）
+        mode = stat.S_IMODE(target.stat().st_mode) if target.exists() else 0o644
+        os.chmod(tmp, mode)
         os.replace(tmp, target)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)

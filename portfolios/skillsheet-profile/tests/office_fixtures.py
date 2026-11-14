@@ -9,10 +9,14 @@ R = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationship
 W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
 
 
-def make_xlsx(sheets: dict[str, str], shared: list[str] | None = None, absolute_target=False) -> bytes:
-    """sheets はシート名 → <sheetData> の中身の XML 断片。shared は共有文字列（素のテキストか <si> の中身）。"""
+def make_xlsx(sheets: dict[str, str], shared: list[str] | None = None, absolute_target=False,
+              styles: str | None = None) -> bytes:
+    """sheets はシート名 → <sheetData> の中身の XML 断片。shared は共有文字列（素のテキストか <si> の中身）。
+    styles は xl/styles.xml の <styleSheet> の中身（numFmts・cellXfs）。"""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as z:
+        if styles is not None:
+            z.writestr("xl/styles.xml", f"<styleSheet {S}>{styles}</styleSheet>")
         sheet_els, rels = [], []
         for i, (name, rows) in enumerate(sheets.items(), start=1):
             sheet_els.append(f'<sheet name="{escape(name)}" sheetId="{i}" r:id="rId{i}"/>')

@@ -18,6 +18,7 @@ class _TextParser(HTMLParser):
         self.parts: list[str] = []
         self.skip_depth = 0
         self.cell_count = 0  # 現在の行で開いたセルの数
+        self.cell_depth = 0  # 開いている td・th の数
 
     def handle_starttag(self, tag, attrs):
         if tag in _SKIP:
@@ -26,26 +27,35 @@ class _TextParser(HTMLParser):
             if self.cell_count:
                 self.parts.append("\t")
             self.cell_count += 1
+            self.cell_depth += 1
         elif tag in _BLOCK:
-            self._newline()
+            self._block(tag)
 
     def handle_startendtag(self, tag, attrs):
         if tag in _BLOCK:
-            self._newline()
+            self._block(tag)
 
     def handle_endtag(self, tag):
         if tag in _SKIP:
             self.skip_depth = max(0, self.skip_depth - 1)
+        elif tag in _CELL:
+            self.cell_depth = max(0, self.cell_depth - 1)
         elif tag in _BLOCK:
-            self._newline()
+            self._block(tag)
 
     def handle_data(self, data):
         if not self.skip_depth:
             self.parts.append(re.sub(r"[ \r\n\f\v]+", " ", data))
 
-    def _newline(self):
+    def _block(self, tag):
+        # セルの中の改行（br・p など）は空白にして、セルの区切り（タブ）を保つ
+        if self.cell_depth and tag not in ("tr", "table"):
+            self.parts.append(" ")
+            return
         self.parts.append("\n")
         self.cell_count = 0
+        if tag in ("tr", "table"):
+            self.cell_depth = 0
 
 
 def html_to_text(html: str) -> str:
@@ -55,7 +65,7 @@ def html_to_text(html: str) -> str:
     lines = []
     for line in "".join(parser.parts).split("\n"):
         # セル内の前後の空白を詰め、行頭・行末の空白を除く
-        line = "\t".join(cell.strip() for cell in line.split("\t")).strip(" ")
+        line = "\t".join(re.sub(" {2,}", " ", cell.strip()) for cell in line.split("\t")).strip(" ")
         if line.strip():
             lines.append(line)
     return "\n".join(lines)

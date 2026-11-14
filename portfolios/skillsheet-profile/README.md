@@ -24,10 +24,10 @@ python portfolios/skillsheet-profile/skillsheet_profile.py apply <下書きの�
 |---|---|
 | `.txt`・`.md`・`.csv`・`.tsv` | そのままテキストとして読む（UTF-8・UTF-8（BOM 付き）・Shift_JIS） |
 | `.html`・`.htm` | `script`・`style` を除いた本文。表はセルをタブ区切り |
-| `.xlsx`・`.xlsm` | 全シートを `# シート: <名前>` の見出しごとに、セルをタブ区切りで出す |
-| `.docx` | 段落と表の行 |
-| Google スプレッドシートの URL | 「リンクを知っている全員」が閲覧できるシートだけ。xlsx でエクスポートして読む。非公開のシートは OAuth に対応していないため、xlsx か csv でダウンロードしてファイルを指定する |
-| その他の http(s) URL | HTML として読む |
+| `.xlsx`・`.xlsm` | 全シートを `# シート: <名前>` の見出しごとに、セルをタブ区切りで出す。日付の表示形式のセルは `YYYY-MM-DD`、ふりがなは除く |
+| `.docx` | 段落と表の行（コンテンツコントロールの中も読む） |
+| Google スプレッドシートの URL | 「リンクを知っている全員」が閲覧できるシートか、「ウェブに公開」したシート（`/d/e/.../pubhtml`）だけ。xlsx でエクスポートして読む。非公開のシートは OAuth に対応していないため、xlsx か csv でダウンロードしてファイルを指定する |
+| その他の http(s) URL | 応答の Content-Type（不明なら URL の拡張子）で上の形式に読み分ける。どちらでも決まらなければ HTML として読む |
 
 - `.xls`・`.doc`・`.ods`・PDF は読めない（xlsx・docx・csv で保存し直す）。
 - ファイル・応答・xlsx/docx の展開後のサイズは 20MB まで。URL のタイムアウトは 30 秒。
