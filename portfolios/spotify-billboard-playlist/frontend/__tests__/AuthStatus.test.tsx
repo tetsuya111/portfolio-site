@@ -14,7 +14,7 @@ describe("AuthStatus", () => {
   it("shows the display name and logout button when authenticated", async () => {
     const onLogout = vi.fn();
     render(
-      <AuthStatus me={{ authenticated: true, id: "u1", display_name: "Tetsu" }} onLogout={onLogout} />,
+      <AuthStatus me={{ authenticated: true, id: "u1", display_name: "Tetsu", csrf_token: "tok" }} onLogout={onLogout} />,
     );
     expect(screen.getByText(/ログイン中: Tetsu/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Spotifyでログイン" })).not.toBeInTheDocument();

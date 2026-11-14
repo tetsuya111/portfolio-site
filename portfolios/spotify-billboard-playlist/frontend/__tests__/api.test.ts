@@ -12,6 +12,55 @@ function mockFetch(status: number, body: unknown) {
   return fn;
 }
 
+/** 呼ぶたびに新しい Response を返す（同じ Response は一度しか読めないため）。 */
+function mockFetchSequence(...responses: [number, unknown][]) {
+  let i = 0;
+  const fn = vi.fn().mockImplementation(async () => {
+    const [status, body] = responses[Math.min(i++, responses.length - 1)];
+    return new Response(body === undefined ? null : JSON.stringify(body), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+  vi.stubGlobal("fetch", fn);
+  return fn;
+}
+
+const LOGGED_IN = { authenticated: true, id: "u1", display_name: "Tetsu", csrf_token: "tok" };
+
+describe("csrf token", () => {
+  it("getMe 後の POST に X-CSRF-Token が付く", async () => {
+    const fn = mockFetchSequence([200, LOGGED_IN], [200, { id: 1, url: "u", title: "", tracks: [] }]);
+    await getMe();
+    await fetchChart("https://billboard.mryogaku.com/");
+    const [, init] = fn.mock.calls[1];
+    expect(init.headers["X-CSRF-Token"]).toBe("tok");
+    expect(init.headers["Content-Type"]).toBe("application/json");
+  });
+
+  it("logout にも X-CSRF-Token が付く", async () => {
+    const fn = mockFetchSequence([200, LOGGED_IN], [204, undefined]);
+    await getMe();
+    await logout();
+    expect(fn.mock.calls[1][1].headers["X-CSRF-Token"]).toBe("tok");
+  });
+
+  it("未ログインなら X-CSRF-Token を付けない", async () => {
+    const fn = mockFetchSequence([200, LOGGED_IN], [200, { authenticated: false }], [204, undefined]);
+    await getMe();
+    await getMe();
+    await logout();
+    expect(fn.mock.calls[2][1].headers?.["X-CSRF-Token"]).toBeUndefined();
+  });
+
+  it("GET には付けない", async () => {
+    const fn = mockFetchSequence([200, LOGGED_IN], [200, LOGGED_IN]);
+    await getMe();
+    await getMe();
+    expect(fn.mock.calls[1][1].headers?.["X-CSRF-Token"]).toBeUndefined();
+  });
+});
+
 describe("api", () => {
   it("getMe returns the parsed body", async () => {
     mockFetch(200, { authenticated: true, id: "u1", display_name: "Tetsu" });

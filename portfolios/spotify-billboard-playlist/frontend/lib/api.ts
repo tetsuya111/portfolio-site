@@ -13,7 +13,10 @@ export class ApiError extends Error {
 /** OAuth はバックエンドへのページ遷移で開始する（fetch ではなくリンクで使う）。 */
 export const LOGIN_PATH = "/auth/login";
 
-export type Me ={ authenticated: false } | { authenticated: true; id: string; display_name: string };
+/** csrf_token は状態を変えるリクエストに X-CSRF-Token ヘッダーで送り返す。 */
+export type Me =
+  | { authenticated: false }
+  | { authenticated: true; id: string; display_name: string; csrf_token: string };
 
 export type Track = { title: string; artist: string };
 export type ChartTrack = Track & { rank: number };
@@ -32,10 +35,16 @@ function detailMessage(detail: unknown): string | null {
   return null;
 }
 
+/** 直近の getMe で受け取った CSRF トークン（未ログインなら null）。 */
+let csrfToken: string | null = null;
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const headers: Record<string, string> = { ...(init?.headers as Record<string, string> | undefined) };
+  if (method !== "GET" && method !== "HEAD" && csrfToken) headers["X-CSRF-Token"] = csrfToken;
   let res: Response;
   try {
-    res = await fetch(path, { credentials: "same-origin", ...init });
+    res = await fetch(path, { credentials: "same-origin", ...init, headers });
   } catch {
     throw new ApiError(0, "サーバーに接続できませんでした");
   }
@@ -56,8 +65,10 @@ function postJson<T>(path: string, payload: unknown): Promise<T> {
   });
 }
 
-export function getMe(): Promise<Me> {
-  return request<Me>("/api/me");
+export async function getMe(): Promise<Me> {
+  const me = await request<Me>("/api/me");
+  csrfToken = me.authenticated ? me.csrf_token : null;
+  return me;
 }
 
 export async function logout(): Promise<void> {
