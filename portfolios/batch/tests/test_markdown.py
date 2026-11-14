@@ -36,11 +36,45 @@ class SanitizeTest(unittest.TestCase):
         md = "`<b>` と\n\n```html\n<div>x</div>\n```\n"
         self.assertEqual(sanitize_markdown(md), md)
 
-    def test_unlinks_non_http_links(self):
-        self.assertEqual(sanitize_markdown("[x](javascript:alert(1)) [y](https://e.com) [z](#a)"), "x [y](https://e.com) [z](#a)")
+    def test_keeps_only_plain_http_links(self):
+        self.assertEqual(
+            sanitize_markdown("[x](javascript:alert(1)) [y](https://e.com) [z](#a)"),
+            r"\[x\](javascript:alert(1)) [y](https://e.com) [z](#a)",
+        )
 
-    def test_drops_non_http_reference_definitions(self):
-        self.assertEqual(sanitize_markdown("[x]: javascript:alert(1)\n[y]: https://e.com"), "[y]: https://e.com")
+    def test_neutralizes_link_bypasses(self):
+        # どの書き方でも、http(s)・# 以外のリンク先のリンク・画像・参照定義が作れないこと（角かっこをすべてエスケープする）
+        for md in [
+            "[x](javascript:alert(1) 'a')",
+            "[x](javascript:alert((1)))",
+            "[a [b] c](javascript:alert(1))",
+            "[`click`](javascript:alert(1))",
+            "[click\nhere](javascript:alert(1))",
+            "[x]: javascript:alert(1)",
+            "![x](javascript:alert(1))",
+            "[x](&#106;avascript:alert(1))",
+            "[x](JaVaScRiPt:alert(1))",
+            "[x][r]\n\n[r]: javascript:alert(1)",
+        ]:
+            out = sanitize_markdown(md)
+            self.assertNotRegex(out, r"(?<!\\)[\[\]]", md)
+
+    def test_citation_markers_stay_readable(self):
+        self.assertEqual(sanitize_markdown("出た[1]。"), r"出た\[1\]。")
+
+    def test_fence_with_backtick_in_info_is_not_a_fence(self):
+        self.assertNotIn("<img", sanitize_markdown("``` `x`\n<img src=x onerror=alert(1)>"))
+
+    def test_fence_closes_only_with_same_char_and_length(self):
+        out = sanitize_markdown("````\n```\n<b>code</b>\n````\n<script>x</script>")
+        self.assertIn("<b>code</b>", out)
+        self.assertNotIn("<script>", out)
+
+    def test_inline_code_needs_matching_backtick_runs(self):
+        # `` で始まり ` で閉じるもの・\` で始まるものはコードではないので、中の < はエスケープする
+        self.assertNotIn("<img", sanitize_markdown("``a <img src=x onerror=alert(1)> `"))
+        self.assertNotIn("<img", sanitize_markdown(r"\`a <img src=x onerror=alert(1)> `"))
+        self.assertEqual(sanitize_markdown("``a`b`` と `Array<T>`"), "``a`b`` と `Array<T>`")
 
     def test_demotes_h1(self):
         self.assertEqual(sanitize_markdown("# 見出し\n## 小見出し"), "## 見出し\n## 小見出し")

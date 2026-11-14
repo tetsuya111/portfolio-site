@@ -9,65 +9,85 @@ import json
 import re
 from datetime import datetime
 
-# 本文のリンク [text](url "title")。url の中の (...) は1段だけ許す（javascript:alert(1) を1つのリンクとして扱う）
-_LINK = re.compile(r'(!?)\[([^\]\n]*)\]\(\s*((?:[^()\s]|\([^()\s]*\))*)(?:\s+"[^"\n]*")?\s*\)')
-_REF_DEF = re.compile(r"^\s{0,3}\[[^\]\n]+\]:\s*(\S+)")
-_INLINE_CODE = re.compile(r"(`+)(.+?)\1")
-_FENCE = re.compile(r"^\s{0,3}(```|~~~)")
+# 方針: 危険な書き方を1つずつ探して消す（取りこぼしうる）のではなく、許す形だけを残して残りをすべて文字にする。
+# - 許すリンクは、1行の中で完結する [文字](http(s)://… または #id) だけ。それ以外の [ ] はすべて \[ \] にエスケープするので、
+#   参照形式・複数行・タイトル付き・入れ子のかっこ・文字参照（&#106;avascript:）など、どの書き方でもリンクや画像にならない。
+# - コードの外の < はすべて &lt; にする（生の HTML・自動リンクにならない）。\ も \\ にして、エスケープを打ち消せないようにする。
+# - コードの中は Markdown がエスケープするのでそのまま残す。コードの判定は CommonMark の規則に合わせる。
+_SAFE_LINK = re.compile(r"(!?)\[([^\[\]\n`\\<]+)\]\((https?://[^\s()<>\\]+|#[A-Za-z0-9_-]+)\)")
+# インラインコード: 同じ長さのバッククォートの並びで囲む（前後にバッククォートが続かない。\` は開始にならない）
+_CODE_SPAN = re.compile(r"(?<![`\\])(`+)(?!`)(.+?)(?<!`)\1(?!`)")
+# コードブロックの開始: 3 つ以上の ` か ~（` の場合、情報文字列に ` を含むものはコードブロックにならない）
+_FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+_PLACEHOLDER = "\x00{}\x00"
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _MAX_ARTICLE_TAGS = 5
 
 
-def _is_allowed_url(url: str) -> bool:
-    return url.startswith(("https://", "http://", "#"))
+def _escape_text(text: str) -> str:
+    """コードの外の文字列を無害化する（許すリンクだけを残す）。"""
+    text = text.replace("\x00", "")
+    links: list[str] = []
+
+    def keep(m: re.Match[str]) -> str:
+        links.append(m.group(0))
+        return _PLACEHOLDER.format(len(links) - 1)
+
+    text = _SAFE_LINK.sub(keep, text)
+    text = text.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]").replace("<", "&lt;")
+    for i, link in enumerate(links):
+        text = text.replace(_PLACEHOLDER.format(i), link)
+    return text
 
 
-def _sanitize_text(text: str) -> str:
-    """コードの外の1行分の文字列を無害化する。"""
-
-    def unlink(m: re.Match[str]) -> str:
-        # 画像（![alt](url)）も含め、許さないリンク先は文字だけにする
-        return m.group(0) if _is_allowed_url(m.group(3)) else m.group(2)
-
-    text = _LINK.sub(unlink, text)
-    return text.replace("<", "&lt;")
-
-
-def _sanitize_line(line: str) -> str | None:
-    """コードブロックの外の1行。None ならその行を消す。"""
-    ref = _REF_DEF.match(line)
-    if ref:
-        return line if _is_allowed_url(ref.group(1)) else None
-    if re.match(r"^#(\s|$)", line):
-        line = "#" + line  # ページの h1 と重ならないよう、本文の見出しは h2 以下にする
-    # インラインコードの中は Markdown がエスケープするので、そのまま残す
+def _sanitize_line(line: str) -> str:
+    """コードブロックの外の1行。"""
+    if re.match(r"^ {0,3}#(\s|$)", line):
+        line = "#" + line.lstrip(" ")  # ページの h1 と重ならないよう、本文の見出しは h2 以下にする
     out, pos = [], 0
-    for m in _INLINE_CODE.finditer(line):
-        out.append(_sanitize_text(line[pos : m.start()]))
+    for m in _CODE_SPAN.finditer(line):
+        out.append(_escape_text(line[pos : m.start()]))
         out.append(m.group(0))
         pos = m.end()
-    out.append(_sanitize_text(line[pos:]))
+    out.append(_escape_text(line[pos:]))
     return "".join(out)
 
 
+def _sanitize_text(text: str) -> str:
+    """見出し以外の1行分の短い文字列（用語解説など）。"""
+    return _sanitize_line(text) if not text.lstrip(" ").startswith("#") else _escape_text(text)
+
+
+def _fence_open(line: str) -> tuple[str, int] | None:
+    m = _FENCE_OPEN.match(line)
+    if not m:
+        return None
+    marker, info = m.group(1), m.group(2)
+    if marker[0] == "`" and "`" in info:
+        return None
+    return marker[0], len(marker)
+
+
+def _closes_fence(line: str, char: str, length: int) -> bool:
+    return re.match(rf"^ {{0,3}}{re.escape(char)}{{{length},}}[ \t]*$", line) is not None
+
+
 def sanitize_markdown(md: str) -> str:
-    """生の HTML・http(s) と # 以外のリンクを無効にし、h1 を h2 に下げる。コードブロックの中は変えない。"""
+    """生の HTML と、http(s)・# 以外へのリンクを無効にし、h1 を h2 に下げる。コードブロックの中は変えない。"""
     result: list[str] = []
-    fence: str | None = None
+    fence: tuple[str, int] | None = None
     for line in md.split("\n"):
-        m = _FENCE.match(line)
         if fence is not None:
             result.append(line)
-            if m and m.group(1) == fence:
+            if _closes_fence(line, *fence):
                 fence = None
             continue
-        if m:
-            fence = m.group(1)
+        opened = _fence_open(line)
+        if opened:
+            fence = opened
             result.append(line)
             continue
-        cleaned = _sanitize_line(line)
-        if cleaned is not None:
-            result.append(cleaned)
+        result.append(_sanitize_line(line))
     return "\n".join(result)
 
 
