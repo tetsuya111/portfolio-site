@@ -1,11 +1,11 @@
 ---
-import { getCollection } from "astro:content";
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import TagList from "../../components/TagList.astro";
 import SectionHeading from "../../components/SectionHeading.astro";
 import { formatDisplayDate, publishedArticles } from "../../lib/content-query";
+import { getAllArticles } from "../../lib/articles";
 
-const articles = publishedArticles(await getCollection("articles"));
+const articles = publishedArticles(await getAllArticles());
 ---
 
 <BaseLayout title="記事">

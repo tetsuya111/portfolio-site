@@ -6,11 +6,12 @@ import SectionHeading from "../components/SectionHeading.astro";
 import Eyebrow from "../components/Eyebrow.astro";
 import { siteConfig } from "../site.config";
 import { formatDisplayDate, publishedArticles, sortPortfolios } from "../lib/content-query";
+import { getAllArticles } from "../lib/articles";
 
 const profile = await getEntry("profile", "profile");
 if (!profile) throw new Error("src/content/profile/profile.md がありません");
 const portfolios = sortPortfolios(await getCollection("portfolios"));
-const latestArticles = publishedArticles(await getCollection("articles")).slice(0, 3);
+const latestArticles = publishedArticles(await getAllArticles()).slice(0, 3);
 ---
 
 <BaseLayout title={siteConfig.name} description={profile.data.summary}>

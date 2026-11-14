@@ -18,4 +18,11 @@ const articles = defineCollection({
   schema: articleSchema,
 });
 
-export const collections = { profile, portfolios, articles };
+// 自動作成の IT 記事。手で書いた記事と別フォルダで管理するが、スキーマは同じで同じ一覧・記事ページに出す
+// （md は定期実行のビルドで作られ、S3 に保存される。git には .gitkeep だけを置く）
+const itArticles = defineCollection({
+  loader: glob({ pattern: "**/*.md", base: "./src/content/it-articles" }),
+  schema: articleSchema,
+});
+
+export const collections = { profile, portfolios, articles, itArticles };
