@@ -12,7 +12,7 @@ from importer.ignore import iter_files
 
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 # portfolios/ 直下にあるがプロジェクトではないディレクトリ
-RESERVED_SLUGS = {"docs", "docker-images", "portfolio-importer"}
+RESERVED_SLUGS = {"docs", "docker-images", "portfolio-importer", "skillsheet-profile"}
 
 
 @dataclass(frozen=True)
