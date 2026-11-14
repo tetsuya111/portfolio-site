@@ -263,8 +263,11 @@ describe("infra/template.yaml", () => {
       "Fn::If": ["HasSiteBucketName", { Ref: "SiteBucketName" }, { Ref: "AWS::NoValue" }],
     });
     const re = new RegExp(t.Parameters.SiteBucketName.AllowedPattern);
-    for (const ok of ["", "portfolio-site-dev", "my.bucket-1"]) expect(re.test(ok), ok).toBe(true);
-    for (const ng of ["UPPER", "ab", "-x-bucket", "bucket-"]) expect(re.test(ng), ng).toBe(false);
+    for (const ok of ["", "portfolio-site-dev", "bucket-1"]) expect(re.test(ok), ok).toBe(true);
+    // ドットを含む名前は HTTPS の仮想ホスト形式で証明書が合わないため受け付けない
+    for (const ng of ["UPPER", "ab", "-x-bucket", "bucket-", "my.bucket", "my..bucket", "192.168.1.1"]) {
+      expect(re.test(ng), ng).toBe(false);
+    }
   });
 
   it("alerts by email when the monthly cost approaches the budget", () => {

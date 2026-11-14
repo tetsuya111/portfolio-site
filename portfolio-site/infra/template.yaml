@@ -28,8 +28,10 @@ Parameters:
     Default: ""
     Description: >-
       サイトのファイルを置く S3 バケットの名前。未指定（空）なら CloudFormation が自動で付ける。
-      作成済みのスタックで変えるとバケットが作り直される（旧バケットは DeletionPolicy: Retain で残る）
-    AllowedPattern: "^$|^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$"
+      作成済みのスタックで変えるとバケットが作り直される（旧バケットは DeletionPolicy: Retain で残る）。
+      英小文字・数字・- のみ（ドット不可）
+    # ドットを含む名前は HTTPS の仮想ホスト形式で証明書が合わないため受け付けない
+    AllowedPattern: "^$|^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
   DeployPath:
     Type: String
     Default: ""

@@ -53,9 +53,10 @@ describe("buildspec.yml", () => {
 
   it("invalidates CloudFront only when DISTRIBUTION_ID is set (EnableCloudFront=false leaves it empty)", () => {
     const post = commands("post_build").join("\n");
-    const check = post.indexOf('-n "$DISTRIBUTION_ID"');
-    expect(check).toBeGreaterThan(post.indexOf("aws s3 sync"));
-    expect(post.indexOf("create-invalidation")).toBeGreaterThan(check);
+    expect(post.indexOf('-n "$DISTRIBUTION_ID"')).toBeGreaterThan(post.indexOf("aws s3 sync"));
+    // 無効化は DISTRIBUTION_ID の if ブロックの中だけで行う
+    expect(post).toMatch(/if \[ -n "\$DISTRIBUTION_ID" \]; then\s*\n\s*aws cloudfront create-invalidation [^\n]*\n\s*fi\n/);
+    expect(post.match(/create-invalidation/g)).toHaveLength(1);
   });
 
   it("does not run aws commands outside post_build", () => {
@@ -85,4 +86,3 @@ describe("buildspec.test.yml", () => {
     expect(all).not.toMatch(/SITE_BUCKET|DISTRIBUTION_ID/);
   });
 });
-

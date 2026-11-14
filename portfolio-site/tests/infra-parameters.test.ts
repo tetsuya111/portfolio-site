@@ -56,4 +56,3 @@ describe("infra/parameters.dev.example.json", () => {
     expect(ignore).toContain("infra/parameters.dev.json");
   });
 });
-

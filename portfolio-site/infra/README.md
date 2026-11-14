@@ -118,7 +118,7 @@ Webhook が反応するのは、`portfolio-site/` 配下のファイルを変更
 | `DomainName` | `portfolio.example.com` | `dev.portfolio.example.com`（同じホストゾーンのサブドメインなら `HostedZoneId` も同じ） |
 | `SiteBucketName` | `""`（自動で命名） | `portfolio-site-dev-<任意>` など、dev 用のバケット名 |
 | `DeployBranch` | `main` | `dev-release` |
-| `DeployPath` | 任意 | 任意 |
+| `DeployPath` | `""`（バケット直下） | `""` または任意のパス |
 | `EnableCloudFront` | `true` | `true`（ブラウザで確認するため） |
 | `EnablePrTests` | `true` | `false`（PR のテストは本番スタックの `-test` で行い、二重に走らせない） |
 
@@ -132,7 +132,9 @@ aws cloudformation deploy --region us-east-1 --stack-name portfolio-site-dev \
 
 - スタック名は本番と別にし、`<本番のスタック名>-test` も避ける（CodeBuild のプロジェクト名・ロググループ名が重ならないようにするため。例 `portfolio-site-dev`）。
 - dev のロールは dev スタックのバケット・ディストリビューションにしか権限がなく、本番には触れない。
-- dev では `MonthlyBudgetUsd` の予算通知も dev スタック分として別に作られる。
+- `CostBudget` はアカウント全体の料金を対象にするため、dev スタックの予算通知は本番と同じ金額（アカウント全体）で届く。重複が不要なら dev の `BudgetAlertEmail`・`MonthlyBudgetUsd` は本番と同じにしておく。
+- `SiteBucketName` を指定したバケットはスタックを削除しても残る（`DeletionPolicy: Retain`）。同じ名前で作り直すときは、先に残ったバケットを空にして削除する（残っていると作成に失敗する）。
+- 作成済みのスタックで `DeployPath` を変えると、CloudFront はすぐに新しいパスを配信するが、中身は次のデプロイ（push）まで空のため 404 になる。古いパスのファイルは残り、デプロイ用ロールからは消せなくなる。本番で変えるときは、先に新しいパスへ手動で同期しておく。
 
 > **注意**: 本番スタックの `DeployBranch` が空のままだと、`dev-release` への push も本番の「任意のブランチへの push」に当たり、**本番にもデプロイされる**。dev 環境を使うときは、本番スタックの `DeployBranch` に `main` などを指定しておく。
 
