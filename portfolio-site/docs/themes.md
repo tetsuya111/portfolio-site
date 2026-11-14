@@ -28,7 +28,7 @@ AWS の CodeBuild（[infra/template.yaml](../infra/template.yaml)）には `PUBL
 
 | 変数（`--theme-` の後） | 役割 | クラスの例 |
 |---|---|---|
-| `base` / `surface` | ページの背景 / カード・ヘッダーの背景 | `bg-base` `bg-surface` |
+| `base` / `surface` | ページの背景 / カード・ヘッダーの背景 | `bg-page` `bg-surface`（`base` は文字サイズの `text-base` と重なるため `page` という名前にしている） |
 | `fg` / `muted` | 本文の文字 / 補足（日付・肩書きなど）の文字 | `text-fg` `text-muted` |
 | `line` | 罫線 | `border-line` `divide-line` |
 | `accent` / `on-accent` | ボタンの塗り / その上の文字 | `bg-accent` `text-on-accent` |

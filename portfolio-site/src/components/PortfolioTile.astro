@@ -1,6 +1,7 @@
 ---
 // タイル全体をクリック可能にしつつ、URL ボタンを入れ子の <a> にしないため
 // タイトルのリンクを疑似要素でタイル全体に広げる（stretched link）。
+// タイトルのリンクにフォーカスしたときはタイル全体に枠を出す（URL ボタンのときはボタンの枠だけ）。
 // 情報の強弱: タイトル（大・太字）＞ URL ボタン（アクセントの塗り）＞ タグ（小・淡色）
 import TagList from "./TagList.astro";
 
@@ -15,7 +16,7 @@ const { slug, title, tags, url } = Astro.props;
 ---
 
 <article
-  class="relative flex flex-col gap-3 rounded-card border border-t-4 border-line border-t-accent bg-surface p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg focus-within:ring-3 focus-within:ring-focus motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+  class="relative flex flex-col gap-3 rounded-card border border-t-4 border-line border-t-accent bg-surface p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg has-[h3_a:focus-visible]:ring-3 has-[h3_a:focus-visible]:ring-focus motion-reduce:transition-none motion-reduce:hover:translate-y-0"
 >
   <h3 class="font-heading text-lg leading-snug font-bold">
     <a href={`/portfolios/${slug}/`} class="after:absolute after:inset-0 focus:outline-none">{title}</a>

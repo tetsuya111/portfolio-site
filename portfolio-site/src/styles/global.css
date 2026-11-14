@@ -57,7 +57,8 @@
 
 /* テーマの変数を Tailwind のトークンにする。inline でユーティリティが var(--theme-*) を直接参照し、data-theme だけで切り替わる */
 @theme inline {
-  --color-base: var(--theme-base);
+  /* --color-base だと文字サイズの text-base と名前が重なり、text-base に背景色の文字色が付くため page とする */
+  --color-page: var(--theme-base);
   --color-surface: var(--theme-surface);
   --color-fg: var(--theme-fg);
   --color-muted: var(--theme-muted);
@@ -92,10 +93,13 @@
   color: var(--theme-on-accent);
   font-weight: 600;
   box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  /* Tailwind の hover: と同じく、ホバーできる端末だけに当てる（タッチ端末で押した後に残らないように） */
+  /*
+   * ホバーではアクセントを少し暗くする（白い文字とのコントラストは下がらない）。
+   * Tailwind の hover: と同じく、ホバーできる端末だけに当てる（タッチ端末で押した後に残らないように）
+   */
   @media (hover: hover) {
     &:hover {
-      opacity: 0.9;
+      background-color: color-mix(in srgb, var(--theme-accent) 85%, black);
     }
   }
 }

@@ -106,6 +106,12 @@ describe.each(THEMES)("theme %s", (theme) => {
   });
 });
 
+it("does not name a color token after a font size (text-base etc. would also set the color)", () => {
+  const colorTokens = [...css.matchAll(/--color-([\w-]+)\s*:/g)].map((m) => m[1]);
+  const fontSizes = ["xs", "sm", "base", "lg", "xl", "2xl", "3xl", "4xl", "5xl", "6xl", "7xl", "8xl", "9xl"];
+  expect(colorTokens.filter((t) => fontSizes.includes(t as string))).toEqual([]);
+});
+
 it("gives :root the default theme's values so pages without data-theme still render", () => {
   expect(declarations(":root")).toEqual(declarations(`[data-theme="${DEFAULT_THEME}"]`));
 });

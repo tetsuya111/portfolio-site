@@ -33,11 +33,20 @@ test.describe("ポートフォリオのタイル", () => {
     expect(buttonBg).not.toBe(tileBg);
   });
 
-  test("タイトルにフォーカスするとタイル全体に枠を表示する", async ({ page }) => {
-    const tile = page.locator("main article").first();
+  test("タイトルにキーボードでフォーカスするとタイル全体に枠を表示し、URL ボタンでは表示しない", async ({ page }) => {
+    const tile = page.locator("main article").filter({ has: page.locator('a[target="_blank"]') }).first();
+    const shadow = () => tile.evaluate((el) => getComputedStyle(el).boxShadow);
+    const before = await shadow();
+    // :focus-visible にするためキーボードで移動する（タイトル → URL ボタンの順）
     await tile.locator("h3 a").focus();
-    const shadow = await tile.evaluate((el) => getComputedStyle(el).boxShadow);
-    expect(shadow).not.toBe("none");
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Tab");
+    await expect(tile.locator("h3 a")).toBeFocused();
+    // タイルは transition で枠が変化するので、値が落ち着くまで待つ
+    await expect.poll(shadow).not.toBe(before);
+    await page.keyboard.press("Tab");
+    await expect(tile.locator('a[target="_blank"]')).toBeFocused();
+    await expect.poll(shadow).toBe(before);
   });
 });
 

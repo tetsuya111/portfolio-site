@@ -24,7 +24,7 @@ const theme = resolveTheme(import.meta.env.PUBLIC_THEME, siteConfig.theme);
     <title>{title === siteName ? title : `${title} | ${siteName}`}</title>
     {description && <meta name="description" content={description} />}
   </head>
-  <body class="flex min-h-screen flex-col bg-base font-sans text-fg antialiased">
+  <body class="flex min-h-screen flex-col bg-page font-sans text-fg antialiased">
     <SiteHeader siteName={siteName} />
     <main class="mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:py-14">
       <slot />
