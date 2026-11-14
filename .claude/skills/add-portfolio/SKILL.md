@@ -22,11 +22,12 @@ disable-model-invocation: true
 
 ## 手順
 
-1. **引数の確認**: `$ARGUMENTS` からプロジェクトのパスと、あれば `--slug`・`--site-url` を取り出す。パスがなければ、直前の会話・開いているファイルから推定する。推定できなければ理由を報告して終了する。
-   - `--site-url` が引数にないときは、`portfolio-site/infra/README.md` などにサイトのドメインが書かれていないか探し、なければ付けない（掲載 md の `url` は入らない）。
+1. **引数の確認**: `$ARGUMENTS` からプロジェクトのパスと、あれば `--slug`・`--site-url`・`--backend-url` を取り出す。パスがなければ、直前の会話・開いているファイルから推定する。推定できなければ理由を報告して終了する。
+   - `--site-url` が引数になければ付けない。コマンドが `portfolio-site/infra/parameters.json` の `DomainName` から `https://<ドメイン>` を使う（ファイルがなければ掲載 md の `url` とバックエンドの `ENV` は入らない）。
+   - `--backend-url`（フロントエンドから呼ぶバックエンドの URL。https のみ）は引数にあるときだけ付ける。推測で付けない。
 2. **取り込み**（イメージは作らない）:
    ```bash
-   python portfolios/portfolio-importer/add_portfolio.py <パス> [--slug <スラッグ>] [--site-url <URL>]
+   python portfolios/portfolio-importer/add_portfolio.py <パス> [--slug <スラッグ>] [--site-url <URL>] [--backend-url <URL>]
    ```
    終了コード 1 なら標準エラーの理由を報告して終了する（例: コピー先が既にある → 既に取り込み済みなら `portfolios/<スラッグ>` を指定して再実行してよい）。成功なら標準出力の JSON（`slug`・`projectDir`・`copied`・`frontend`・`backend`・`content`・`warnings`）を読む。
 3. **Docker イメージ**: `backend` があり、`warnings` に「CMD」を含む警告がない場合だけ、上の確認ルールで yes/no を確認する。yes なら、対象を `portfolios/<スラッグ>` にして `--build-image` 付きで再実行する（`portfolios/` 配下はコピーせず、既存の生成物も上書きしないので安全）。CMD の警告がある場合は、生成された Dockerfile の起動コマンドを補うよう報告に書く（推測で CMD を書き足さない）。
@@ -38,8 +39,8 @@ disable-model-invocation: true
 6. **作業ログ**: CLAUDE.md の規則に従い `logs/<yyyymmdd_hhMMss>_content_add-portfolio-<スラッグ>.md` に、何を・なぜ取り込んだかを書く。
 7. **報告**: 次を箇条書きで示す。コミットはしない（ユーザーに任せる）。
    - 取り込み先（コピーしたか）、作成・更新したファイル
-   - フロントエンド: 配信登録したか。しなかった場合はその理由。登録した場合の配信 URL（`<サイトURL>/apps/<スラッグ>/`）
-   - バックエンド: Dockerfile の場所、イメージの tar の場所（作った場合）
+   - フロントエンド: 配信登録したか。しなかった場合はその理由。登録した場合の配信 URL（`<サイトURL>/apps/<スラッグ>/`）と、`apps.json` の `env`（バックエンドの URL を入れた環境変数名。名前は推測のため、ユーザーに確認してもらう）
+   - バックエンド: Dockerfile の場所、`ENV` に書いたフロントエンドの URL（`backend.env`）、イメージの tar の場所（作った場合）
    - `warnings` の全件と、ユーザーが手で対応すべきこと
 
 ## よくある間違い

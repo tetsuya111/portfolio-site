@@ -11,14 +11,19 @@
 | [`src/lib/apps-manifest.ts`](../src/lib/apps-manifest.ts) | `apps.json` の検証とビルド処理 |
 | [`scripts/build-apps.mjs`](../scripts/build-apps.mjs) | `npm run build:apps` の入口 |
 
-CloudFormation はリポジトリのファイルを直接読めないため、テンプレートで定義した CodeBuild の buildspec（`buildspec.yml`・`buildspec.test.yml`）が `astro build` の後に `npm run build:apps` を実行する。各アプリで `npm ci` と `npm run build -- <buildArgs>` を実行し（`package-lock.json` がないアプリはビルドせずエラーにする）、`<outputDir>` を `dist/apps/<スラッグ>/` にコピーする。デプロイは既存の `aws s3 sync dist` がそのまま行う。
+CloudFormation はリポジトリのファイルを直接読めないため、テンプレートで定義した CodeBuild の buildspec（`buildspec.yml`・`buildspec.test.yml`）が `astro build` の後に `npm run build:apps` を実行する。各アプリで `npm ci` と `npm run build -- <buildArgs>` を（`env` を環境変数に追加して）実行し（`package-lock.json` がないアプリはビルドせずエラーにする）、`<outputDir>` を `dist/apps/<スラッグ>/` にコピーする。デプロイは既存の `aws s3 sync dist` がそのまま行う。
 
 ## apps.json の書式
 
 ```json
 {
   "apps": [
-    { "slug": "my-app", "outputDir": "dist", "buildArgs": ["--base=/apps/my-app/"] }
+    {
+      "slug": "my-app",
+      "outputDir": "dist",
+      "buildArgs": ["--base=/apps/my-app/"],
+      "env": { "VITE_API_URL": "https://api.example.com" }
+    }
   ]
 }
 ```
@@ -28,8 +33,11 @@ CloudFormation はリポジトリのファイルを直接読めないため、�
 | `slug` | スラッグ（ポートフォリオの md と同じ規則）。重複不可 |
 | `outputDir` | ビルド成果物のディレクトリ（アプリ内の相対パス。`..`・絶対パス不可） |
 | `buildArgs` | `npm run build --` に渡す引数。英数字と `@ . / : = - _` だけ |
+| `env`（任意） | ビルド時の環境変数。バックエンドの URL などを渡す。名前は `VITE_`・`PUBLIC_`・`NEXT_PUBLIC_` で始まる英大文字・数字・`_` だけ、値は `https://` の URL（英数字と `. - _ ~ /` だけ、クエリなし）だけ |
 
 不正な内容があると `npm run build:apps` が失敗し、ビルド（PR のテスト・デプロイとも）が止まる。
+
+`env` は取り込み時に `--backend-url` を付けると書かれる（環境変数名はフロントエンドのソースから推測する）。付けなかった場合や名前が違う場合は手で書く。`.env.*` は取り込み時にコピーされず、git の管理外のため、ビルドに値を渡すにはこの `env` を使う。値はフロントエンドのファイルに埋め込まれ公開されるため、秘密情報は書かない。バックエンドはサイトのオリジン（`https://<ドメイン>`）からの CORS を許可しておく。
 
 ## 配信できるフロントエンド
 
