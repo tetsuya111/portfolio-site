@@ -32,11 +32,13 @@ flowchart LR
 | `DirectoryIndexFunction` | CloudFront Function | `/about/` や `/about` へのリクエストを `/about/index.html` に置き換える（Astro の出力形式に合わせる） |
 | `Distribution` | CloudFront | HTTPS へリダイレクト、TLS 1.2 以上、HTTP/2・HTTP/3、IPv6。キャッシュはマネージドの CachingOptimized、レスポンスヘッダーは SecurityHeadersPolicy。403/404 は `/404.html` を 404 で返す |
 | `AliasRecordA` / `AliasRecordAAAA` | Route 53 | `DomainName` から CloudFront へのエイリアス |
-| `BuildLogGroup` | CloudWatch Logs | CodeBuild のログ（30日保存） |
-| `CodeBuildTestRole` | IAM ロール | テスト用。ログの書き込みだけを許可（S3・CloudFront には触れない） |
-| `CodeBuildTestProject` | CodeBuild | `<スタック名>-test`。プルリクエストでテスト・lint・ビルドを実行する |
-| `CodeBuildRole` | IAM ロール | デプロイ用。ログの書き込み、`SiteBucket` の一覧・読み書き・削除、このディストリビューションの無効化だけを許可 |
-| `CodeBuildProject` | CodeBuild | `<スタック名>-deploy`。`DeployBranch` への push でビルドし、成功したらデプロイする |
+| `BuildLogGroup` / `TestLogGroup` | CloudWatch Logs | CodeBuild のログ（デプロイ用・テスト用で分ける。30日保存） |
+| `CodeBuildTestRole` | IAM ロール | テスト用。`TestLogGroup` への書き込みだけを許可（S3・CloudFront には触れない）。このアカウントの `<スタック名>-test` からだけ引き受けられる |
+| `CodeBuildTestProject` | CodeBuild | `<スタック名>-test`。`GitHubActorAccountId` のアカウントが出したプルリクエストだけで、テスト・lint・ビルドを実行する（同時実行は1件） |
+| `CodeBuildRole` | IAM ロール | デプロイ用。`BuildLogGroup` への書き込み、`SiteBucket` の一覧・読み書き・削除、このディストリビューションの無効化だけを許可。このアカウントの `<スタック名>-deploy` からだけ引き受けられる |
+| `CodeBuildProject` | CodeBuild | `<スタック名>-deploy`。`DeployBranch` への push でビルドし、成功したらデプロイする（同時実行は1件） |
+| `WebAcl` | AWS WAF | `EnableWaf=true` のときだけ作る。IP ごとに 5 分間 1000 リクエストを超えたら遮断する |
+| `CostBudget` | AWS Budgets | 月額料金が予算の 80% を超えた（実績）・100% を超えそう（予測）なときに `BudgetAlertEmail` へメールする |
 
 ## 前提
 
@@ -59,6 +61,17 @@ flowchart LR
 | `HostedZoneId` | ○ | — | `DomainName` を管理している Route 53 ホストゾーンの ID |
 | `GitHubRepoUrl` | ○ | — | GitHub リポジトリの HTTPS URL（例 `https://github.com/<owner>/<repo>.git`） |
 | `DeployBranch` | | `main` | push されたときに本番へデプロイするブランチ |
+| `GitHubActorAccountId` | ○ | — | プルリクエストのビルドを許可する GitHub アカウントの数値 ID（`gh api users/<ユーザー名> -q .id` で確認）。公開リポジトリのため、ほかのアカウントの PR ではビルドしない |
+| `BudgetAlertEmail` | ○ | — | 料金アラートの送り先メールアドレス |
+| `MonthlyBudgetUsd` | | `10` | 月額料金の予算（USD） |
+| `EnableWaf` | | `false` | `true` で CloudFront に WAF（レート制限）を付ける。Web ACL とルールの月額固定費（数 USD）がかかる |
+
+## セキュリティ上の前提（テンプレートの外で設定するもの）
+
+- **GitHub の認証情報は、このリポジトリだけに絞る**: CodeBuild に登録した認証情報は、そのアカウント・リージョンのすべての CodeBuild プロジェクトで共有される。AWS CodeConnections（GitHub App）を使うか、個人用アクセストークンならこのリポジトリだけを対象にした fine-grained トークンにする（classic トークンの `repo` は全リポジトリへの書き込み権限になる）。
+- **`main` にブランチ保護を付ける**: `DeployBranch` への push はそのまま本番に出る。GitHub の Settings → Branches で、PR 必須・テスト用 CodeBuild の成功必須・force push 禁止にする。
+- **アカウントの監視を有効にする**: CloudTrail（管理イベント）と GuardDuty を有効にしておく（このテンプレートでは作らない）。料金は `CostBudget` のメールで気づけるようにしている。
+- **ビルドで依存のインストールスクリプトを実行しない**: buildspec と `npm run build:apps` は `npm ci --ignore-scripts` で依存を入れる。インストール時のスクリプトが必要な依存を追加するときは、デプロイ用の権限で動くことを踏まえて buildspec に明示的に追加する。
 
 ## スタックの作成
 
@@ -80,7 +93,9 @@ aws cloudformation deploy \
     DomainName=portfolio.example.com \
     HostedZoneId=Z0123456789ABCDEFGHIJ \
     GitHubRepoUrl=https://github.com/<owner>/<repo>.git \
-    DeployBranch=main
+    DeployBranch=main \
+    GitHubActorAccountId=<GitHub の数値 ID> \
+    BudgetAlertEmail=<メールアドレス>
 
 # 3. 出力（サイト URL・バケット名・ディストリビューション ID）を確認
 aws cloudformation describe-stacks --region us-east-1 --stack-name portfolio-site \

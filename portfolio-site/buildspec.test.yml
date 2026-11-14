@@ -9,7 +9,8 @@ phases:
       nodejs: 22
     commands:
       - cd portfolio-site
-      - npm ci
+      # デプロイ用の buildspec.yml と同じ方法で入れる（スクリプトを実行しない）
+      - npm ci --ignore-scripts
   build:
     commands:
       - npm test

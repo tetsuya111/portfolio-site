@@ -9,7 +9,9 @@ phases:
       nodejs: 22
     commands:
       - cd portfolio-site
-      - npm ci
+      # 依存のインストールスクリプト（postinstall など）は実行しない。デプロイ用の権限があるビルドで、
+      # 乗っ取られた依存のスクリプトが動かないようにするため（esbuild のバイナリは optionalDependencies で入る）
+      - npm ci --ignore-scripts
   build:
     commands:
       - npm test

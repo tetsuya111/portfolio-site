@@ -63,7 +63,8 @@ export function buildApps(apps: AppEntry[], { appsDir, distDir, run }: BuildOpti
       throw new Error(`${app.slug}: apps/${app.slug}/package-lock.json がありません（依存のバージョンを固定してください）`);
     }
     const build = ["run", "build", ...(app.buildArgs.length ? ["--", ...app.buildArgs] : [])];
-    for (const args of [["ci"], build]) {
+    // インストールスクリプトは実行しない（乗っ取られた依存のスクリプトにデプロイ用の権限を使わせない）
+    for (const args of [["ci", "--ignore-scripts"], build]) {
       const code = run("npm", args, cwd);
       if (code !== 0) throw new Error(`${app.slug}: npm ${args.join(" ")} が失敗しました（終了コード ${code}）`);
     }
