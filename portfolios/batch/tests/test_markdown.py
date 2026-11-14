@@ -1,0 +1,99 @@
+import json
+import unittest
+
+from it_news.markdown import build_article_markdown, sanitize_markdown
+
+ARTICLE = {
+    "title": 'Astro: "7.0" がリリース',
+    "description": "Astro の新しいメジャーバージョン",
+    "tags": ["Astro", "Web"],
+    "body": "## 概要\n\n新しいバージョンが出た[1]。",
+    "background": "Astro は静的サイトジェネレーター。",
+    "glossary": [{"term": "SSG", "description": "静的サイト生成"}],
+}
+REFS = [
+    {"title": "Astro Blog", "url": "https://astro.build/blog/astro-7/"},
+    {"title": "bad", "url": "javascript:alert(1)"},
+]
+
+
+def frontmatter(md: str) -> dict:
+    lines = md.split("\n")
+    assert lines[0] == "---"
+    end = lines.index("---", 1)
+    data = {}
+    for line in lines[1:end]:
+        key, _, value = line.partition(": ")
+        data[key] = json.loads(value)
+    return data
+
+
+class SanitizeTest(unittest.TestCase):
+    def test_escapes_raw_html(self):
+        self.assertEqual(sanitize_markdown("a <script>alert(1)</script>"), "a &lt;script>alert(1)&lt;/script>")
+
+    def test_keeps_html_in_code(self):
+        md = "`<b>` と\n\n```html\n<div>x</div>\n```\n"
+        self.assertEqual(sanitize_markdown(md), md)
+
+    def test_unlinks_non_http_links(self):
+        self.assertEqual(sanitize_markdown("[x](javascript:alert(1)) [y](https://e.com) [z](#a)"), "x [y](https://e.com) [z](#a)")
+
+    def test_drops_non_http_reference_definitions(self):
+        self.assertEqual(sanitize_markdown("[x]: javascript:alert(1)\n[y]: https://e.com"), "[y]: https://e.com")
+
+    def test_demotes_h1(self):
+        self.assertEqual(sanitize_markdown("# 見出し\n## 小見出し"), "## 見出し\n## 小見出し")
+
+
+class BuildTest(unittest.TestCase):
+    def build(self, **kw):
+        args = dict(article=ARTICLE, references=REFS, date="2026-11-14", source_url="https://astro.build/blog/astro-7/",
+                    generator="perplexity/sonar", tags=["IT ニュース"])
+        args.update(kw)
+        return build_article_markdown(**args)
+
+    def test_frontmatter(self):
+        fm = frontmatter(self.build())
+        self.assertEqual(fm["title"], 'Astro: "7.0" がリリース')
+        self.assertEqual(fm["date"], "2026-11-14")
+        self.assertEqual(fm["tags"], ["IT ニュース", "Astro", "Web"])
+        self.assertEqual(fm["description"], "Astro の新しいメジャーバージョン")
+        self.assertEqual(fm["sourceUrl"], "https://astro.build/blog/astro-7/")
+        self.assertEqual(fm["generator"], "perplexity/sonar")
+
+    def test_sections_in_order(self):
+        md = self.build()
+        idx = [md.index(s) for s in ["に自動で作成しました", "## 概要", "## 参考情報", "## 用語解説", "## 参考リンク"]]
+        self.assertEqual(idx, sorted(idx))
+        self.assertIn("- **SSG**: 静的サイト生成", md)
+
+    def test_references_numbered_and_http_only(self):
+        md = self.build()
+        self.assertIn("1. [Astro Blog](https://astro.build/blog/astro-7/)", md)
+        self.assertNotIn("javascript:", md)
+
+    def test_rejects_without_references(self):
+        with self.assertRaises(ValueError):
+            self.build(references=[{"title": "x", "url": "ftp://x"}])
+
+    def test_rejects_without_glossary(self):
+        with self.assertRaises(ValueError):
+            self.build(article={**ARTICLE, "glossary": []})
+
+    def test_rejects_empty_title_or_bad_date(self):
+        with self.assertRaises(ValueError):
+            self.build(article={**ARTICLE, "title": " "})
+        with self.assertRaises(ValueError):
+            self.build(date="2026-13-40")
+
+    def test_sanitizes_every_text_section(self):
+        md = self.build(article={**ARTICLE, "background": "<img src=x onerror=alert(1)>",
+                                 "glossary": [{"term": "<b>", "description": "<i>x</i>"}]})
+        self.assertNotIn("<img", md)
+        self.assertNotIn("<b>", md)
+        self.assertNotIn("<i>", md)
+
+
+if __name__ == "__main__":
+    unittest.main()
