@@ -11,6 +11,8 @@ const FUNCTIONS = [
 
 function toObject(name: string, value: unknown): unknown {
   if (name === "Ref") return { Ref: value };
+  // !Condition は条件名の参照（Fn::And などの中で使う）
+  if (name === "Condition") return { Condition: value };
   if (name === "GetAtt" && typeof value === "string") {
     const i = value.indexOf(".");
     if (i === -1) throw new Error(`!GetAtt は「リソース名.属性名」の形式が必要です: ${value}`);
@@ -28,7 +30,7 @@ function tagsFor(name: string): (ScalarTag | CollectionTag)[] {
   ];
 }
 
-const customTags = ["Ref", ...FUNCTIONS].flatMap(tagsFor);
+const customTags = ["Ref", "Condition", ...FUNCTIONS].flatMap(tagsFor);
 
 // テンプレートの構造は自由形式のため any で返す
 export function loadCfnTemplate(path: string): any {

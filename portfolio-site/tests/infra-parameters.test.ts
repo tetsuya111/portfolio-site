@@ -31,23 +31,24 @@ describe("infra/parameters.example.json", () => {
   });
 });
 
+// dev 環境は同じ template.yaml から別スタックとして作る
 describe("infra/parameters.dev.example.json", () => {
-  const devTemplate = loadCfnTemplate(join(root, "infra", "template.dev.yaml"));
-  const devExample: any = JSON.parse(readFileSync(join(root, "infra", "parameters.dev.example.json"), "utf8"));
+  const dev: any = JSON.parse(readFileSync(join(root, "infra", "parameters.dev.example.json"), "utf8"));
 
-  it('is a { "Parameters": { name: string } } object', () => {
-    expect(Object.keys(devExample)).toEqual(["Parameters"]);
-    for (const value of Object.values(devExample.Parameters)) expect(typeof value).toBe("string");
+  it("sets every template parameter exactly once as strings", () => {
+    expect(Object.keys(dev)).toEqual(["Parameters"]);
+    for (const value of Object.values(dev.Parameters)) expect(typeof value).toBe("string");
+    expect(Object.keys(dev.Parameters).sort()).toEqual(Object.keys(template.Parameters).sort());
   });
 
-  it("sets every dev template parameter exactly once", () => {
-    expect(Object.keys(devExample.Parameters).sort()).toEqual(Object.keys(devTemplate.Parameters).sort());
-  });
-
-  it("uses the dev template defaults for parameters that have one", () => {
-    for (const [name, p] of Object.entries<any>(devTemplate.Parameters)) {
-      if (p.Default !== undefined) expect(devExample.Parameters[name]).toBe(String(p.Default));
-    }
+  it("deploys dev-release to its own domain and bucket with CloudFront, without PR test builds", () => {
+    const p = dev.Parameters;
+    expect(p.DeployBranch).toBe("dev-release");
+    expect(p.EnableCloudFront).toBe("true");
+    expect(p.EnablePrTests).toBe("false");
+    expect(p.DomainName).not.toBe(example.Parameters.DomainName);
+    expect(p.DomainName).not.toBe("");
+    expect(p.SiteBucketName).not.toBe("");
   });
 
   it("keeps the real dev parameter file out of git", () => {
@@ -55,3 +56,4 @@ describe("infra/parameters.dev.example.json", () => {
     expect(ignore).toContain("infra/parameters.dev.json");
   });
 });
+

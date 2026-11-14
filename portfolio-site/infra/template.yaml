@@ -3,15 +3,48 @@ Description: >-
   ポートフォリオサイト（portfolio-site/）の配信基盤と CI。
   S3（非公開）+ CloudFront（OAC）+ ACM + Route 53 + CodeBuild（GitHub Webhook。PR はテスト用、push はデプロイ用）。
   CloudFront で使う ACM 証明書は us-east-1 にしか作れないため、このスタックは us-east-1 にデプロイする。
+  本番と dev は、このテンプレートからパラメーターを変えて別スタックとして作る（dev は DomainName・SiteBucketName・DeployBranch を本番と別にする）。
 
 Parameters:
   DomainName:
     Type: String
-    Description: サイトのドメイン名（例 portfolio.example.com）。HostedZoneId のゾーン内の名前にする
-    AllowedPattern: "^(?!-)[a-z0-9-]+(\\.[a-z0-9-]+)+$"
+    Description: >-
+      サイトのドメイン名（例 portfolio.example.com、dev は dev.portfolio.example.com）。HostedZoneId のゾーン内の名前にする。
+      EnableCloudFront=false のときだけ空にできる
+    AllowedPattern: "^$|^(?!-)[a-z0-9-]+(\\.[a-z0-9-]+)+$"
   HostedZoneId:
-    Type: AWS::Route53::HostedZone::Id
-    Description: DomainName を管理している作成済みの Route 53 ホストゾーン
+    Type: String
+    Description: DomainName を管理している作成済みの Route 53 ホストゾーンの ID。EnableCloudFront=false のときだけ空にできる
+    AllowedPattern: "^$|^Z[A-Z0-9]+$"
+  EnableCloudFront:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      CloudFront（+ ACM 証明書・Route 53・ディレクトリ補完の Function）で配信するか。
+      false なら S3 へのアップロードだけを行い、ブラウザでは確認できない（キャッシュ無効化も行わない）
+  SiteBucketName:
+    Type: String
+    Default: ""
+    Description: >-
+      サイトのファイルを置く S3 バケットの名前。未指定（空）なら CloudFormation が自動で付ける。
+      作成済みのスタックで変えるとバケットが作り直される（旧バケットは DeletionPolicy: Retain で残る）
+    AllowedPattern: "^$|^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$"
+  DeployPath:
+    Type: String
+    Default: ""
+    Description: >-
+      バケット内のアップロード先のパス（例 preview）。CloudFront はこのパスをドメイン直下として配信する。
+      先頭・末尾に / を付けない。未指定（空）ならバケット直下
+    AllowedPattern: "^$|^[A-Za-z0-9_-][A-Za-z0-9._-]*(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$"
+    ConstraintDescription: 英数字・. _ - を / で区切ったパス（先頭・末尾の /、空のセグメント、. で始まるセグメントは不可）
+  EnablePrTests:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      プルリクエストのテスト用 CodeBuild（<スタック名>-test）を作るか。
+      dev のスタックでは false にして、本番スタックと同じ PR のテストが二重に走らないようにする
   GitHubRepoUrl:
     Type: String
     Description: GitHub リポジトリの HTTPS URL（例 https://github.com/owner/repo.git）。CodeBuild に GitHub の認証情報を事前登録しておく
@@ -44,14 +77,26 @@ Parameters:
       （料金の歯止めは BudgetAlertEmail の通知が基本）
 
 Conditions:
-  UseWaf: !Equals [!Ref EnableWaf, "true"]
+  UseCloudFront: !Equals [!Ref EnableCloudFront, "true"]
+  # CloudFront を作らないときは WAF も作らない
+  UseWaf: !And [!Equals [!Ref EnableWaf, "true"], !Condition UseCloudFront]
+  UsePrTests: !Equals [!Ref EnablePrTests, "true"]
   HasDeployBranch: !Not [!Equals [!Ref DeployBranch, ""]]
+  HasDeployPath: !Not [!Equals [!Ref DeployPath, ""]]
+  HasSiteBucketName: !Not [!Equals [!Ref SiteBucketName, ""]]
 
 Rules:
   RegionMustBeUsEast1:
     Assertions:
       - Assert: !Equals [!Ref "AWS::Region", us-east-1]
         AssertDescription: CloudFront 用の ACM 証明書を作るため、us-east-1 にデプロイしてください
+  DomainRequiredWithCloudFront:
+    RuleCondition: !Equals [!Ref EnableCloudFront, "true"]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref DomainName, ""]]
+        AssertDescription: EnableCloudFront=true のときは DomainName を指定してください
+      - Assert: !Not [!Equals [!Ref HostedZoneId, ""]]
+        AssertDescription: EnableCloudFront=true のときは HostedZoneId を指定してください
 
 Resources:
   # ===== 配信 =====
@@ -60,6 +105,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
+      BucketName: !If [HasSiteBucketName, !Ref SiteBucketName, !Ref "AWS::NoValue"]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -88,16 +134,19 @@ Resources:
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
-          # このディストリビューションからの読み取りだけを許可する
-          - Sid: AllowCloudFrontRead
-            Effect: Allow
-            Principal:
-              Service: cloudfront.amazonaws.com
-            Action: s3:GetObject
-            Resource: !Sub "${SiteBucket.Arn}/*"
-            Condition:
-              StringEquals:
-                AWS:SourceArn: !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}"
+          # このディストリビューションからの読み取りだけを許可する（CloudFront を作らないときは誰にも読ませない）
+          - !If
+            - UseCloudFront
+            - Sid: AllowCloudFrontRead
+              Effect: Allow
+              Principal:
+                Service: cloudfront.amazonaws.com
+              Action: s3:GetObject
+              Resource: !Sub "${SiteBucket.Arn}/*"
+              Condition:
+                StringEquals:
+                  AWS:SourceArn: !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}"
+            - !Ref "AWS::NoValue"
           - Sid: DenyInsecureTransport
             Effect: Deny
             Principal: "*"
@@ -111,6 +160,7 @@ Resources:
 
   OriginAccessControl:
     Type: AWS::CloudFront::OriginAccessControl
+    Condition: UseCloudFront
     Properties:
       OriginAccessControlConfig:
         Name: !Sub "${AWS::StackName}-oac"
@@ -120,6 +170,7 @@ Resources:
 
   Certificate:
     Type: AWS::CertificateManager::Certificate
+    Condition: UseCloudFront
     Properties:
       DomainName: !Ref DomainName
       ValidationMethod: DNS
@@ -130,6 +181,7 @@ Resources:
   # Astro は /about/index.html の形で出力するため、/about/ や /about へのリクエストに index.html を補う
   DirectoryIndexFunction:
     Type: AWS::CloudFront::Function
+    Condition: UseCloudFront
     Properties:
       Name: !Sub "${AWS::StackName}-directory-index"
       AutoPublish: true
@@ -150,6 +202,7 @@ Resources:
 
   Distribution:
     Type: AWS::CloudFront::Distribution
+    Condition: UseCloudFront
     Properties:
       DistributionConfig:
         Enabled: true
@@ -164,6 +217,8 @@ Resources:
           - Id: SiteBucketOrigin
             DomainName: !GetAtt SiteBucket.RegionalDomainName
             OriginAccessControlId: !GetAtt OriginAccessControl.Id
+            # DeployPath 以下をドメイン直下として配信する
+            OriginPath: !If [HasDeployPath, !Sub "/${DeployPath}", !Ref "AWS::NoValue"]
             S3OriginConfig:
               OriginAccessIdentity: ""
         DefaultCacheBehavior:
@@ -224,6 +279,7 @@ Resources:
 
   AliasRecordA:
     Type: AWS::Route53::RecordSet
+    Condition: UseCloudFront
     Properties:
       HostedZoneId: !Ref HostedZoneId
       Name: !Ref DomainName
@@ -234,6 +290,7 @@ Resources:
 
   AliasRecordAAAA:
     Type: AWS::Route53::RecordSet
+    Condition: UseCloudFront
     Properties:
       HostedZoneId: !Ref HostedZoneId
       Name: !Ref DomainName
@@ -252,6 +309,7 @@ Resources:
   # テスト用（信頼できないコードも動きうる）はデプロイ用とロググループを分け、デプロイのログに書き込めないようにする
   TestLogGroup:
     Type: AWS::Logs::LogGroup
+    Condition: UsePrTests
     Properties:
       LogGroupName: !Sub "/aws/codebuild/${AWS::StackName}-test"
       RetentionInDays: 30
@@ -259,6 +317,7 @@ Resources:
   # --- テスト用（プルリクエスト）: ログ出力の権限だけを持ち、デプロイ先には触れない ---
   CodeBuildTestRole:
     Type: AWS::IAM::Role
+    Condition: UsePrTests
     Properties:
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -287,6 +346,7 @@ Resources:
 
   CodeBuildTestProject:
     Type: AWS::CodeBuild::Project
+    Condition: UsePrTests
     Properties:
       Name: !Sub "${AWS::StackName}-test"
       Description: portfolio-site のプルリクエストのテスト・lint・ビルド（デプロイしない）
@@ -349,21 +409,34 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !Sub "${BuildLogGroup.Arn}"
+              # DeployPath を指定したら、一覧・読み書き・削除はそのパス以下に限る
               - Sid: ListSiteBucket
                 Effect: Allow
                 Action: s3:ListBucket
                 Resource: !GetAtt SiteBucket.Arn
+                Condition: !If
+                  - HasDeployPath
+                  - StringLike:
+                      s3:prefix:
+                        - !Sub "${DeployPath}/*"
+                  - !Ref "AWS::NoValue"
               - Sid: SyncSiteObjects
                 Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub "${SiteBucket.Arn}/*"
-              - Sid: InvalidateCache
-                Effect: Allow
-                Action: cloudfront:CreateInvalidation
-                Resource: !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}"
+                Resource: !If
+                  - HasDeployPath
+                  - !Sub "${SiteBucket.Arn}/${DeployPath}/*"
+                  - !Sub "${SiteBucket.Arn}/*"
+              - !If
+                - UseCloudFront
+                - Sid: InvalidateCache
+                  Effect: Allow
+                  Action: cloudfront:CreateInvalidation
+                  Resource: !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}"
+                - !Ref "AWS::NoValue"
 
   CodeBuildProject:
     Type: AWS::CodeBuild::Project
@@ -389,8 +462,11 @@ Resources:
         EnvironmentVariables:
           - Name: SITE_BUCKET
             Value: !Ref SiteBucket
+          # CloudFront を作らないときは空にする（buildspec.yml はキャッシュ無効化を省略する）
           - Name: DISTRIBUTION_ID
-            Value: !Ref Distribution
+            Value: !If [UseCloudFront, !Ref Distribution, ""]
+          - Name: DEPLOY_PATH
+            Value: !Ref DeployPath
           - Name: DEPLOY_BRANCH
             Value: !Ref DeployBranch
       LogsConfig:
@@ -440,14 +516,20 @@ Resources:
 
 Outputs:
   SiteUrl:
+    Condition: UseCloudFront
     Description: サイトの URL
     Value: !Sub "https://${DomainName}/"
   AppsBaseUrl:
+    Condition: UseCloudFront
     Description: ポートフォリオのフロントエンド（apps/apps.json に登録したもの）の配信先。各アプリは <この URL><スラッグ>/
     Value: !Sub "https://${DomainName}/apps/"
   BucketName:
     Description: サイトのファイルを置く S3 バケット
     Value: !Ref SiteBucket
+  DeployUri:
+    Description: ビルド成果物のアップロード先
+    Value: !If [HasDeployPath, !Sub "s3://${SiteBucket}/${DeployPath}/", !Sub "s3://${SiteBucket}/"]
   DistributionId:
+    Condition: UseCloudFront
     Description: CloudFront ディストリビューション ID
     Value: !Ref Distribution

@@ -216,3 +216,7 @@ aws cloudfront create-invalidation --distribution-id <DistributionId> --paths "/
 - [ ] `portfolio-site/` 配下を変更した PR を作ると、`portfolio-site-test` のビルド結果が PR に表示される
 
 うまくいかない場合は [../infra/README.md のうまくいかないとき](../infra/README.md#うまくいかないとき) を参照。
+
+## 9. dev 環境の作成（任意）
+
+本番と同じテンプレートを、dev 用のパラメーター（別のドメイン・バケット名、`DeployBranch=dev-release`、`EnablePrTests=false`）で別スタックとして作る。手順 2・3 の準備はそのまま使える。パラメーターと作成コマンドは [../infra/README.md の dev 環境](../infra/README.md#dev-環境) を参照。作る前に、本番スタックの `DeployBranch` が `main` などに指定されていることを確認する（空のままだと `dev-release` への push が本番にもデプロイされる）。

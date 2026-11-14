@@ -63,7 +63,11 @@ cp infra/parameters.example.json infra/parameters.json  # 値を書き換える
 | `GitHubActorAccountId` | ○ | — | プルリクエストのビルドを許可する GitHub アカウントの数値 ID（`gh api users/<ユーザー名> -q .id` で確認）。公開リポジトリのため、ほかのアカウントの PR ではビルドしない |
 | `BudgetAlertEmail` | ○ | — | 料金アラートの送り先メールアドレス |
 | `MonthlyBudgetUsd` | | `10` | 月額料金の予算（USD） |
-| `EnableWaf` | | `false` | `true` で CloudFront に WAF（レート制限）を付ける。Web ACL とルールの月額固定費（数 USD）がかかる |
+| `EnableWaf` | | `false` | `true` で CloudFront に WAF（レート制限）を付ける。Web ACL とルールの月額固定費（数 USD）がかかる。`EnableCloudFront=false` なら作らない |
+| `EnableCloudFront` | | `true` | `false` なら CloudFront・ACM 証明書・Route 53 レコード・ディレクトリ補完の Function・WAF を作らず、S3 へのアップロードだけを行う（ブラウザでは確認できない。キャッシュ無効化もしない）。このときだけ `DomainName`・`HostedZoneId` を空にできる |
+| `SiteBucketName` | | `""`（空） | サイトのファイルを置くバケットの名前。空なら自動で付ける。作成済みのスタックで変えるとバケットが作り直される（旧バケットは残る） |
+| `DeployPath` | | `""`（空） | バケット内のアップロード先のパス（例 `preview`）。CloudFront はこのパスをドメイン直下として配信する（`OriginPath`）。先頭・末尾に `/` を付けない。空ならバケット直下。デプロイ用ロールの S3 権限もこのパス以下に限る |
+| `EnablePrTests` | | `true` | `false` ならプルリクエストのテスト用 CodeBuild（`<スタック名>-test`）とそのロール・ロググループを作らない（dev スタック用） |
 
 ## セキュリティ上の前提（テンプレートの外で設定するもの）
 
@@ -88,7 +92,7 @@ Webhook が反応するのは、`portfolio-site/` 配下のファイルを変更
 1. `install`: Node.js 22 で `npm ci`
 2. `build`: `npm test` → `npm run lint` → `npm run test:build`（ビルドと、成果物に管理画面が含まれないことなどの検証）
 
-デプロイ用の [../buildspec.yml](../buildspec.yml) だけが、続けて `post_build` を実行します。次の**すべて**を満たすときだけ、`dist/` を S3 に同期（`--delete`）し、CloudFront のキャッシュを無効化します。
+デプロイ用の [../buildspec.yml](../buildspec.yml) だけが、続けて `post_build` を実行します。次の**すべて**を満たすときだけ、`dist/` を S3 の `DeployPath` 以下（空ならバケット直下）に同期（`--delete`）し、CloudFront のキャッシュを無効化します（`EnableCloudFront=false` のスタックでは無効化を省略します）。
 
 - ビルドが成功している（`CODEBUILD_BUILD_SUCCEEDING = 1`）
 - Webhook のイベントが `PUSH`
@@ -101,46 +105,36 @@ Webhook が反応するのは、`portfolio-site/` 配下のファイルを変更
 | 変数 | 値 |
 |---|---|
 | `SITE_BUCKET` | `SiteBucket` のバケット名 |
-| `DISTRIBUTION_ID` | `Distribution` の ID |
+| `DISTRIBUTION_ID` | `Distribution` の ID（`EnableCloudFront=false` なら空） |
+| `DEPLOY_PATH` | パラメーター `DeployPath`（空ならバケット直下） |
 | `DEPLOY_BRANCH` | パラメーター `DeployBranch`（空なら任意のブランチ） |
 
 ## dev 環境
 
-本番に出す前の確認用に、ビルド成果物を dev 用の S3 バケットへアップロードするだけの別スタックを [template.dev.yaml](template.dev.yaml) で作れます（CloudFront・独自ドメインは作らず、バケットは非公開）。本番のスタック・buildspec は変更しません。
+本番に出す前の確認用の dev 環境は、**同じ [template.yaml](template.yaml) から別スタックとして作る**（buildspec も本番と同じ [../buildspec.yml](../buildspec.yml)）。違いはパラメーターだけで、[parameters.dev.example.json](parameters.dev.example.json) を `infra/parameters.dev.json`（`.gitignore` 済み）にコピーして使う。
 
-> **注意**: 本番スタックの `DeployBranch` が空のままだと、`dev-release` への push も本番の「任意のブランチへの push」に当たり、**本番にもデプロイされる**。dev 環境を使うときは、本番スタックの `DeployBranch` に `main` などを指定しておく。
-
-```mermaid
-flowchart LR
-  GH[GitHub] -- dev-release への push --> CBD[CodeBuild dev 用]
-  CBD -- 成功時のみ s3 sync --> S3D[(dev 用 S3 バケット<br/>非公開)]
-```
-
-| ファイル | 内容 |
-|---|---|
-| [template.dev.yaml](template.dev.yaml) | dev 用のテンプレート（S3 バケット・ロググループ・IAM ロール・CodeBuild） |
-| [../buildspec.dev.yml](../buildspec.dev.yml) | dev 用のビルド手順。install・build は `buildspec.yml` と同じで、成功時に dev バケットへ同期する（キャッシュ無効化なし） |
-| [parameters.dev.example.json](parameters.dev.example.json) | パラメーターファイルの例。`infra/parameters.dev.json` にコピーして使う（`.gitignore` 済み） |
-
-| 名前 | 必須 | 既定値 | 内容 |
-|---|---|---|---|
-| `GitHubRepoUrl` | ○ | — | 本番と同じ GitHub リポジトリの HTTPS URL |
-| `DeployBranch` | | `dev-release` | push されたときに dev へアップロードするブランチ |
-| `DeployPath` | | `""`（空） | アップロード先のバケット内のパス（例 `preview`）。先頭・末尾に `/` を付けない。空ならバケット直下 |
-
-本番と同じく、GitHub の認証情報を登録したリージョン（us-east-1）に作ります。スタック名は本番と別にし、`<本番のスタック名>-test` も避けます（CodeBuild のプロジェクト名 `<スタック名>-deploy` やロググループ `/aws/codebuild/<スタック名>` が本番のものと重ならないようにするため。例 `portfolio-site-dev`）。
+| パラメーター | 本番（例） | dev（例） |
+|---|---|---|
+| `DomainName` | `portfolio.example.com` | `dev.portfolio.example.com`（同じホストゾーンのサブドメインなら `HostedZoneId` も同じ） |
+| `SiteBucketName` | `""`（自動で命名） | `portfolio-site-dev-<任意>` など、dev 用のバケット名 |
+| `DeployBranch` | `main` | `dev-release` |
+| `DeployPath` | 任意 | 任意 |
+| `EnableCloudFront` | `true` | `true`（ブラウザで確認するため） |
+| `EnablePrTests` | `true` | `false`（PR のテストは本番スタックの `-test` で行い、二重に走らせない） |
 
 ```bash
 cp infra/parameters.dev.example.json infra/parameters.dev.json  # 値を書き換える
 aws cloudformation deploy --region us-east-1 --stack-name portfolio-site-dev \
-  --template-file infra/template.dev.yaml \
+  --template-file infra/template.yaml \
   --parameter-overrides file://infra/parameters.dev.json \
   --capabilities CAPABILITY_IAM
 ```
 
-`DeployBranch` に `portfolio-site/` 配下を変更するコミットを push すると、テスト・lint・ビルドを実行し、成功したら `dist/` を出力 `DeployUri`（`s3://<バケット>/<DeployPath>/`）へ `--delete` 付きで同期します。手動開始のビルドやほかのブランチではアップロードしません。push に含まれるコミットが `portfolio-site/` 配下を変更していない場合（既存のコミットを指すブランチの作成だけ、など）もビルドは始まらないため、dev の内容は前回のままになります。`DeployPath` が空のときはバケット直下に `--delete` で同期するため、バケット内のほかのパスに置いたファイルは削除されます。dev のロールは dev バケット（`DeployPath` 指定時はそのパス以下）とログにしか権限がなく、本番の S3・CloudFront には触れません。
+- スタック名は本番と別にし、`<本番のスタック名>-test` も避ける（CodeBuild のプロジェクト名・ロググループ名が重ならないようにするため。例 `portfolio-site-dev`）。
+- dev のロールは dev スタックのバケット・ディストリビューションにしか権限がなく、本番には触れない。
+- dev では `MonthlyBudgetUsd` の予算通知も dev スタック分として別に作られる。
 
-dev スタックを削除するときは、先に dev バケットを空にしてください（中身が残っているとバケットの削除に失敗します）。
+> **注意**: 本番スタックの `DeployBranch` が空のままだと、`dev-release` への push も本番の「任意のブランチへの push」に当たり、**本番にもデプロイされる**。dev 環境を使うときは、本番スタックの `DeployBranch` に `main` などを指定しておく。
 
 ## スタックの削除
 

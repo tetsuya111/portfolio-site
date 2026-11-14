@@ -7,6 +7,10 @@
     "GitHubActorAccountId": "12345678",
     "BudgetAlertEmail": "you@example.com",
     "MonthlyBudgetUsd": "10",
-    "EnableWaf": "false"
+    "EnableWaf": "false",
+    "EnableCloudFront": "true",
+    "SiteBucketName": "",
+    "DeployPath": "",
+    "EnablePrTests": "true"
   }
 }
