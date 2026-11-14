@@ -24,7 +24,8 @@ def _parser() -> argparse.ArgumentParser:
                                 description="指定したプロジェクトをポートフォリオとして取り込む")
     p.add_argument("source", help="取り込むプロジェクトのディレクトリ")
     p.add_argument("--slug", help="スラッグ（省略時はディレクトリ名から作る）")
-    p.add_argument("--site-url", help="ポートフォリオサイトの URL（例 https://portfolio.example.com）")
+    p.add_argument("--site-url", help="掲載 md の url を絶対 URL にするときのサイトの URL（例 https://portfolio.example.com）。"
+                        "省略時はサイト内のパス /apps/<スラッグ>/ にする")
     return p
 
 
@@ -71,7 +72,10 @@ def run_import(args: argparse.Namespace, repo_root: Path, today: date) -> dict:
     for t in (frontend.tags if frontend else []) + (backend.tags if backend else []):
         if t not in tags:
             tags.append(t)
-    app_url = f"{args.site_url.rstrip('/')}/apps/{target.slug}/" if args.site_url and registered else None
+    # ドメインなしのパスにすると、本番・dev それぞれのサイトで表示中のドメインのアプリが開く
+    app_url = None
+    if registered:
+        app_url = f"{args.site_url.rstrip('/')}/apps/{target.slug}/" if args.site_url else f"/apps/{target.slug}/"
     content, w = write_portfolio_md(target.slug, project, repo_root, tags, app_url, today)
     warnings += w
 

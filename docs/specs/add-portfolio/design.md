@@ -90,7 +90,7 @@ portfolio-site/
 - 入力の優先順: `portfolios/docs/<スラッグ>.md`（frontmatter と本文）→ プロジェクトの `README.md`（最初の `# 見出し` をタイトル、残りを本文）→ スラッグ。
 - frontmatter の読み取りは `key: value` と `- 項目` のリストだけを扱う簡易パーサー。書き出しは値を JSON 文字列（YAML のダブルクォート文字列として有効）で書く。
 - 本文の先頭にある `# 見出し` 1行は除く（サイトがタイトルを h1 で出すため）。
-- `tags`: docs のタグがあればそれ、なければ検出した技術。`date`: 実行日。`url`: R4-3 の条件のときだけ。http/https でない値は捨てる。
+- `tags`: docs のタグがあればそれ、なければ検出した技術。`date`: 実行日。`url`: R4-3 の条件のときだけ。http/https でない値は捨てる（[add-portfolio-relative-url](../add-portfolio-relative-url/design.md) で変更）。
 - 既にファイルがあれば作らない（R4-4）。
 
 ### コマンド出力（cli.py）

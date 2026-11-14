@@ -22,7 +22,7 @@ disable-model-invocation: true
 ## 手順
 
 1. **引数の確認**: `$ARGUMENTS` からプロジェクトのパスと、あれば `--slug`・`--site-url` を取り出す。パスがなければ、直前の会話・開いているファイルから推定する。推定できなければ理由を報告して終了する。
-   - `--site-url` が引数にないときは、`portfolio-site/infra/README.md` などにサイトのドメインが書かれていないか探し、なければ付けない（掲載 md の `url` は入らない）。
+   - `--site-url` は引数で明示されたときだけ付ける。ドメインを探して補わない（付けなければ、フロントエンドを配信登録したとき掲載 md の `url` はサイト内のパス `/apps/<スラッグ>/` になり、本番・dev それぞれのサイトで表示中のドメインのアプリが開く）。
 2. **取り込み**:
    ```bash
    python portfolios/portfolio-importer/add_portfolio.py <パス> [--slug <スラッグ>] [--site-url <URL>]

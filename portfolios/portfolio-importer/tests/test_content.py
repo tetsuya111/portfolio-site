@@ -62,6 +62,33 @@ class WritePortfolioMdTest(TempDirMixin, unittest.TestCase):
         self.call(app_url="https://example.com/apps/my-app/")
         self.assertIn('url: "https://example.com/apps/my-app/"', self.out.read_text(encoding="utf-8"))
 
+    def test_relative_app_url_is_saved(self):
+        self.call(app_url="/apps/my-app/")
+        self.assertIn('url: "/apps/my-app/"', self.out.read_text(encoding="utf-8"))
+
+    def test_warns_when_app_url_replaces_metadata_url(self):
+        write(self.tmp / "portfolios/docs/my-app.md", "---\ntitle: x\nurl: https://my-app.example.com/\n---\n")
+        _, warnings = self.call(app_url="/apps/my-app/")
+        self.assertIn('url: "/apps/my-app/"', self.out.read_text(encoding="utf-8"))
+        self.assertTrue(any("https://my-app.example.com/" in w for w in warnings))
+
+    def test_warns_even_when_only_the_path_matches(self):
+        # 別ホストの同じパスは別のアプリでありうるため、完全一致でなければ警告する
+        write(self.tmp / "portfolios/docs/my-app.md",
+              "---\ntitle: x\nurl: https://my-app.vercel.app/apps/my-app/\n---\n")
+        _, warnings = self.call(app_url="/apps/my-app/")
+        self.assertTrue(any("https://my-app.vercel.app/apps/my-app/" in w for w in warnings))
+
+    def test_no_warning_when_metadata_url_equals_app_url(self):
+        write(self.tmp / "portfolios/docs/my-app.md", "---\ntitle: x\nurl: https://ex.com/apps/my-app/\n---\n")
+        _, warnings = self.call(app_url="https://ex.com/apps/my-app/")
+        self.assertEqual(warnings, [])
+
+    def test_relative_url_in_metadata_is_dropped(self):
+        write(self.tmp / "portfolios/docs/my-app.md", "---\ntitle: x\nurl: /foo/\n---\n")
+        self.call()
+        self.assertNotIn("url:", self.out.read_text(encoding="utf-8"))
+
     def test_non_http_url_is_dropped(self):
         write(self.tmp / "portfolios/docs/my-app.md", "---\ntitle: x\nurl: javascript:alert(1)\n---\n")
         self.call()

@@ -54,7 +54,7 @@ class CliTest(TempDirMixin, unittest.TestCase):
         md = (self.repo / result["content"]).read_text(encoding="utf-8")
         self.assertIn('  - "FastAPI"', md)
         self.assertIn('  - "Vite"', md)
-        self.assertNotIn("url:", md)
+        self.assertIn('url: "/apps/my-app/"', md)
         self.assertNotIn("Docker", md)
 
     def test_warns_when_frontend_and_backend_share_root(self):
@@ -81,6 +81,31 @@ class CliTest(TempDirMixin, unittest.TestCase):
         self.run_main(str(self.src), "--site-url", "https://ex.com")
         md = (self.repo / "portfolio-site/src/content/portfolios/my-app.md").read_text(encoding="utf-8")
         self.assertIn('url: "https://ex.com/apps/my-app/"', md)
+
+    def test_registered_frontend_gets_relative_url_without_site_url(self):
+        self.run_main(str(self.src))
+        md = (self.repo / "portfolio-site/src/content/portfolios/my-app.md").read_text(encoding="utf-8")
+        self.assertIn('url: "/apps/my-app/"', md)
+
+    def test_no_relative_url_when_frontend_not_registered(self):
+        src = self.tmp / "api-only"
+        write(src / "README.md", "# API\n")
+        write(src / "requirements.txt", "fastapi\n")
+        write(src / "main.py", '@app.get("/api/me")\n')
+        code, out, _ = self.run_main(str(src))
+        self.assertEqual(code, 0)
+        md = (self.repo / json.loads(out)["content"]).read_text(encoding="utf-8")
+        self.assertNotIn("url:", md)
+
+    def test_unregistered_frontend_keeps_metadata_http_url(self):
+        (self.src / "frontend/package-lock.json").unlink()
+        write(self.repo / "portfolios/docs/my-app.md", "---\ntitle: x\nurl: https://my-app.example.com/\n---\n")
+        code, out, _ = self.run_main(str(self.src))
+        self.assertEqual(code, 0)
+        result = json.loads(out)
+        self.assertFalse(result["frontend"]["registered"])
+        md = (self.repo / result["content"]).read_text(encoding="utf-8")
+        self.assertIn('url: "https://my-app.example.com/"', md)
 
     def test_invalid_site_url_is_error(self):
         code, _, err = self.run_main(str(self.src), "--site-url", "javascript:x")

@@ -76,6 +76,16 @@ cp infra/parameters.example.json infra/parameters.json  # 値を書き換える
 - **アカウントの監視を有効にする**: CloudTrail（管理イベント）と GuardDuty を有効にしておく（このテンプレートでは作らない）。料金は `CostBudget` のメールで気づけるようにしている。
 - **ビルドで依存のインストールスクリプトを実行しない**: buildspec と `npm run build:apps` は `npm ci --ignore-scripts` で依存を入れる。インストール時のスクリプトが必要な依存を追加するときは、デプロイ用の権限で動くことを踏まえて buildspec に明示的に追加する。
 
+## ブランチの役割
+
+| ブランチ | 役割 | 自動で動くもの |
+|---|---|---|
+| `main` | 本番のブランチ。CI/CD・本番への自動デプロイ | PR でテスト（`<本番スタック名>-test`）。push でテスト後に本番へデプロイ（本番スタックの `DeployBranch=main`） |
+| `dev-release` | dev 環境への自動デプロイ用 | push でテスト後に dev 環境へデプロイ（dev スタックの `DeployBranch=dev-release`） |
+| `dev-main` | 開発用のブランチ。CI/CD | PR でテスト（`<本番スタック名>-test`）。push してもデプロイはされない |
+
+どれも `portfolio-site/` 配下を変更したときだけ動きます（詳細は次の「CI / デプロイ」）。
+
 ## CI / デプロイ
 
 テスト用とデプロイ用で、CodeBuild のプロジェクトと buildspec を分けています。プルリクエストのビルド（フォークからの PR を含む）は、デプロイ先への権限を持たないプロジェクトで実行されます。
