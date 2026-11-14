@@ -67,9 +67,14 @@ def test_me_unauthenticated(client):
     assert client.get("/api/me").json() == {"authenticated": False}
 
 
-def test_me_authenticated(client, logged_in):
+def test_me_authenticated(client, logged_in, sessions):
     body = client.get("/api/me").json()
-    assert body == {"authenticated": True, "id": "u1", "display_name": "Tetsu"}
+    assert body == {
+        "authenticated": True,
+        "id": "u1",
+        "display_name": "Tetsu",
+        "csrf_token": sessions.get(logged_in).csrf_token,
+    }
     assert "access" not in str(body)
 
 

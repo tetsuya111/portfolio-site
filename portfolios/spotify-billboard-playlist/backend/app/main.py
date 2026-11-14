@@ -18,7 +18,8 @@ from app.batch.runner import PageFetcher, process_chart_page
 from app.batch.urls import MAX_URL_LENGTH, InvalidChartUrl
 from app.config import Settings, load_settings
 from app.db import Database
-from app.sessions import Session, SessionStore
+from app.ratelimit import CHART_RATE_LIMIT, CHART_RATE_WINDOW, RateLimiter
+from app.sessions import SESSION_MAX_AGE, Session, SessionStore
 from app.spotify import SpotifyClient, SpotifyError, TrackQuery
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 STATE_COOKIE = "oauth_state"
 SESSION_COOKIE = "sid"
 STATE_MAX_AGE = 600
+CSRF_HEADER = "X-CSRF-Token"
 
 
 class ChartRequest(BaseModel):
@@ -71,14 +73,23 @@ def create_app(
     fetcher: PageFetcher,
     spotify: SpotifyClient,
     sessions: SessionStore,
+    chart_limiter: RateLimiter | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Billboard → Spotify Playlist")
-    secure_cookie = settings.frontend_url.startswith("https://")
+    secure_cookie = settings.cookie_secure
+    limiter = chart_limiter or RateLimiter(CHART_RATE_LIMIT, CHART_RATE_WINDOW)
 
     def require_same_origin(request: Request) -> None:
-        """状態を変更するリクエストはフロントエンドのオリジンからのみ受け付ける（CSRF対策）。"""
+        """状態を変更するリクエストはフロントエンドのオリジンからのみ受け付ける（CSRF対策）。
+
+        Origin が無いときは Sec-Fetch-Site: same-origin の場合だけ許し、どちらも無ければ拒否する。
+        """
         origin = request.headers.get("origin")
-        if origin is not None and origin != _origin(settings.frontend_url):
+        if origin is not None:
+            allowed = origin == _origin(settings.frontend_url)
+        else:
+            allowed = request.headers.get("sec-fetch-site") == "same-origin"
+        if not allowed:
             raise HTTPException(status_code=403, detail="許可されていないオリジンです")
 
     def current_session(
@@ -87,12 +98,30 @@ def create_app(
         session = sessions.get(sid or "")
         return (sid, session) if sid and session else None
 
-    same_origin = [Depends(require_same_origin)]
+    CurrentSession = Annotated[tuple[str, Session] | None, Depends(current_session)]
+
+    def require_csrf(request: Request, current: CurrentSession) -> None:
+        """ログイン中のセッションでは、セッションに紐付く CSRF トークンをヘッダーで要求する。"""
+        if current is None:
+            return
+        token = request.headers.get(CSRF_HEADER, "")
+        if not secrets.compare_digest(token.encode(), current[1].csrf_token.encode()):
+            logger.warning("CSRF token mismatch for %s", request.url.path)
+            raise HTTPException(status_code=403, detail="不正なリクエストです（CSRFトークン）")
+
+    # same_origin → セッション → CSRF の順に判定する
+    protected = [Depends(require_same_origin), Depends(require_csrf)]
 
     # ---- チャート ----
 
-    @app.post("/api/charts", response_model=ChartResponse, dependencies=same_origin)
-    def post_chart(body: ChartRequest) -> ChartResponse:
+    @app.post("/api/charts", response_model=ChartResponse, dependencies=protected)
+    def post_chart(body: ChartRequest, current: CurrentSession) -> ChartResponse:
+        if current is None:
+            raise HTTPException(status_code=401, detail="Spotify にログインしてください")
+        if not limiter.allow(current[1].user_id):
+            logger.warning("chart rate limit exceeded")
+            detail = "リクエストが多すぎます。しばらく待ってから再度お試しください"
+            raise HTTPException(status_code=429, detail=detail)
         source_id = db.add_source(body.url.strip())
         try:
             page = process_chart_page(db, source_id, fetcher)
@@ -158,21 +187,31 @@ def create_app(
         response = RedirectResponse(settings.frontend_url + "/", status_code=302)
         response.delete_cookie(STATE_COOKIE, path="/auth")
         response.set_cookie(
-            SESSION_COOKIE, sid, path="/", httponly=True, samesite="lax", secure=secure_cookie
+            SESSION_COOKIE,
+            sid,
+            max_age=SESSION_MAX_AGE,
+            path="/",
+            httponly=True,
+            samesite="lax",
+            secure=secure_cookie,
         )
         return response
 
     @app.get("/api/me")
-    def me(current: Annotated[tuple[str, Session] | None, Depends(current_session)]) -> dict:
+    def me(current: CurrentSession) -> dict:
         if current is None:
             return {"authenticated": False}
         _, session = current
-        return {"authenticated": True, "id": session.user_id, "display_name": session.display_name}
+        return {
+            "authenticated": True,
+            "id": session.user_id,
+            "display_name": session.display_name,
+            # 同一オリジンの画面だけが読める（CORS 未設定）。状態を変える POST に付けて送り返す
+            "csrf_token": session.csrf_token,
+        }
 
-    @app.post("/auth/logout", status_code=204, dependencies=same_origin)
-    def logout(
-        current: Annotated[tuple[str, Session] | None, Depends(current_session)],
-    ) -> Response:
+    @app.post("/auth/logout", status_code=204, dependencies=protected)
+    def logout(current: CurrentSession) -> Response:
         if current is not None:
             sessions.delete(current[0])
         response = Response(status_code=204)
@@ -185,12 +224,9 @@ def create_app(
         "/api/playlists",
         status_code=201,
         response_model=PlaylistResponse,
-        dependencies=same_origin,
+        dependencies=protected,
     )
-    async def create_playlist(
-        body: PlaylistRequest,
-        current: Annotated[tuple[str, Session] | None, Depends(current_session)],
-    ) -> PlaylistResponse:
+    async def create_playlist(body: PlaylistRequest, current: CurrentSession) -> PlaylistResponse:
         if current is None:
             raise HTTPException(status_code=401, detail="Spotify にログインしてください")
         sid, session = current
