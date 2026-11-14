@@ -1,0 +1,16 @@
+# ローカル開発用。Celeryのブローカー（Redis）だけをコンテナで動かす。
+# アプリ本体は venv のまま動かす（backend / frontend と同じ進め方に揃えるため）。
+#
+#   docker compose up -d redis     起動
+#   docker compose down            停止
+services:
+  redis:
+    image: redis:7
+    container_name: line-bot-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5

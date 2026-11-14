@@ -5,6 +5,12 @@
       "outputDir": "out",
       "buildArgs": [],
       "mock": true
+    },
+    {
+      "slug": "task-box-it-develop",
+      "outputDir": "out",
+      "buildArgs": [],
+      "mock": true
     }
   ]
 }
