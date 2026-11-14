@@ -67,10 +67,10 @@ portfolios/spotify-billboard-playlist/
 |---|---|
 | `/`、`/index.php`、`/s/`（フラグメント `#…` は無視） | トップページ |
 | `/php/chart.php?date=D`、`/php/dispHot100.php?date=D`、`/s/php/…` の同名 | `https://billboard.mryogaku.com/php/dispHot100.php?date=D` |
-| 上記以外の同一ホストのパス（例: `/php/artist.php?artist=…`） | `https://billboard.mryogaku.com<パス>?<クエリ>`（フラグメントは除く）をそのまま取得し、Hot 100 と同じセレクター（`table tbody tr` の順位・曲名 `<b>`）で解析する。曲が1件も取れなければ `ParseError` |
+| 上記以外の同一ホストのパス（例: `/php/artist.php?artist=…`） | `https://billboard.mryogaku.com<パス>?<クエリ>`（フラグメントは除く）をそのまま取得する。`<script>` 内に `$('#data-table').append(…)` がある詳細表示形式なら `parse_detail_page` で、なければ Hot 100 と同じセレクター（`table tbody tr` の順位・曲名 `<b>`）で解析する（`parse_chart_page` が中身で振り分ける）。曲が1件も取れなければ `ParseError`。詳細は [spotify-detail-page-scraping/design.md](../spotify-detail-page-scraping/design.md) |
 | `chart.php`・`dispHot100.php` で `D` が `YYYY-MM-DD` でない、ホスト不一致、ユーザー情報・ポート指定付き | `InvalidChartUrl` |
 
-取得は常に `https://` で行う。`chart.php` は曲データをJavaScript文字列で埋め込み上位40曲しか持たないため、同日付の `dispHot100.php`（素直な `<table>` で100曲）に寄せる（2026-11-13 に実ページで構造を確認）。その他のページは同じ表構造であれば使える。2026-11-13 時点では、トップページからリンクされたランキング系ページ（`alltime.php`・`no1weeks.php` など）はこの構造ではなく、解析に失敗する。
+取得は常に `https://` で行う。`chart.php` は曲データをJavaScript文字列で埋め込み上位40曲しか持たないため、同日付の `dispHot100.php`（素直な `<table>` で100曲）に寄せる（2026-11-13 に実ページで構造を確認）。その他のページは同じ表構造であれば使える。ランキング系ページ（`alltime.php` など）のように曲を `<script>` に埋め込んだ詳細表示形式なら `parse_detail_page` で解析する。詳細は [docs/specs/spotify-detail-page-scraping/design.md](../spotify-detail-page-scraping/design.md)。
 
 曲数が100を超えるページでは、フロントエンドが先頭100曲だけを `POST /api/playlists` に送り、その旨を結果に表示する。
 
