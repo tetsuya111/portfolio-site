@@ -1,0 +1,13 @@
+---
+// 「ポートフォリオ」の見出しの下に置く注意書き。配信しているアプリはバックエンドをブラウザ内のモックに
+// 置き換えて S3 だけで動かしているため（docs/apps.md）、データを使う機能は動かないことを伝える。
+interface Props {
+  class?: string;
+}
+
+const { class: className } = Astro.props;
+---
+
+<p class:list={["text-sm text-danger", className]}>
+  ※ モックのため画面のみ動作します。サービスの詳細については直接ご連絡ください。
+</p>
