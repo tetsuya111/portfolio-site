@@ -15,7 +15,7 @@ describe("build output", () => {
     const top = html(".");
     expect(top).toContain("このポートフォリオサイト");
     expect(top).toContain("Astro");
-    expect(top).toMatch(/href="https:\/\/example\.com\/"[^>]*target="_blank"|target="_blank"[^>]*href="https:\/\/example\.com\/"/);
+    expect(top).toMatch(/href="\/"[^>]*target="_blank"|target="_blank"[^>]*href="\/"/);
     expect(top).toContain('href="/portfolios/sample-portfolio-site/"');
   });
 
