@@ -4,11 +4,14 @@ import argparse
 import sys
 from pathlib import Path
 
-from skillsheet import readers
+from skillsheet import fetch, readers
 from skillsheet.errors import SkillsheetError
 
 
 def _extract(source: str) -> str:
+    if fetch.has_scheme(source):
+        body, ext = fetch.fetch(source)
+        return readers.read_bytes(body, ext)
     return readers.read_file(Path(source))
 
 
