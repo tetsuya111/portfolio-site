@@ -157,5 +157,37 @@ class BuildImageTest(TempDirMixin, unittest.TestCase):
             build_image(self.tmp / "be", "my-app", self.tmp, run=run)
 
 
+class WriteDockerFilesEnvTest(TempDirMixin, unittest.TestCase):
+    ENV = {"FRONTEND_URL": "https://p.example.com/apps/a/", "CORS_ORIGINS": "https://p.example.com"}
+
+    def dockerfile(self):
+        return (self.tmp / "Dockerfile").read_text(encoding="utf-8")
+
+    def test_python_env_lines_before_expose(self):
+        write(self.tmp / "requirements.txt", "")
+        write(self.tmp / "main.py", "")
+        write_docker_files(Backend(self.tmp, "python"), self.ENV)
+        text = self.dockerfile()
+        self.assertIn('ENV CORS_ORIGINS="https://p.example.com"\nENV FRONTEND_URL="https://p.example.com/apps/a/"\n'
+                      "EXPOSE", text)
+
+    def test_node_env_lines_before_expose(self):
+        write_json(self.tmp / "package.json", {"scripts": {"start": "node s.js"}})
+        write_docker_files(Backend(self.tmp, "node"), {"FRONTEND_URL": "https://p.example.com"})
+        self.assertIn('ENV FRONTEND_URL="https://p.example.com"\nEXPOSE', self.dockerfile())
+
+    def test_no_env_lines_without_env(self):
+        write(self.tmp / "requirements.txt", "")
+        write_docker_files(Backend(self.tmp, "python"))
+        self.assertNotIn("FRONTEND_URL", self.dockerfile())
+
+    def test_existing_dockerfile_gets_warning_with_lines(self):
+        write(self.tmp / "requirements.txt", "")
+        write(self.tmp / "Dockerfile", "FROM scratch\nCMD [\"x\"]\n")
+        r = write_docker_files(Backend(self.tmp, "python"), {"FRONTEND_URL": "https://p.example.com"})
+        self.assertEqual(self.dockerfile(), "FROM scratch\nCMD [\"x\"]\n")
+        self.assertTrue(any('ENV FRONTEND_URL="https://p.example.com"' in w for w in r.warnings))
+
+
 if __name__ == "__main__":
     unittest.main()

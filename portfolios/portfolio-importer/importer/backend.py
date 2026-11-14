@@ -95,7 +95,12 @@ def _cmd_line(cmd: list[str] | None) -> str:
     return f"CMD {json.dumps(cmd, ensure_ascii=False)}\n"
 
 
-def _python_dockerfile(d: Path) -> tuple[str, bool]:
+def _env_lines(env: dict[str, str]) -> str:
+    # 値は envvars で引用符などを含まない URL に限定済み
+    return "".join(f"ENV {name}={json.dumps(env[name])}\n" for name in sorted(env))
+
+
+def _python_dockerfile(d: Path, env: dict[str, str]) -> tuple[str, bool]:
     # 依存は requirements.txt を優先し、pyproject.toml は [project] があるときだけパッケージとして入れる
     # （ツール設定だけの pyproject.toml で pip install . すると依存が入らない・失敗するため）
     steps = []
@@ -117,13 +122,14 @@ def _python_dockerfile(d: Path) -> tuple[str, bool]:
         "COPY --chown=appuser:appuser . .\n"
         f"RUN {install}\n"
         "USER appuser\n"
-        f"EXPOSE {PYTHON_PORT}\n"
+        + _env_lines(env)
+        + f"EXPOSE {PYTHON_PORT}\n"
         + _cmd_line(cmd)
     )
     return text, cmd is not None
 
 
-def _node_dockerfile(d: Path) -> tuple[str, bool]:
+def _node_dockerfile(d: Path, env: dict[str, str]) -> tuple[str, bool]:
     pkg = read_package_json(d / "package.json") or {}
     build = has_script(pkg, "build")
     install = "npm ci" if (d / "package-lock.json").is_file() else "npm install"
@@ -143,21 +149,27 @@ def _node_dockerfile(d: Path) -> tuple[str, bool]:
         # build スクリプトがあれば、開発用の依存を使ってビルドしてから取り除く
         + ("RUN npm run build && npm prune --omit=dev\n" if build else "")
         + "ENV NODE_ENV=production\n"
-        f"EXPOSE {NODE_PORT}\n"
+        + _env_lines(env)
+        + f"EXPOSE {NODE_PORT}\n"
         + _cmd_line(cmd)
     )
     return text, cmd is not None
 
 
-def write_docker_files(backend: Backend) -> DockerResult:
+def write_docker_files(backend: Backend, env: dict[str, str] | None = None) -> DockerResult:
+    """Dockerfile・.dockerignore を生成する。env（フロントエンドの URL など）は Dockerfile の ENV に書く。"""
+    env = env or {}
     d = backend.dir
     dockerfile = d / "Dockerfile"
     warnings: list[str] = []
     if dockerfile.exists():
         warnings.append(f"{dockerfile.name} が既にあるため上書きしませんでした")
+        if env:
+            warnings.append(f"{dockerfile.name} が既にあるため、次の行を手で追記してください: "
+                            + " / ".join(_env_lines(env).splitlines()))
         has_cmd = bool(_HAS_CMD.search(dockerfile.read_text(encoding="utf-8", errors="replace")))
     else:
-        text, has_cmd = _python_dockerfile(d) if backend.kind == "python" else _node_dockerfile(d)
+        text, has_cmd = _python_dockerfile(d, env) if backend.kind == "python" else _node_dockerfile(d, env)
         dockerfile.write_text(text, encoding="utf-8", newline="\n")
     if not has_cmd:
         warnings.append("Dockerfile に起動コマンド（CMD）がないため、イメージを作成できません。CMD を追記してください")
