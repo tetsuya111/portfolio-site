@@ -27,11 +27,11 @@ else:
     app_url = None
 ```
 
-`write_portfolio_md` は `app_url` が与えられればそれを採用し、なければメタデータの `url` を `_HTTP` で検証して採用する。`app_url` はコード内で組み立てた値（スラッグは `resolve_target` で検証済み）のため再検証しない。`app_url` がメタデータの http(s) の `url` を置き換えるときは警告に出す（URL のパスが `app_url` と同じなら同じアプリなので出さない）。
+`write_portfolio_md` は `app_url` が与えられればそれを採用し、なければメタデータの `url` を `_HTTP` で検証して採用する。`app_url` はコード内で組み立てた値（スラッグは `resolve_target` で検証済み）のため再検証しない。`app_url` がメタデータの http(s) の `url` を置き換えるときは警告に出す（完全一致のときだけ出さない。別ホストの同じパスは別のアプリでありうるため）。
 
 ### スキーマ（R2-1, R2-2）
 
-- `sitePath`: `/` で始まり、2文字目が `/`・バックスラッシュでない文字列。空白（JS の `\s`）・バックスラッシュ・制御文字（C0・DEL・C1）・ゼロ幅文字（U+200B〜U+200F・U+2060・U+FEFF）を含まないもの。正規表現の正本は `portfolio-site/src/lib/schemas.ts`。
+- `sitePath`: `/` で始まり、2文字目が `/`・バックスラッシュでない文字列。空白（JS の `\s`）・バックスラッシュ・制御文字（C0・DEL・C1）・ゼロ幅文字・双方向制御文字・ソフトハイフンなどの見えない文字を含まないもの。正規表現の正本は `portfolio-site/src/lib/schemas.ts`。
 - `portfolioUrl = z.union([httpUrl, sitePath])`。検証エラーは「http(s) の URL か、/ で始まるサイト内のパス」と分かるメッセージにする。
 - `profileSchema.links` は `httpUrl` のまま。
 

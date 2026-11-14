@@ -72,10 +72,16 @@ class WritePortfolioMdTest(TempDirMixin, unittest.TestCase):
         self.assertIn('url: "/apps/my-app/"', self.out.read_text(encoding="utf-8"))
         self.assertTrue(any("https://my-app.example.com/" in w for w in warnings))
 
-    def test_no_warning_when_metadata_url_is_same_app(self):
+    def test_warns_even_when_only_the_path_matches(self):
+        # 別ホストの同じパスは別のアプリでありうるため、完全一致でなければ警告する
         write(self.tmp / "portfolios/docs/my-app.md",
-              "---\ntitle: x\nurl: https://portfolio.example.com/apps/my-app/\n---\n")
+              "---\ntitle: x\nurl: https://my-app.vercel.app/apps/my-app/\n---\n")
         _, warnings = self.call(app_url="/apps/my-app/")
+        self.assertTrue(any("https://my-app.vercel.app/apps/my-app/" in w for w in warnings))
+
+    def test_no_warning_when_metadata_url_equals_app_url(self):
+        write(self.tmp / "portfolios/docs/my-app.md", "---\ntitle: x\nurl: https://ex.com/apps/my-app/\n---\n")
+        _, warnings = self.call(app_url="https://ex.com/apps/my-app/")
         self.assertEqual(warnings, [])
 
     def test_relative_url_in_metadata_is_dropped(self):

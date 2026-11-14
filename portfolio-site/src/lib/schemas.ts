@@ -8,12 +8,12 @@ const httpUrl = z.url({ protocol: /^https?$/ });
 /**
  * サイト内のパス（例 /apps/<スラッグ>/）。表示中のドメインで開くため、本番・dev で同じ md を使える。
  * //host・/\host はブラウザが別ホストとして解釈し、\ は / に読み替えられるため、空白・制御文字
- * （C0・DEL・C1）・ゼロ幅文字（md では見えず、見た目と違うパスになる）とともに拒否する。
+ * （C0・DEL・C1）・ゼロ幅文字・双方向制御文字・ソフトハイフン（md では見えず、見た目と違うパスになる）とともに拒否する。
  */
 const sitePath = z
   .string()
   // eslint-disable-next-line no-control-regex
-  .regex(/^\/(?![/\\])[^\s\\\x00-\x1f\x7f-\x9f\u200b-\u200f\u2060\ufeff]*$/);
+  .regex(/^\/(?![/\\])[^\s\\\x00-\x1f\x7f-\x9f\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]*$/);
 
 /** 掲載 md の url。http(s) の URL かサイト内のパスを受け付ける（profile の links は http(s) のみ）。 */
 const portfolioUrl = z.union([httpUrl, sitePath], {
