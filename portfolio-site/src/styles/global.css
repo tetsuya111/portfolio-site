@@ -92,8 +92,11 @@
   color: var(--theme-on-accent);
   font-weight: 600;
   box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  &:hover {
-    opacity: 0.9;
+  /* Tailwind の hover: と同じく、ホバーできる端末だけに当てる（タッチ端末で押した後に残らないように） */
+  @media (hover: hover) {
+    &:hover {
+      opacity: 0.9;
+    }
   }
 }
 

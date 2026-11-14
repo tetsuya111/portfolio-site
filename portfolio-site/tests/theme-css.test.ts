@@ -80,6 +80,9 @@ const TEXT_PAIRS: [string, string][] = [
 const NON_TEXT_PAIRS: [string, string][] = [
   ["focus", "base"],
   ["focus", "surface"],
+  // 冒頭のパネルの上のボタン
+  ["focus", "hero-from"],
+  ["focus", "hero-to"],
 ];
 
 it("contrast() matches known values", () => {
