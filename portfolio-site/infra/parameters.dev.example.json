@@ -1,0 +1,7 @@
+{
+  "Parameters": {
+    "GitHubRepoUrl": "https://github.com/owner/repo.git",
+    "DeployBranch": "dev-release",
+    "DeployPath": ""
+  }
+}

@@ -1,0 +1,166 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  ポートフォリオサイト（portfolio-site/）の dev 環境。
+  DeployBranch（既定 dev-release）への push でテスト・lint・ビルドし、成功したら成果物を dev 用 S3 バケットにアップロードする。
+  S3 へのアップロードだけを行い、CloudFront・独自ドメインは作らない（本番は template.yaml の別スタック）。
+
+Parameters:
+  GitHubRepoUrl:
+    Type: String
+    Description: GitHub リポジトリの HTTPS URL（例 https://github.com/owner/repo.git）。CodeBuild に GitHub の認証情報を事前登録しておく
+    AllowedPattern: "^https://github\\.com/[^/]+/[^/]+$"
+  DeployBranch:
+    Type: String
+    Default: dev-release
+    Description: push されたときに dev 環境へアップロードするブランチ
+    AllowedPattern: "^[A-Za-z0-9._/-]+$"
+  DeployPath:
+    Type: String
+    Default: ""
+    Description: >-
+      アップロード先のバケット内のパス（例 preview、feature/foo）。先頭・末尾に / を付けない。
+      未指定（空）ならバケット直下にアップロードする
+    AllowedPattern: "^$|^[A-Za-z0-9_-][A-Za-z0-9._-]*(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$"
+    ConstraintDescription: 英数字・. _ - を / で区切ったパス（先頭・末尾の /、空のセグメント、. で始まるセグメントは不可）
+
+Conditions:
+  HasDeployPath: !Not [!Equals [!Ref DeployPath, ""]]
+
+Resources:
+  # ===== アップロード先 =====
+  DevSiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+
+  DevSiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DevSiteBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt DevSiteBucket.Arn
+              - !Sub "${DevSiteBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  # ===== CI（CodeBuild: dev へのアップロード用） =====
+  BuildLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/codebuild/${AWS::StackName}"
+      RetentionInDays: 30
+
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+            # このアカウントのこのプロジェクトからだけ引き受けられるようにする（confused deputy 対策）
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub "arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:project/${AWS::StackName}-deploy"
+      Policies:
+        # 本番の S3・CloudFront には触れない。dev バケット（DeployPath 指定時はそのパス以下）だけを読み書きする
+        - PolicyName: portfolio-site-dev-build
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: WriteBuildLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "${BuildLogGroup.Arn}"
+              - Sid: ListDevBucket
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt DevSiteBucket.Arn
+              - Sid: SyncDevObjects
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !If
+                  - HasDeployPath
+                  - !Sub "${DevSiteBucket.Arn}/${DeployPath}/*"
+                  - !Sub "${DevSiteBucket.Arn}/*"
+
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${AWS::StackName}-deploy"
+      Description: portfolio-site の DeployBranch への push 時のテスト・lint・ビルドと dev 用 S3 へのアップロード
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      TimeoutInMinutes: 20
+      # アップロード（s3 sync）が並行して走り、古い成果物で上書きされるのを防ぐ
+      ConcurrentBuildLimit: 1
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Source:
+        # GitHub の認証情報は事前に CodeBuild へ登録しておく（テンプレートには含めない）
+        Type: GITHUB
+        Location: !Ref GitHubRepoUrl
+        BuildSpec: portfolio-site/buildspec.dev.yml
+        ReportBuildStatus: true
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:5.0
+        EnvironmentVariables:
+          - Name: SITE_BUCKET
+            Value: !Ref DevSiteBucket
+          - Name: DEPLOY_PATH
+            Value: !Ref DeployPath
+          - Name: DEPLOY_BRANCH
+            Value: !Ref DeployBranch
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Ref BuildLogGroup
+      Triggers:
+        Webhook: true
+        FilterGroups:
+          - - Type: EVENT
+              Pattern: PUSH
+            - Type: HEAD_REF
+              Pattern: !Sub "^refs/heads/${DeployBranch}$"
+            - Type: FILE_PATH
+              Pattern: ^portfolio-site/
+
+Outputs:
+  BucketName:
+    Description: dev 環境のファイルを置く S3 バケット
+    Value: !Ref DevSiteBucket
+  DeployUri:
+    Description: ビルド成果物のアップロード先
+    Value: !If
+      - HasDeployPath
+      - !Sub "s3://${DevSiteBucket}/${DeployPath}/"
+      - !Sub "s3://${DevSiteBucket}/"

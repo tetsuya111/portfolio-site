@@ -30,3 +30,28 @@ describe("infra/parameters.example.json", () => {
     expect(ignore).toContain("infra/parameters.json");
   });
 });
+
+describe("infra/parameters.dev.example.json", () => {
+  const devTemplate = loadCfnTemplate(join(root, "infra", "template.dev.yaml"));
+  const devExample: any = JSON.parse(readFileSync(join(root, "infra", "parameters.dev.example.json"), "utf8"));
+
+  it('is a { "Parameters": { name: string } } object', () => {
+    expect(Object.keys(devExample)).toEqual(["Parameters"]);
+    for (const value of Object.values(devExample.Parameters)) expect(typeof value).toBe("string");
+  });
+
+  it("sets every dev template parameter exactly once", () => {
+    expect(Object.keys(devExample.Parameters).sort()).toEqual(Object.keys(devTemplate.Parameters).sort());
+  });
+
+  it("uses the dev template defaults for parameters that have one", () => {
+    for (const [name, p] of Object.entries<any>(devTemplate.Parameters)) {
+      if (p.Default !== undefined) expect(devExample.Parameters[name]).toBe(String(p.Default));
+    }
+  });
+
+  it("keeps the real dev parameter file out of git", () => {
+    const ignore = readFileSync(join(root, ".gitignore"), "utf8").split(/\r?\n/);
+    expect(ignore).toContain("infra/parameters.dev.json");
+  });
+});
