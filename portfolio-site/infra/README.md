@@ -82,11 +82,12 @@ cp infra/parameters.example.json infra/parameters.json  # 値を書き換える
 |---|---|---|
 | `main` | 本番のブランチ。CI/CD・本番への自動デプロイ | PR でテスト（`<本番スタック名>-test`）。push でテスト後に本番へデプロイ（本番スタックの `DeployBranch=main`） |
 | `dev-release` | dev 環境への自動デプロイ用 | push でテスト後に dev 環境へデプロイ（dev スタックの `DeployBranch=dev-release`） |
-| `dev-main` | 開発用のブランチ | なし（`dev-main` 向けの PR ではテストされず、push してもデプロイされない。`main` への PR を出した時点でテストされる） |
+| `dev-main` | 開発用のブランチ | なし（`dev-main` 向けの PR ではテストされず、push してもデプロイされない。`portfolio-site/` 配下を変更していれば、`main` への PR でテストされる） |
 
 どれも `portfolio-site/` 配下を変更したときだけ動きます（詳細は次の「CI / デプロイ」）。
 
 PR のテスト（`<本番スタック名>-test`）は、本番スタックの `DeployBranch`（`main`）を向き先とする PR だけで動きます。GitHub のブランチ保護で `main` 以外のブランチ（`dev-main` など）にこのテストの成功を必須にしていると、チェックが来ずにマージできなくなるため、必須設定は `main` だけにします。
+なお、作成済みの PR の向き先を後から `main` に変えただけでは、テストが始まらないことがあります（向き先の変更は「作成・更新・再オープン」のイベントに当たらないため）。そのときは PR にコミットを追加して push するか、PR を閉じて再オープンします。
 
 ## CI / デプロイ
 

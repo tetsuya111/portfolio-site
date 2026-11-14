@@ -120,6 +120,11 @@ describe("infra/template.yaml", () => {
       expect(groups[0].find((f: any) => f.Type === "BASE_REF")?.Pattern).toEqual({
         "Fn::If": ["HasDeployBranch", { "Fn::Sub": "^refs/heads/${DeployBranch}$" }, "^refs/heads/"],
       });
+      const [, withBranch, anyBranch] = groups[0].find((f: any) => f.Type === "BASE_REF").Pattern["Fn::If"];
+      const toMain = new RegExp(withBranch["Fn::Sub"].replace("${DeployBranch}", "main"));
+      expect(toMain.test("refs/heads/main")).toBe(true);
+      for (const ng of ["refs/heads/dev-main", "refs/heads/dev-release", "refs/heads/main-old"]) expect(toMain.test(ng), ng).toBe(false);
+      expect(new RegExp(anyBranch).test("refs/heads/dev-release")).toBe(true);
       // デプロイ先の情報を渡さない
       expect(testProject.Environment.EnvironmentVariables ?? []).toEqual([]);
     });
