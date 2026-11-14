@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadEnv } from "vite";
 import { describe, expect, it } from "vitest";
+import { parseMarkdown } from "../src/lib/markdown-file";
 import { resolveTheme } from "../src/lib/theme";
 import { siteConfig } from "../src/site.config";
 
@@ -44,7 +45,11 @@ describe("build output", () => {
   });
 
   it("renders the profile on the about page", () => {
-    expect(html("about")).toContain("山田 太郎");
+    // 名前はプロフィールの差し替えで変わるため、profile.md の frontmatter から読む
+    const profile = parseMarkdown(readFileSync(join(import.meta.dirname, "..", "src", "content", "profile", "profile.md"), "utf8"));
+    const name = profile.data.name;
+    expect(typeof name === "string" && name.length > 0).toBe(true);
+    expect(html("about")).toContain(`>${String(name)}</h1>`);
   });
 
   it("lists published articles and excludes drafts", () => {
