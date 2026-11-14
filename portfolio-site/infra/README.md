@@ -106,7 +106,9 @@ Webhook が反応するのは、`portfolio-site/` 配下のファイルを変更
 
 ## dev 環境
 
-本番に出す前の確認用に、ビルド成果物を dev 用の S3 バケットへアップロードするだけの別スタックを [template.dev.yaml](template.dev.yaml) で作れます（CloudFront・独自ドメインは作らず、バケットは非公開）。本番のスタック・buildspec には影響しません。
+本番に出す前の確認用に、ビルド成果物を dev 用の S3 バケットへアップロードするだけの別スタックを [template.dev.yaml](template.dev.yaml) で作れます（CloudFront・独自ドメインは作らず、バケットは非公開）。本番のスタック・buildspec は変更しません。
+
+> **注意**: 本番スタックの `DeployBranch` が空のままだと、`dev-release` への push も本番の「任意のブランチへの push」に当たり、**本番にもデプロイされる**。dev 環境を使うときは、本番スタックの `DeployBranch` に `main` などを指定しておく。
 
 ```mermaid
 flowchart LR
@@ -126,7 +128,7 @@ flowchart LR
 | `DeployBranch` | | `dev-release` | push されたときに dev へアップロードするブランチ |
 | `DeployPath` | | `""`（空） | アップロード先のバケット内のパス（例 `preview`）。先頭・末尾に `/` を付けない。空ならバケット直下 |
 
-本番と同じく、GitHub の認証情報を登録したリージョン（us-east-1）に作ります。スタック名は本番と別にします（CodeBuild のプロジェクト名 `<スタック名>-deploy` が重ならないようにするため）。
+本番と同じく、GitHub の認証情報を登録したリージョン（us-east-1）に作ります。スタック名は本番と別にし、`<本番のスタック名>-test` も避けます（CodeBuild のプロジェクト名 `<スタック名>-deploy` やロググループ `/aws/codebuild/<スタック名>` が本番のものと重ならないようにするため。例 `portfolio-site-dev`）。
 
 ```bash
 cp infra/parameters.dev.example.json infra/parameters.dev.json  # 値を書き換える
@@ -136,7 +138,7 @@ aws cloudformation deploy --region us-east-1 --stack-name portfolio-site-dev \
   --capabilities CAPABILITY_IAM
 ```
 
-`DeployBranch` に `portfolio-site/` 配下を変更するコミットを push すると、テスト・lint・ビルドを実行し、成功したら `dist/` を出力 `DeployUri`（`s3://<バケット>/<DeployPath>/`）へ `--delete` 付きで同期します。手動開始のビルドやほかのブランチではアップロードしません。dev のロールは dev バケット（`DeployPath` 指定時はそのパス以下）とログにしか権限がなく、本番の S3・CloudFront には触れません。
+`DeployBranch` に `portfolio-site/` 配下を変更するコミットを push すると、テスト・lint・ビルドを実行し、成功したら `dist/` を出力 `DeployUri`（`s3://<バケット>/<DeployPath>/`）へ `--delete` 付きで同期します。手動開始のビルドやほかのブランチではアップロードしません。push に含まれるコミットが `portfolio-site/` 配下を変更していない場合（既存のコミットを指すブランチの作成だけ、など）もビルドは始まらないため、dev の内容は前回のままになります。`DeployPath` が空のときはバケット直下に `--delete` で同期するため、バケット内のほかのパスに置いたファイルは削除されます。dev のロールは dev バケット（`DeployPath` 指定時はそのパス以下）とログにしか権限がなく、本番の S3・CloudFront には触れません。
 
 dev スタックを削除するときは、先に dev バケットを空にしてください（中身が残っているとバケットの削除に失敗します）。
 

@@ -78,11 +78,23 @@ describe("infra/template.dev.yaml", () => {
     const trust = JSON.stringify(role.AssumeRolePolicyDocument);
     expect(trust).toContain("aws:SourceAccount");
     expect(trust).toContain("${AWS::StackName}-deploy");
-    const stmts = role.Policies.flatMap((p: any) => p.PolicyDocument.Statement);
+    const stmts = role.Policies.flatMap((p: any) => p.PolicyDocument.Statement).flatMap((s: any) =>
+      s["Fn::If"] ? s["Fn::If"].slice(1) : [s],
+    );
     const actions = stmts.flatMap((s: any) => [s.Action].flat());
     for (const a of actions) expect(a).not.toContain("*");
     expect(actions.some((a: string) => a.startsWith("cloudfront:"))).toBe(false);
     const objects = stmts.find((s: any) => [s.Action].flat().includes("s3:PutObject"));
+    // DeployPath 指定時は一覧もそのパス以下に限定する
+    const list = role.Policies.flatMap((p: any) => p.PolicyDocument.Statement).find(
+      (s: any) => s["Fn::If"] !== undefined,
+    );
+    expect(list["Fn::If"][0]).toBe("HasDeployPath");
+    const [withPath, withoutPath] = list["Fn::If"].slice(1);
+    expect(withPath.Action).toBe("s3:ListBucket");
+    expect(withPath.Condition.StringLike["s3:prefix"]).toEqual([{ "Fn::Sub": "${DeployPath}/*" }]);
+    expect(withoutPath.Action).toBe("s3:ListBucket");
+    expect(withoutPath.Condition).toBeUndefined();
     expect(objects.Resource).toEqual({
       "Fn::If": ["HasDeployPath", { "Fn::Sub": "${DevSiteBucket.Arn}/${DeployPath}/*" }, { "Fn::Sub": "${DevSiteBucket.Arn}/*" }],
     });
