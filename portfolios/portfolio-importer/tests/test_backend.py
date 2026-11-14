@@ -188,6 +188,18 @@ class WriteDockerFilesEnvTest(TempDirMixin, unittest.TestCase):
         self.assertEqual(self.dockerfile(), "FROM scratch\nCMD [\"x\"]\n")
         self.assertTrue(any('ENV FRONTEND_URL="https://p.example.com"' in w for w in r.warnings))
 
+    def test_existing_dockerfile_with_same_env_is_not_warned(self):
+        write(self.tmp / "requirements.txt", "")
+        write(self.tmp / "Dockerfile", 'FROM scratch\nENV FRONTEND_URL="https://p.example.com"\nCMD ["x"]\n')
+        r = write_docker_files(Backend(self.tmp, "python"),
+                               {"FRONTEND_URL": "https://p.example.com", "CORS_ORIGIN": "https://p.example.com"})
+        env_warnings = [w for w in r.warnings if "ENV" in w]
+        self.assertEqual(len(env_warnings), 1)
+        self.assertIn("CORS_ORIGIN", env_warnings[0])
+        self.assertNotIn("FRONTEND_URL", env_warnings[0])
+        r = write_docker_files(Backend(self.tmp, "python"), {"FRONTEND_URL": "https://p.example.com"})
+        self.assertFalse(any("ENV" in w for w in r.warnings))
+
 
 if __name__ == "__main__":
     unittest.main()

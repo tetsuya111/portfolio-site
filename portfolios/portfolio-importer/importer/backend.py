@@ -164,10 +164,12 @@ def write_docker_files(backend: Backend, env: dict[str, str] | None = None) -> D
     warnings: list[str] = []
     if dockerfile.exists():
         warnings.append(f"{dockerfile.name} が既にあるため上書きしませんでした")
-        if env:
-            warnings.append(f"{dockerfile.name} が既にあるため、次の行を手で追記してください: "
-                            + " / ".join(_env_lines(env).splitlines()))
-        has_cmd = bool(_HAS_CMD.search(dockerfile.read_text(encoding="utf-8", errors="replace")))
+        existing = dockerfile.read_text(encoding="utf-8", errors="replace")
+        # 前回の実行で生成した Dockerfile などで、同じ行が既にある変数は案内しない
+        missing = [line for line in _env_lines(env).splitlines() if line not in existing.splitlines()]
+        if missing:
+            warnings.append(f"{dockerfile.name} が既にあるため、次の行を手で追記してください: " + " / ".join(missing))
+        has_cmd = bool(_HAS_CMD.search(existing))
     else:
         text, has_cmd = _python_dockerfile(d, env) if backend.kind == "python" else _node_dockerfile(d, env)
         dockerfile.write_text(text, encoding="utf-8", newline="\n")

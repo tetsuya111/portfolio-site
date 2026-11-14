@@ -43,22 +43,24 @@ def _rel(path: Path, repo_root: Path) -> str:
 _BACKEND_URL_UNUSED = "配信登録できるフロントエンドがないため、--backend-url は使いませんでした"
 
 
-def _frontend_env(frontend, backend_url: str | None) -> tuple[dict[str, str], list[str]]:
-    """apps.json の env に書く内容と警告を返す（配信できないフロントエンドは対象外）。"""
-    if frontend.kind is None:
-        return {}, [_BACKEND_URL_UNUSED] if backend_url is not None else []
-    names = find_frontend_env_names(frontend.dir)
+def _frontend_env(names: list[str], backend_url: str | None) -> tuple[dict[str, str], list[str]]:
+    """--backend-url を apps.json の env に書く内容と警告を返す。names はフロントエンドの環境変数名の候補（順位順）。"""
     if backend_url is None:
-        if not names:
-            return {}, []
-        return {}, [f"フロントエンドが {', '.join(names)} を参照しています。バックエンドの URL は --backend-url を付けて"
-                    f'再実行するか、apps.json の env に {{"{names[0]}": "https://..."}} を書くと反映されます']
+        return {}, []
     if not names:
         return {}, ["--backend-url を書く環境変数名（VITE_・PUBLIC_・NEXT_PUBLIC_ で始まり API・BACKEND・SERVER と URL などを"
                     "含む名前）がフロントエンドに見つからないため、apps.json の env に手で書いてください"]
-    warnings = [f"--backend-url を {names[0]} に設定しました。ほかの候補（{', '.join(names[1:])}）が必要なら apps.json の env に"
-                "手で書いてください"] if len(names) > 1 else []
+    warnings = [f"--backend-url の書き先に {names[0]} を選びました。ほかの候補（{', '.join(names[1:])}）が正しければ"
+                " apps.json の env を直してください"] if len(names) > 1 else []
     return {names[0]: backend_url}, warnings
+
+
+def _suggest_backend_url(names: list[str], env: dict[str, str]) -> list[str]:
+    """--backend-url なしで、候補の名前がどれも env にないときに書き方を案内する。"""
+    if not names or any(n in env for n in names):
+        return []
+    return [f"フロントエンドが {', '.join(names)} を参照しています。バックエンドの URL は --backend-url を付けて"
+            f'再実行するか、apps.json の env に {{"{names[0]}": "https://..."}} を書くと反映されます']
 
 
 def _backend_env(backend_dir: Path, site_url: str | None, slug: str, registered: bool,
@@ -105,10 +107,18 @@ def run_import(args: argparse.Namespace, repo_root: Path, run, today: date) -> d
     if frontend is not None:
         # ルートにフロントエンドがある場合に、バックエンドまで apps/ にコピーしないようにする
         exclude = [backend.dir] if backend is not None and frontend.dir in backend.dir.parents else []
-        env, w = _frontend_env(frontend, args.backend_url)
+        names: list[str] = []
+        if frontend.kind is None:
+            if args.backend_url is not None:
+                warnings.append(_BACKEND_URL_UNUSED)
+        else:
+            names = find_frontend_env_names(frontend.dir, skip_dirs=exclude)
+        env, w = _frontend_env(names, args.backend_url if frontend.kind is not None else None)
         warnings += w
         registered, w, env = register_frontend(frontend, target.slug, repo_root, project, exclude=exclude, env=env)
         warnings += w
+        if args.backend_url is None:
+            warnings += _suggest_backend_url(names, env)
         if registered and backend is not None and backend.dir == frontend.dir:
             warnings.append("フロントエンドとバックエンドが同じディレクトリにあるため、portfolio-site/apps/ にバックエンドの"
                             "ファイルも含まれています。不要なファイルは apps/ から削除してください")

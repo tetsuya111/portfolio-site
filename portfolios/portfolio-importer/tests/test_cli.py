@@ -179,6 +179,12 @@ class CliUrlTest(CliBase, unittest.TestCase):
         self.assertEqual(json.loads(out)["backend"]["env"], {})
         self.assertTrue(any("parameters.json" in w for w in json.loads(out)["warnings"]))
 
+    def test_rerun_without_backend_url_does_not_suggest_when_env_is_set(self):
+        self.run_main(str(self.src), "--backend-url", "https://api.example.com")
+        _, out, _ = self.run_main(str(self.repo / "portfolios/my-app"))
+        self.assertFalse(any("--backend-url" in w for w in json.loads(out)["warnings"]))
+        self.assertEqual(json.loads(out)["frontend"]["env"], {"VITE_API_URL": "https://api.example.com"})
+
     def test_backend_url_with_trailing_newline_is_error(self):
         code, _, _ = self.run_main(str(self.src), "--backend-url", "https://api.example.com\n")
         self.assertEqual(code, 1)

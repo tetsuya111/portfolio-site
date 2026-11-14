@@ -1,8 +1,19 @@
+import re
 import unittest
+from pathlib import Path
 
-from importer.envvars import (HTTPS_URL, find_backend_env_names, find_frontend_env_names, frontend_url_env,
+from importer.envvars import (HTTPS_URL, PUBLIC_ENV_NAME, find_backend_env_names, find_frontend_env_names, frontend_url_env,
                               read_site_url)
 from tests.helpers import TempDirMixin, write, write_json
+
+
+class SameRulesAsManifestTest(unittest.TestCase):
+    def test_patterns_match_apps_manifest_ts(self):
+        ts = (Path(__file__).resolve().parents[3] / "portfolio-site/src/lib/apps-manifest.ts").read_text(encoding="utf-8")
+        for name, pattern in [("PUBLIC_ENV_NAME", PUBLIC_ENV_NAME), ("HTTPS_URL", HTTPS_URL)]:
+            m = re.search(rf"export const {name} = /\^(.*)\$/;", ts)
+            self.assertIsNotNone(m, name)
+            self.assertEqual(m.group(1).replace("\\/", "/"), pattern.pattern, name)
 
 
 class HttpsUrlTest(unittest.TestCase):
@@ -23,12 +34,26 @@ class FindFrontendEnvNamesTest(TempDirMixin, unittest.TestCase):
         write(self.tmp / ".env.example", "PUBLIC_SERVER_ORIGIN=\n# VITE_API_BASE=\nSECRET_API_URL=\n")
         write(self.tmp / "src/App.vue", "import.meta.env.VITE_API_URL\n")
         self.assertEqual(find_frontend_env_names(self.tmp),
-                         ["NEXT_PUBLIC_BACKEND_URL", "PUBLIC_SERVER_ORIGIN", "VITE_API_URL"])
+                         ["NEXT_PUBLIC_BACKEND_URL", "VITE_API_URL", "PUBLIC_SERVER_ORIGIN"])
 
     def test_finds_destructured_and_bracket_access(self):
         write(self.tmp / "src/a.ts", "const { VITE_API_URL } = import.meta.env;\n"
                                      "const b = import.meta.env['VITE_BACKEND_URL'];\n")
         self.assertEqual(find_frontend_env_names(self.tmp), ["VITE_API_URL", "VITE_BACKEND_URL"])
+
+    def test_matches_whole_words_only(self):
+        write(self.tmp / "src/a.ts", "import.meta.env.VITE_FIREBASE_API_KEY; import.meta.env.VITE_GHOST_SERVER_ID;\n")
+        self.assertEqual(find_frontend_env_names(self.tmp), [])
+
+    def test_url_like_names_come_first(self):
+        write(self.tmp / "src/a.ts", "import.meta.env.VITE_API_BASE_PATH; import.meta.env.VITE_API_URL;"
+                                     " import.meta.env.VITE_API_HOST;\n")
+        self.assertEqual(find_frontend_env_names(self.tmp), ["VITE_API_URL", "VITE_API_HOST", "VITE_API_BASE_PATH"])
+
+    def test_skips_nested_backend(self):
+        write(self.tmp / "server/.env.example", "VITE_SERVER_URL=\n")
+        write(self.tmp / "src/a.ts", "import.meta.env.VITE_API_URL\n")
+        self.assertEqual(find_frontend_env_names(self.tmp, skip_dirs=[self.tmp / "server"]), ["VITE_API_URL"])
 
     def test_ignores_node_modules_and_other_extensions(self):
         write(self.tmp / "node_modules/x/index.js", "import.meta.env.VITE_API_URL\n")
@@ -51,6 +76,10 @@ class FindBackendEnvNamesTest(TempDirMixin, unittest.TestCase):
         write(self.tmp / "tests/test_config.py", 'os.getenv("FRONTEND_URL")\n')
         write(self.tmp / "test_main.py", 'os.getenv("CLIENT_URL")\n')
         write(self.tmp / "src/tests/conftest.py", 'os.environ["TEST_CLIENT_URL"]\n')
+        self.assertEqual(find_backend_env_names(self.tmp), [])
+
+    def test_ignores_unrelated_names_with_similar_words(self):
+        write(self.tmp / "cfg.py", 'os.getenv("ORIGINAL_UPLOAD_DIR")\nos.environ["OAUTH_CLIENT_CALLBACK_URL"]\n')
         self.assertEqual(find_backend_env_names(self.tmp), [])
 
     def test_ignores_public_names_and_nested_frontend(self):

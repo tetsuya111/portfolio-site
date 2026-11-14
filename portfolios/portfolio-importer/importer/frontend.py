@@ -26,8 +26,8 @@ def _load_manifest(path: Path) -> dict:
     return data
 
 
-def _write_manifest(apps: Path, manifest_path: Path, manifest: dict) -> None:
-    apps.mkdir(parents=True, exist_ok=True)
+def _write_manifest(manifest_path: Path, manifest: dict) -> None:
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
 
 
@@ -77,12 +77,12 @@ def register_frontend(frontend: Frontend, slug: str, repo_root: Path, project: P
         changed, w = _merge_env(entry, env, slug)
         warnings += w
         if changed:
-            _write_manifest(apps, manifest_path, manifest)
+            _write_manifest(manifest_path, manifest)
     else:
         entry = {"slug": slug, "outputDir": frontend.output_dir, "buildArgs": frontend.build_args}
         if env:
             entry["env"] = dict(env)
         manifest["apps"].append(entry)
-        _write_manifest(apps, manifest_path, manifest)
+        _write_manifest(manifest_path, manifest)
     current = entry.get("env", {})
     return True, warnings, dict(current) if isinstance(current, dict) else {}

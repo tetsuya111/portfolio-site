@@ -32,18 +32,37 @@ _BACKEND_REF = re.compile(r"""os\.environ\.get\(\s*["']([A-Z][A-Z0-9_]*)["']"""
 _ENV_EXAMPLE_LINE = re.compile(r"^\s*(?:export\s+)?([A-Z][A-Z0-9_]*)\s*=", re.MULTILINE)
 
 
+# バックエンドの場所を表す語。先にあるものほど URL そのものを表すとみなし、候補の順位に使う
+_LOCATION_WORDS = ["URL", "ORIGIN", "ENDPOINT", "HOST", "BASE"]
+
+
+def _words(name: str) -> list[str]:
+    # FIREBASE の BASE・GHOST の HOST などに当たらないよう、_ 区切りの語で比べる
+    return name.split("_")
+
+
 def _is_backend_url_name(name: str) -> bool:
     # VITE_API_KEY など URL でない変数を除くため、場所を表す語との組み合わせにする
-    return (PUBLIC_ENV_NAME.fullmatch(name) is not None and re.search(r"API|BACKEND|SERVER", name) is not None
-            and re.search(r"URL|ORIGIN|BASE|ENDPOINT|HOST", name) is not None)
+    words = _words(name)
+    return (PUBLIC_ENV_NAME.fullmatch(name) is not None and any(w in ("API", "BACKEND", "SERVER") for w in words)
+            and any(w in _LOCATION_WORDS for w in words))
+
+
+def _backend_url_rank(name: str) -> tuple[int, str]:
+    # 末尾の語が場所を表す名前（VITE_API_URL）を、途中にあるもの（VITE_API_BASE_PATH）より先にする
+    last = _words(name)[-1]
+    return (_LOCATION_WORDS.index(last) if last in _LOCATION_WORDS else len(_LOCATION_WORDS), name)
 
 
 def _is_frontend_url_name(name: str) -> bool:
     # 公開用の名前（VITE_API_ORIGIN など）はフロントエンド向けのため除く
     if PUBLIC_ENV_NAME.fullmatch(name):
         return False
-    # SPOTIFY_CLIENT_ID など URL でない変数を除くため、CLIENT・FRONTEND は URL との組み合わせにする
-    return "ORIGIN" in name or (re.search(r"FRONTEND|CLIENT", name) is not None and "URL" in name)
+    words = _words(name)
+    if any(w in ("ORIGIN", "ORIGINS") for w in words):
+        return True
+    # SPOTIFY_CLIENT_ID・OAUTH_CLIENT_CALLBACK_URL など別の用途の変数を除くため、FRONTEND_URL・CLIENT_URL の並びに限る
+    return any(a in ("FRONTEND", "CLIENT") and b == "URL" for a, b in zip(words, words[1:]))
 
 
 def _is_test(rel: Path) -> bool:
@@ -69,9 +88,13 @@ def _scan(d: Path, exts: set[str], ref: re.Pattern, skip_tests: bool,
     return names
 
 
-def find_frontend_env_names(d: Path) -> list[str]:
-    """フロントエンドがバックエンドの URL として読んでいそうな公開用の環境変数名を、名前順で返す。"""
-    return sorted(n for n in _scan(d, _FRONTEND_EXTS, _FRONTEND_REF, skip_tests=False) if _is_backend_url_name(n))
+def find_frontend_env_names(d: Path, skip_dirs: list[Path] | None = None) -> list[str]:
+    """フロントエンドがバックエンドの URL として読んでいそうな公開用の環境変数名を、URL らしい順（同順位は名前順）で返す。
+
+    skip_dirs（フロントエンド内にあるバックエンドなど）は探さない。
+    """
+    names = _scan(d, _FRONTEND_EXTS, _FRONTEND_REF, skip_tests=False, skip_dirs=skip_dirs)
+    return sorted((n for n in names if _is_backend_url_name(n)), key=_backend_url_rank)
 
 
 def find_backend_env_names(d: Path, skip_dirs: list[Path] | None = None) -> list[str]:
