@@ -225,3 +225,22 @@ def test_parse_detail_skips_out_of_range_rank():
         "<div class='number'>5</div><span class='title'>Ok</span>",
     )
     assert parse_detail_page(html) == [ChartEntry(5, "Ok", "")]
+
+
+def test_parse_detail_rank_must_be_ascii_digits():
+    html = _detail(
+        "<div class='number'>+3</div><span class='title'>Plus</span>",
+        "<div class='number'>１</div><span class='title'>Wide</span>",
+        "<div class='number'>1_0</div><span class='title'>Under</span>",
+        "<div class='number'>7</div><span class='title'>Ok</span>",
+    )
+    assert parse_detail_page(html) == [ChartEntry(7, "Ok", "")]
+
+
+def test_parse_chart_page_keeps_missing_chart_message():
+    html = (
+        "<p>チャートファイルが見つかりません</p>"
+        "<script>$('#data-table').append('<p>x</p>');</script>"
+    )
+    with pytest.raises(ParseError, match="この日付のチャートデータがありません"):
+        parse_chart_page(html)

@@ -168,10 +168,11 @@ def _parse_detail_fragment(fragment: str) -> list[ChartEntry]:
     soup = BeautifulSoup(fragment, "html.parser")
     rows: list[tuple[int, str, str]] = []
     for number in soup.find_all(_is_number):
-        try:
-            rank = int(_clean(number.get_text()))
-        except ValueError:
+        rank_text = _clean(number.get_text())
+        # 半角数字だけを順位とみなす（「+3」「１」「1_0」なども int() は受け付けてしまうため）
+        if not (rank_text.isascii() and rank_text.isdigit()):
             continue
+        rank = int(rank_text)
         if not 1 <= rank <= _MAX_RANK:  # DB の INTEGER を超える値や 0 以下は順位として扱わない
             continue
         title_tag, artist_tag = _row_parts(number)
@@ -213,7 +214,10 @@ def parse_chart_page(html: str) -> list[ChartEntry]:
     except ParseError as detail_error:
         try:
             return parse_hot100(html)
-        except ParseError:
+        except ParseError as table_error:
+            # 「この日付のデータが無い」は表の解析のほうが具体的な理由なので、そちらを優先する
+            if _MISSING_CHART_TEXT in html:
+                raise table_error from None
             raise detail_error from None
 
 
