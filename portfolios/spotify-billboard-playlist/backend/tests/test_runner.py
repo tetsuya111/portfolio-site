@@ -114,3 +114,26 @@ def test_reprocess_replaces_tracks(db):
 
 def test_get_unknown_source(db):
     assert db.get_source(999) is None
+
+
+ALLTIME_URL = "https://billboard.mryogaku.com/php/alltime.php?page=1"
+
+
+def test_process_detail_page_directly(db):
+    sid = db.add_source(ALLTIME_URL)
+    fetcher = FakeFetcher({ALLTIME_URL: (FIXTURES / "detail.html").read_text(encoding="utf-8")})
+    entries = process_source(db, sid, fetcher)
+    assert [e.rank for e in entries] == [1, 2, 3]
+    assert fetcher.calls == [ALLTIME_URL]
+    assert db.get_source(sid)["status"] == "done"
+    assert db.tracks(sid) == entries
+
+
+def test_detail_page_without_rows_marked_failed(db):
+    sid = db.add_source(ALLTIME_URL)
+    fetcher = FakeFetcher({ALLTIME_URL: "<script>$('#data-table').append('<p>x</p>');</script>"})
+    with pytest.raises(ParseError):
+        process_source(db, sid, fetcher)
+    source = db.get_source(sid)
+    assert source["status"] == "failed"
+    assert source["error"] == "詳細表示ページから曲を取り出せませんでした"

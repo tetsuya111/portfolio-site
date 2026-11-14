@@ -6,7 +6,13 @@ import logging
 from typing import Protocol
 
 from app.batch.fetcher import FetchError
-from app.batch.parser import ChartEntry, ParseError, find_latest_hot100_url, parse_hot100
+from app.batch.parser import (
+    ChartEntry,
+    ParseError,
+    find_latest_hot100_url,
+    parse_chart_page,
+    parse_hot100,
+)
 from app.batch.urls import InvalidChartUrl, resolve_chart_url
 from app.db import Database
 
@@ -29,7 +35,8 @@ def process_source(db: Database, source_id: int, fetcher: PageFetcher) -> list[C
         url = target.url
         if target.kind == "top":
             url = find_latest_hot100_url(fetcher.get(target.url))
-        entries = parse_hot100(fetcher.get(url))
+        parse = parse_chart_page if target.kind == "page" else parse_hot100
+        entries = parse(fetcher.get(url))
     except BatchError as exc:
         logger.warning("chart source %s failed: %s", source_id, exc)
         db.mark_failed(source_id, str(exc))
