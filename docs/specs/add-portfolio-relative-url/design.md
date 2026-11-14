@@ -12,7 +12,7 @@ importer は配信登録時の `url` を既定で `/apps/<スラッグ>/` にす
 |---|---|---|
 | `portfolios/portfolio-importer/importer/cli.py` | `app_url` を `site_url` 有無で絶対／相対に分ける | R1-1, R1-2 |
 | `portfolios/portfolio-importer/importer/content.py` | http(s) 検証をメタデータ由来の `url` だけに適用し、`app_url` はそのまま使う | R1-3 |
-| `portfolio-site/src/lib/schemas.ts` | `portfolioUrl = httpUrl.or(sitePath)` を追加し `portfolioSchema.url` に使う | R2-1, R2-2 |
+| `portfolio-site/src/lib/schemas.ts` | `portfolioUrl = z.union([httpUrl, sitePath])` を追加し `portfolioSchema.url` に使う | R2-1, R2-2 |
 | `portfolio-site/src/components/PortfolioTile.astro`・`pages/portfolios/[slug].astro` | 変更なし（`href={url}` がパスでもそのまま動く） | R2-3 |
 | `.claude/skills/add-portfolio/SKILL.md`・importer `README.md` | `--site-url` の説明更新、ドメイン探索手順の削除 | R3-1 |
 
@@ -27,17 +27,13 @@ else:
     app_url = None
 ```
 
-`write_portfolio_md` は `app_url` が与えられればそれを採用し、なければメタデータの `url` を `_HTTP` で検証して採用する。`app_url` はコード内で組み立てた値（スラッグは `resolve_target` で検証済み）のため再検証しない。
+`write_portfolio_md` は `app_url` が与えられればそれを採用し、なければメタデータの `url` を `_HTTP` で検証して採用する。`app_url` はコード内で組み立てた値（スラッグは `resolve_target` で検証済み）のため再検証しない。`app_url` がメタデータの http(s) の `url` を置き換えるときは警告に出す（URL のパスが `app_url` と同じなら同じアプリなので出さない）。
 
 ### スキーマ（R2-1, R2-2）
 
-```ts
-/** サイト内のパス。//host・/\host（別ホストになる）と空白・制御文字・\ を拒否する。 */
-const sitePath = z.string().regex(/^\/(?![/\])[^\s\]*$/u);
-const portfolioUrl = z.union([httpUrl, sitePath]);
-```
-
-`\s` は JS では Unicode 空白を含む。制御文字（`\x00-\x1f`, `\x7f`）も明示的に除外する: `/^\/(?![/\])[^\s\\x00-\x1f\x7f]*$/`。
+- `sitePath`: `/` で始まり、2文字目が `/`・バックスラッシュでない文字列。空白（JS の `\s`）・バックスラッシュ・制御文字（C0・DEL・C1）・ゼロ幅文字（U+200B〜U+200F・U+2060・U+FEFF）を含まないもの。正規表現の正本は `portfolio-site/src/lib/schemas.ts`。
+- `portfolioUrl = z.union([httpUrl, sitePath])`。検証エラーは「http(s) の URL か、/ で始まるサイト内のパス」と分かるメッセージにする。
+- `profileSchema.links` は `httpUrl` のまま。
 
 ## テスト方針
 

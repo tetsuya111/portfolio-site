@@ -6,6 +6,7 @@ import json
 import re
 from datetime import date
 from pathlib import Path
+from urllib.parse import urlsplit
 
 _FRONTMATTER = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n?", re.DOTALL)
 _KEY = re.compile(r"^([A-Za-z_][\w-]*)\s*:\s*(.*)$")
@@ -108,7 +109,9 @@ def write_portfolio_md(slug: str, project: Path, repo_root: Path, tags: list[str
     meta_url = meta.get("url") if isinstance(meta.get("url"), str) and _HTTP.match(meta.get("url")) else None
     url = app_url or meta_url
     warnings: list[str] = []
-    if app_url and meta_url and meta_url != app_url:
+    # 相対パスの app_url は、どのドメインでも同じパスなら同じアプリを指すため警告しない
+    same_app = app_url and meta_url and (meta_url == app_url or urlsplit(meta_url).path == app_url)
+    if app_url and meta_url and not same_app:
         warnings.append(f"url を配信先の {app_url} にしました（{docs.name} の {meta_url} は使っていません）")
     if not body.strip():
         body = "## 概要\n\n（ここにポートフォリオの説明を書く）\n"

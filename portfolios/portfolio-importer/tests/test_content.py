@@ -72,6 +72,12 @@ class WritePortfolioMdTest(TempDirMixin, unittest.TestCase):
         self.assertIn('url: "/apps/my-app/"', self.out.read_text(encoding="utf-8"))
         self.assertTrue(any("https://my-app.example.com/" in w for w in warnings))
 
+    def test_no_warning_when_metadata_url_is_same_app(self):
+        write(self.tmp / "portfolios/docs/my-app.md",
+              "---\ntitle: x\nurl: https://portfolio.example.com/apps/my-app/\n---\n")
+        _, warnings = self.call(app_url="/apps/my-app/")
+        self.assertEqual(warnings, [])
+
     def test_relative_url_in_metadata_is_dropped(self):
         write(self.tmp / "portfolios/docs/my-app.md", "---\ntitle: x\nurl: /foo/\n---\n")
         self.call()

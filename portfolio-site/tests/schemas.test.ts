@@ -42,7 +42,7 @@ describe("portfolioSchema", () => {
     expect(portfolioSchema.parse({ title: "App", url: "/apps/my-app/" }).url).toBe("/apps/my-app/");
   });
 
-  it.each(["//evil.com/", "/\\evil.com/", "/a b", "/a\\b", "/a\nb", "/a\tb", "apps/x/", ""])(
+  it.each(["//evil.com/", "/\\evil.com/", "/a b", "/a\\b", "/a\nb", "/a\tb", "/a\u0085b", "/a\u200bb", "/a\ufeffb", "apps/x/", ""])(
     "rejects an unsafe or non-root path %j",
     (url) => {
       expect(portfolioSchema.safeParse({ title: "App", url }).success).toBe(false);

@@ -70,7 +70,7 @@
 
 - **R4-1**: THE SYSTEM SHALL `portfolio-site/src/content/portfolios/<スラッグ>.md` を、サイトのスキーマ（`title` 必須、`tags`、`url`、`date`）に合う形で作成する。
 - **R4-2**: WHEN `portfolios/docs/<スラッグ>.md` がある, THE SYSTEM SHALL そのタイトル・タグ・本文を使う。ない場合は README の見出しと本文、検出した技術をタグに使う。
-- **R4-3**: WHEN サイト URL が指定され、フロントエンドを配信登録した, THE SYSTEM SHALL `url` に `<サイトURL>/apps/<スラッグ>/` を入れる。http/https 以外の URL は入れない。
+- **R4-3**: WHEN サイト URL が指定され、フロントエンドを配信登録した, THE SYSTEM SHALL `url` に `<サイトURL>/apps/<スラッグ>/` を入れる。http/https 以外の URL は入れない。（サイト URL 未指定時の扱いは [add-portfolio-relative-url](../add-portfolio-relative-url/requirements.md) の R1-1〜R1-3 で変更: 配信登録時は `/apps/<スラッグ>/` を入れる）
 - **R4-4**: IF 掲載用 md が既に存在する, THEN THE SYSTEM SHALL 上書きせず警告する。
 
 ### スキル
