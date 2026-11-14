@@ -147,12 +147,7 @@ Windows では、AWS CLI が日本語を含む `template.yaml` を cp932 で読�
 2. スタックを作成する（上のコマンドから `--no-execute-changeset` を外す）。2回目以降は同じコマンドで更新になる。
 
    ```bash
-   aws cloudformation deploy \
-     --region us-east-1 \
-     --stack-name portfolio-site \
-     --template-file infra/template.yaml \
-     --capabilities CAPABILITY_IAM \
-     --parameter-overrides file://infra/parameters.json
+   aws cloudformation deploy  --region us-east-1 --stack-name portfolio-site --template-file infra/template.yaml --capabilities CAPABILITY_IAM --parameter-overrides file://infra/parameters.json
    ```
 
    証明書の DNS 検証と CloudFront の配置に時間がかかるため、初回は数分〜数十分かかる。
