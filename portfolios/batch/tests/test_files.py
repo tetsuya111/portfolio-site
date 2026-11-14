@@ -31,6 +31,14 @@ class LoadExistingTest(unittest.TestCase):
         self.assertEqual(ex.source_urls, {normalize_url("https://e.com/old")})
         self.assertEqual(ex.recent_titles, ["新しい", "古い", "こんにちは"])
 
+    def test_reads_subfolders(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "2026").mkdir()
+            Path(d, "2026", "foo.md").write_text('---\ntitle: "x"\ndate: 2026-01-01\nsourceUrl: "https://e.com/foo"\n---\n', encoding="utf-8")
+            ex = load_existing([Path(d)])
+        self.assertIn("foo", ex.names)
+        self.assertIn(normalize_url("https://e.com/foo"), ex.source_urls)
+
     def test_limits_recent_titles(self):
         with tempfile.TemporaryDirectory() as d:
             for i in range(40):

@@ -104,6 +104,10 @@ def sanitize_markdown(md: str) -> str:
             result.append(line)
             continue
         result.append(_sanitize_line(line))
+    if fence is not None:
+        # 閉じていないコードブロックを閉じる。閉じないと、後ろにつなげる別の節（参考情報など）のコードの開始が
+        # 閉じとして扱われ、無害化していない行（コードのつもりの行）が HTML として出てしまう
+        result.append(fence[0] * fence[1])
     return "\n".join(result)
 
 
@@ -184,7 +188,8 @@ def build_article_markdown(
     ]
     lines += ["", "## 参考リンク", ""]
     for i, r in enumerate(refs, 1):
-        label = _sanitize_text(_one_line(r.get("title") or r["url"])).replace("[", "［").replace("]", "］")
+        # 角かっこは無害化の前に全角にする（後にすると、エスケープの \ が画面に残る）
+        label = _sanitize_text(_one_line(r.get("title") or r["url"]).replace("[", "［").replace("]", "］"))
         url = str(r["url"]).replace("(", "%28").replace(")", "%29")
         lines.append(f"{i}. [{label}]({url})")
     return "\n".join(lines) + "\n"

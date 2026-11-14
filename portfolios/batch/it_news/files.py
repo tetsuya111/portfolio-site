@@ -63,7 +63,8 @@ def load_existing(dirs: list[Path]) -> Existing:
     for d in dirs:
         if not d.is_dir():
             continue
-        for p in sorted(d.glob("*.md")):
+        # サイトのコレクション（**/*.md）・S3 との同期と同じく、サブフォルダも読む
+        for p in sorted(d.rglob("*.md")):
             ex.names.add(p.stem)
             fm = _frontmatter(p.read_text(encoding="utf-8"))
             if fm.get("sourceUrl"):

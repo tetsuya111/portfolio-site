@@ -99,6 +99,12 @@ describe("buildspec.it-articles.yml", () => {
     const site = build.findIndex((l) => l.includes("npm run test:build"));
     expect(gen).toBeGreaterThanOrEqual(0);
     expect(site).toBeGreaterThan(gen);
+    // push のデプロイと同じく、テストと lint に通ったコードだけを公開する
+    const checks = ["npm test", "npm run lint"].map((cmd) => build.findIndex((l) => l === cmd));
+    for (const i of checks) {
+      expect(i).toBeGreaterThanOrEqual(0);
+      expect(i).toBeLessThan(site);
+    }
   });
 
   it("saves the articles and deploys the diff only after a successful build", () => {

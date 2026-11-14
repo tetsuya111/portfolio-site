@@ -24,6 +24,9 @@ phases:
     commands:
       # PERPLEXITY_API_KEY（SSM Parameter Store から）・PERPLEXITY_MODEL・IT_ARTICLES_PER_RUN はプロジェクトの環境変数
       - python ../portfolios/batch/generate_it_articles.py --out-dir src/content/it-articles
+      # push のデプロイ（buildspec.yml）と同じく、テストと lint に通ったコードだけを公開する
+      - npm test
+      - npm run lint
       # astro build と成果物の検証。記事の md がスキーマを満たさなければここで失敗し、保存も公開もしない
       - npm run test:build
   post_build:

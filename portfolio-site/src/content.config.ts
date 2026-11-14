@@ -18,7 +18,7 @@ const articles = defineCollection({
   schema: articleSchema,
 });
 
-// 自動作成の IT 記事。手で書いた記事と別フォルダで管理するが、スキーマは同じで同じ一覧・記事ページに出す
+// 自動作成の IT 記事。スキーマは手で書いた記事と同じだが、別フォルダで管理し、/it-news/ に分けて表示する（/articles/・トップには出さない）
 // （md は定期実行のビルドで作られ、S3 に保存される。git には .gitkeep だけを置く）
 const itArticles = defineCollection({
   loader: glob({ pattern: "**/*.md", base: "./src/content/it-articles" }),

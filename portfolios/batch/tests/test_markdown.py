@@ -94,6 +94,12 @@ class SanitizeTest(unittest.TestCase):
         out = sanitize_markdown("- item\n  ```\n<img src=x onerror=alert(1)>")
         self.assertNotIn("<img", out)
 
+    def test_closes_an_unclosed_fence(self):
+        # 閉じていないコードブロックが、後ろにつなげた別の節（参考情報など）のコードの開始を閉じに変えないこと
+        out = sanitize_markdown("text\n```\ncode")
+        self.assertEqual(out, "text\n```\ncode\n```")
+        self.assertEqual(sanitize_markdown("~~~~\nx"), "~~~~\nx\n~~~~")
+
     def test_images_are_not_kept(self):
         self.assertNotRegex(sanitize_markdown("![x](https://tracker.example/p.gif)"), r"!\[")
 
@@ -134,6 +140,10 @@ class BuildTest(unittest.TestCase):
         self.assertNotIn("<script>", md)
         self.assertNotIn("x.example/a", md)
         self.assertIn("1. [ok](https://x.example/c%281%29)", md)
+
+    def test_reference_title_brackets_have_no_backslash(self):
+        md = self.build(references=[{"title": "Release [beta]", "url": "https://e.com/r"}])
+        self.assertIn("1. [Release ［beta］](https://e.com/r)", md)
 
     def test_rejects_without_references(self):
         with self.assertRaises(ValueError):
