@@ -128,16 +128,21 @@ Windows では、AWS CLI が日本語を含む `template.yaml` を cp932 で読�
 1. （任意）変更セットだけを作って、作成されるリソースを確認する。
 
    ```bash
-   aws cloudformation deploy \
-     --region us-east-1 \
-     --stack-name portfolio-site \
-     --template-file infra/template.yaml \
-     --capabilities CAPABILITY_IAM \
-     --parameter-overrides file://infra/parameters.json \
-     --no-execute-changeset
+   aws cloudformation deploy --region us-east-1 --stack-name portfolio-site --template-file infra/template.yaml --capabilities CAPABILITY_IAM --parameter-overrides file://infra/parameters.json --no-execute-changeset
    ```
 
    出力に表示される `aws cloudformation describe-change-set ...` を実行すると内容を確認できる。問題なければ、コンソールから変更セットを実行するか、次の手順に進む。
+
+   > **注意:** 表示される `describe-change-set` のコマンドには `--region` が含まれない。そのまま実行すると既定のリージョン（`aws configure` で設定したもの）を探しにいき、変更セットがあっても `ChangeSetNotFound` になる。`--region us-east-1` を付けて実行するか、作業前に `$env:AWS_DEFAULT_REGION = "us-east-1"`（Git Bash: `export AWS_DEFAULT_REGION=us-east-1`）を設定しておく。
+   >
+   > ```bash
+   > aws cloudformation describe-change-set --region us-east-1 --change-set-name <表示された変更セットの ARN> \
+   >   --query "Changes[].ResourceChange.[Action,LogicalResourceId,ResourceType]" --output table
+   > ```
+   >
+   > 変更セットの状態は `aws cloudformation list-change-sets --region us-east-1 --stack-name portfolio-site` で確認できる（`CREATE_COMPLETE` なら作成できている）。CLI から実行する場合は `aws cloudformation execute-change-set --region us-east-1 --change-set-name <ARN>` を使う。
+   >
+   > 初回は、変更セットを実行するまでスタックが `REVIEW_IN_PROGRESS` のまま残る。この状態ではリソースは何も作られていない。やり直したいときは `aws cloudformation delete-stack --region us-east-1 --stack-name portfolio-site` で削除してよい。
 
 2. スタックを作成する（上のコマンドから `--no-execute-changeset` を外す）。2回目以降は同じコマンドで更新になる。
 
