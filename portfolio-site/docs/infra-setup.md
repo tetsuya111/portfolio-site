@@ -208,7 +208,7 @@ aws cloudfront create-invalidation --distribution-id <DistributionId> --paths "/
 - [ ] `SiteUrl` をブラウザで開くとトップページが表示される
 - [ ] `http://` で開くと `https://` にリダイレクトされる
 - [ ] 存在しないパス（例 `/no-such-page/`）で 404 ページが表示される
-- [ ] `portfolio-site/` 配下を変更した PR を作ると、`portfolio-site-test` のビルド結果が PR に表示される
+- [ ] `portfolio-site/` 配下を変更した `DeployBranch`（`main`）向けの PR を作ると、`portfolio-site-test` のビルド結果が PR に表示される
 
 うまくいかない場合は [../infra/README.md のうまくいかないとき](../infra/README.md#うまくいかないとき) を参照。
 

@@ -34,7 +34,7 @@ flowchart LR
 | `AliasRecordA` / `AliasRecordAAAA` | Route 53 | `DomainName` から CloudFront へのエイリアス |
 | `BuildLogGroup` / `TestLogGroup` | CloudWatch Logs | CodeBuild のログ（デプロイ用・テスト用で分ける。30日保存） |
 | `CodeBuildTestRole` | IAM ロール | テスト用。`TestLogGroup` への書き込みだけを許可（S3・CloudFront には触れない）。このアカウントの `<スタック名>-test` からだけ引き受けられる |
-| `CodeBuildTestProject` | CodeBuild | `<スタック名>-test`。`GitHubActorAccountId` のアカウントが出したプルリクエストだけで、テスト・lint・ビルドを実行する（同時実行は1件） |
+| `CodeBuildTestProject` | CodeBuild | `<スタック名>-test`。`GitHubActorAccountId` のアカウントが出した、`DeployBranch`（未指定なら任意のブランチ）を向き先とするプルリクエストだけで、テスト・lint・ビルドを実行する（同時実行は1件） |
 | `CodeBuildRole` | IAM ロール | デプロイ用。`BuildLogGroup` への書き込み、`SiteBucket` の一覧・読み書き・削除、このディストリビューションの無効化だけを許可。このアカウントの `<スタック名>-deploy` からだけ引き受けられる |
 | `CodeBuildProject` | CodeBuild | `<スタック名>-deploy`。`DeployBranch`（未指定なら任意のブランチ）への push でビルドし、成功したらデプロイする（同時実行は1件） |
 | `WebAcl` | AWS WAF | `EnableWaf=true` のときだけ作る。IP ごとに 5 分間 1000 リクエストを超えたら遮断する |
@@ -59,7 +59,7 @@ cp infra/parameters.example.json infra/parameters.json  # 値を書き換える
 | `DomainName` | ○ | — | サイトのドメイン名（例 `portfolio.example.com`）。`HostedZoneId` のゾーン内の名前にする |
 | `HostedZoneId` | ○ | — | `DomainName` を管理している Route 53 ホストゾーンの ID |
 | `GitHubRepoUrl` | ○ | — | GitHub リポジトリの HTTPS URL（例 `https://github.com/<owner>/<repo>.git`） |
-| `DeployBranch` | | `""`（空） | push されたときに本番へデプロイするブランチ。空なら任意のブランチへの push でデプロイする（作業ブランチの push もそのまま本番に出る） |
+| `DeployBranch` | | `""`（空） | push されたときに本番へデプロイするブランチ。空なら任意のブランチへの push でデプロイする（作業ブランチの push もそのまま本番に出る）。プルリクエストのテスト（`<スタック名>-test`）も、このブランチを向き先とする PR だけで実行する（Webhook の `BASE_REF`）。空なら任意のブランチ向けの PR でテストする |
 | `GitHubActorAccountId` | ○ | — | プルリクエストのビルドを許可する GitHub アカウントの数値 ID（`gh api users/<ユーザー名> -q .id` で確認）。公開リポジトリのため、ほかのアカウントの PR ではビルドしない |
 | `BudgetAlertEmail` | ○ | — | 料金アラートの送り先メールアドレス |
 | `MonthlyBudgetUsd` | | `10` | 月額料金の予算（USD） |
@@ -82,9 +82,12 @@ cp infra/parameters.example.json infra/parameters.json  # 値を書き換える
 |---|---|---|
 | `main` | 本番のブランチ。CI/CD・本番への自動デプロイ | PR でテスト（`<本番スタック名>-test`）。push でテスト後に本番へデプロイ（本番スタックの `DeployBranch=main`） |
 | `dev-release` | dev 環境への自動デプロイ用 | push でテスト後に dev 環境へデプロイ（dev スタックの `DeployBranch=dev-release`） |
-| `dev-main` | 開発用のブランチ。CI/CD | PR でテスト（`<本番スタック名>-test`）。push してもデプロイはされない |
+| `dev-main` | 開発用のブランチ | なし（`dev-main` 向けの PR ではテストされず、push してもデプロイされない。`portfolio-site/` 配下を変更していれば、`main` への PR でテストされる） |
 
 どれも `portfolio-site/` 配下を変更したときだけ動きます（詳細は次の「CI / デプロイ」）。
+
+PR のテスト（`<本番スタック名>-test`）は、本番スタックの `DeployBranch`（`main`）を向き先とする PR だけで動きます。GitHub のブランチ保護で `main` 以外のブランチ（`dev-main` など）にこのテストの成功を必須にしていると、チェックが来ずにマージできなくなるため、必須設定は `main` だけにします（`portfolio-site/` 配下を変更しない PR でもテストは動かないため、必須にするとそうした PR もマージできなくなる点に注意します）。
+なお、作成済みの PR の向き先を後から `main` に変えただけでは、テストが始まらないことがあります（向き先の変更は「作成・更新・再オープン」のイベントに当たらないため）。そのときは PR にコミットを追加して push するか、PR を閉じて再オープンします。
 
 ## CI / デプロイ
 
@@ -94,7 +97,7 @@ Webhook が反応するのは、`portfolio-site/` 配下のファイルを変更
 
 | イベント | プロジェクト | buildspec | 動作 |
 |---|---|---|---|
-| プルリクエストの作成・更新・再オープン | `<スタック名>-test` | [../buildspec.test.yml](../buildspec.test.yml) | テスト・lint・ビルドのみ。結果は GitHub の PR に表示される |
+| `DeployBranch`（未指定なら任意のブランチ）を向き先とするプルリクエストの作成・更新・再オープン | `<スタック名>-test` | [../buildspec.test.yml](../buildspec.test.yml) | テスト・lint・ビルドのみ。結果は GitHub の PR に表示される |
 | `DeployBranch`（未指定なら任意のブランチ）への push | `<スタック名>-deploy` | [../buildspec.yml](../buildspec.yml) | テスト・lint・ビルド、成功したらデプロイ |
 
 どちらの buildspec も、次の手順は共通です（同じであることをテストで確認しています）。
@@ -167,6 +170,6 @@ S3 バケットは誤削除を防ぐため、スタックを消しても残り�
 |---|---|
 | 証明書が「検証保留中」のまま進まない | `HostedZoneId` が `DomainName` を管理するゾーンか。ドメインのネームサーバーがそのゾーンを向いているか |
 | `CodeBuildProject` の作成で Webhook のエラーになる | us-east-1 に GitHub の認証情報を登録したか。トークンにリポジトリと Webhook の権限があるか |
-| PR や push でビルドが始まらない | 変更が `portfolio-site/` 配下を含むか。push 先が `DeployBranch` か（指定している場合）。PR は `-test`、push は `-deploy` のプロジェクトの履歴を見ているか |
+| PR や push でビルドが始まらない | 変更が `portfolio-site/` 配下を含むか。push 先・PR の向き先が `DeployBranch` か（指定している場合）。PR は `-test`、push は `-deploy` のプロジェクトの履歴を見ているか |
 | ビルドは成功するのにデプロイされない | 手動開始のビルドではないか（Webhook の PUSH のみデプロイ） |
 | ページが 404 になる | `npm run build` の成果物が同期されているか。URL の綴り（パスは末尾 `/` 付き） |

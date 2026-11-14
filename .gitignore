@@ -72,5 +72,6 @@ desktop.ini
 set-ocr-env.bat
 
 logs/*
+**/logs/*
 docs/specs/*
 memo/*
