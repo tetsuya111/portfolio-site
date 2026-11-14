@@ -96,7 +96,7 @@ Resources:
                 Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub "${BuildLogGroup.Arn}"
+                Resource: !GetAtt BuildLogGroup.Arn
               # DeployPath 指定時は、一覧もそのパス以下に限る
               - Sid: ListDevBucket
                 Effect: Allow

@@ -76,7 +76,7 @@ describe("buildspec.test.yml", () => {
 
 describe("buildspec.dev.yml", () => {
   const devSpec = parse(readFileSync(join(import.meta.dirname, "..", "buildspec.dev.yml"), "utf8"));
-  const devCommands = (phase: string): string[] => devSpec.phases[phase]?.commands ?? [];
+  const devCommands = (phase: string): string[] => devSpec.phases[phase].commands;
 
   it("installs and checks exactly like the deploy buildspec", () => {
     expect(String(devSpec.phases.install["runtime-versions"].nodejs)).toBe("22");
