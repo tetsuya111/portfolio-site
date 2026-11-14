@@ -2,3 +2,102 @@
 /* apps/ は取り込んだポートフォリオのフロントエンド。サイトの CSS にそのクラスを含めない */
 @source not "../../apps";
 @plugin "@tailwindcss/typography";
+
+/*
+ * デザインテーマ（一覧は src/lib/theme.ts、追加方法は docs/themes.md）。
+ * 各テーマは下の --theme-* をすべて定義する（tests/theme-css.test.ts で検証）。
+ * :root には既定テーマ（minimal）と同じ値を置き、data-theme のない管理画面などでも未定義にならないようにする。
+ */
+:root,
+[data-theme="minimal"] {
+  --theme-base: #f8fafc;
+  --theme-surface: #ffffff;
+  --theme-fg: #0f172a;
+  --theme-muted: #475569;
+  --theme-line: #e2e8f0;
+  --theme-accent: #4338ca;
+  --theme-on-accent: #ffffff;
+  --theme-accent-soft: #eef2ff;
+  --theme-on-accent-soft: #3730a3;
+  --theme-link: #4338ca;
+  --theme-focus: #4338ca;
+  --theme-hero-from: #e0e7ff;
+  --theme-hero-to: #f8fafc;
+  --theme-font-body:
+    system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo,
+    sans-serif;
+  --theme-font-heading:
+    system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo,
+    sans-serif;
+  --theme-font-eyebrow: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --theme-radius: 0.5rem;
+}
+
+/* 参考: https://mycampus.jue.ac.jp/ の雰囲気（明るい配色・丸みの大きいカード・英語ラベル） */
+[data-theme="campus"] {
+  --theme-base: #f3f6fb;
+  --theme-surface: #ffffff;
+  --theme-fg: #1b2a41;
+  --theme-muted: #4a5a70;
+  --theme-line: #d6e0ee;
+  --theme-accent: #0d4ea6;
+  --theme-on-accent: #ffffff;
+  --theme-accent-soft: #fff3c4;
+  --theme-on-accent-soft: #6b4d00;
+  --theme-link: #0d4ea6;
+  --theme-focus: #0d4ea6;
+  --theme-hero-from: #dbe8fb;
+  --theme-hero-to: #fff6d6;
+  --theme-font-body: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "BIZ UDPGothic", "Yu Gothic UI", Meiryo, sans-serif;
+  --theme-font-heading:
+    "Hiragino Maru Gothic ProN", "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif;
+  --theme-font-eyebrow: "Arial Black", "Segoe UI", "Hiragino Sans", sans-serif;
+  --theme-radius: 1.25rem;
+}
+
+/* テーマの変数を Tailwind のトークンにする。inline でユーティリティが var(--theme-*) を直接参照し、data-theme だけで切り替わる */
+@theme inline {
+  --color-base: var(--theme-base);
+  --color-surface: var(--theme-surface);
+  --color-fg: var(--theme-fg);
+  --color-muted: var(--theme-muted);
+  --color-line: var(--theme-line);
+  --color-accent: var(--theme-accent);
+  --color-on-accent: var(--theme-on-accent);
+  --color-accent-soft: var(--theme-accent-soft);
+  --color-on-accent-soft: var(--theme-on-accent-soft);
+  --color-link: var(--theme-link);
+  --color-focus: var(--theme-focus);
+  --color-hero-from: var(--theme-hero-from);
+  --color-hero-to: var(--theme-hero-to);
+  --font-sans: var(--theme-font-body);
+  --font-heading: var(--theme-font-heading);
+  --font-eyebrow: var(--theme-font-eyebrow);
+  --radius-card: var(--theme-radius);
+}
+
+@layer base {
+  /* キーボード操作時のフォーカス位置（WCAG 2.4.7） */
+  :focus-visible {
+    outline: 3px solid var(--theme-focus);
+    outline-offset: 2px;
+  }
+}
+
+/* 記事・自己紹介の本文（typography プラグイン）の色をテーマに合わせる */
+@utility prose-themed {
+  --tw-prose-body: var(--theme-fg);
+  --tw-prose-headings: var(--theme-fg);
+  --tw-prose-lead: var(--theme-muted);
+  --tw-prose-links: var(--theme-link);
+  --tw-prose-bold: var(--theme-fg);
+  --tw-prose-counters: var(--theme-muted);
+  --tw-prose-bullets: var(--theme-muted);
+  --tw-prose-hr: var(--theme-line);
+  --tw-prose-quotes: var(--theme-fg);
+  --tw-prose-quote-borders: var(--theme-line);
+  --tw-prose-captions: var(--theme-muted);
+  --tw-prose-code: var(--theme-fg);
+  --tw-prose-th-borders: var(--theme-line);
+  --tw-prose-td-borders: var(--theme-line);
+}
