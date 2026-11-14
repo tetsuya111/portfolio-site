@@ -147,12 +147,7 @@ Windows では、AWS CLI が日本語を含む `template.yaml` を cp932 で読�
 2. スタックを作成する（上のコマンドから `--no-execute-changeset` を外す）。2回目以降は同じコマンドで更新になる。
 
    ```bash
-   aws cloudformation deploy \
-     --region us-east-1 \
-     --stack-name portfolio-site \
-     --template-file infra/template.yaml \
-     --capabilities CAPABILITY_IAM \
-     --parameter-overrides file://infra/parameters.json
+   aws cloudformation deploy  --region us-east-1 --stack-name portfolio-site --template-file infra/template.yaml --capabilities CAPABILITY_IAM --parameter-overrides file://infra/parameters.json
    ```
 
    証明書の DNS 検証と CloudFront の配置に時間がかかるため、初回は数分〜数十分かかる。
@@ -216,3 +211,7 @@ aws cloudfront create-invalidation --distribution-id <DistributionId> --paths "/
 - [ ] `portfolio-site/` 配下を変更した PR を作ると、`portfolio-site-test` のビルド結果が PR に表示される
 
 うまくいかない場合は [../infra/README.md のうまくいかないとき](../infra/README.md#うまくいかないとき) を参照。
+
+## 9. dev 環境の作成（任意）
+
+本番と同じテンプレートを、dev 用のパラメーター（別のドメイン・バケット名、`DeployBranch=dev-release`、`EnablePrTests=false`）で別スタックとして作る。手順 2・3 の準備はそのまま使える。パラメーターと作成コマンドは [../infra/README.md の dev 環境](../infra/README.md#dev-環境) を参照。作る前に、本番スタックの `DeployBranch` が `main` などに指定されていることを確認する（空のままだと `dev-release` への push が本番にもデプロイされる）。
