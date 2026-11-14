@@ -37,6 +37,8 @@ function detailMessage(detail: unknown): string | null {
 
 /** 直近の getMe で受け取った CSRF トークン（未ログインなら null）。 */
 let csrfToken: string | null = null;
+/** csrfToken を受け取ったときのログイン中の利用者 ID。 */
+let csrfUserId: string | null = null;
 
 async function request<T>(path: string, init?: RequestInit, retryOnForbidden = true): Promise<T> {
   const method = (init?.method ?? "GET").toUpperCase();
@@ -55,9 +57,13 @@ async function request<T>(path: string, init?: RequestInit, retryOnForbidden = t
     if (res.status === 403 && unsafe && retryOnForbidden) {
       // 別タブでの再ログインなどでトークンが古い（または未取得の）可能性がある。
       // 取り直してトークンが変わったときだけ1回再送する（403 は処理前に拒否されるので再送しても安全）
+      // 別のアカウントに切り替わっていたら再送しない（画面の表示と違うアカウントで操作しないため）
       const before = csrfToken;
+      const beforeUser = csrfUserId;
       await getMe().catch(() => null);
-      if (csrfToken && csrfToken !== before) return request<T>(path, init, false);
+      if (csrfToken && csrfToken !== before && csrfUserId === beforeUser) {
+        return request<T>(path, init, false);
+      }
     }
     const detail = body && typeof body === "object" && "detail" in body ? body.detail : null;
     throw new ApiError(res.status, detailMessage(detail) ?? `エラーが発生しました（HTTP ${res.status}）`);
@@ -76,12 +82,14 @@ function postJson<T>(path: string, payload: unknown): Promise<T> {
 export async function getMe(): Promise<Me> {
   const me = await request<Me>("/api/me");
   csrfToken = me.authenticated ? me.csrf_token : null;
+  csrfUserId = me.authenticated ? me.id : null;
   return me;
 }
 
 export async function logout(): Promise<void> {
   await request<void>("/auth/logout", { method: "POST" });
   csrfToken = null;
+  csrfUserId = null;
 }
 
 export function fetchChart(url: string): Promise<Chart> {

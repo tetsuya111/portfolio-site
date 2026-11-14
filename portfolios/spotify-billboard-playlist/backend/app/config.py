@@ -28,26 +28,27 @@ class Settings:
     cookie_secure: bool = False
 
 
+def _is_loopback(url: str) -> bool:
+    return (urlsplit(url).hostname or "") in LOOPBACK_HOSTS
+
+
 def _require_https_unless_loopback(name: str, url: str) -> None:
     """https 以外は、ループバックのホストに対する http だけを許す（平文で外部に出さない）。"""
-    parts = urlsplit(url)
-    if parts.scheme == "https":
-        return
-    if parts.scheme == "http" and (parts.hostname or "") in LOOPBACK_HOSTS:
+    scheme = urlsplit(url).scheme
+    if scheme == "https" or (scheme == "http" and _is_loopback(url)):
         return
     raise ConfigError(f"{name} は https で指定してください（http はループバックのみ可）: {url}")
 
 
 def _cookie_secure(frontend_url: str) -> bool:
-    parts = urlsplit(frontend_url)
     value = os.environ.get("COOKIE_SECURE", "").strip().lower()
     if value == "":
-        return parts.scheme == "https"
+        return urlsplit(frontend_url).scheme == "https"
     if value == "true":
         return True
     if value == "false":
         # Secure 無しを許すのはループバック（ローカル開発）だけ。公開先で平文に乗せない
-        if (parts.hostname or "") not in LOOPBACK_HOSTS:
+        if not _is_loopback(frontend_url):
             raise ConfigError("COOKIE_SECURE=false はループバックの FRONTEND_URL でのみ指定可")
         return False
     raise ConfigError("COOKIE_SECURE は true または false で指定してください")

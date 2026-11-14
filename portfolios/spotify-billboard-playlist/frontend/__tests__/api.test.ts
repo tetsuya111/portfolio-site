@@ -96,6 +96,20 @@ describe("csrf retry", () => {
   });
 });
 
+describe("csrf retry across accounts", () => {
+  it("別のアカウントに切り替わっていたら再送しない", async () => {
+    const fn = mockFetchSequence(
+      [200, LOGGED_IN],
+      [403, { detail: "不正なリクエストです（CSRFトークン）" }],
+      [200, { ...LOGGED_IN, id: "u2", csrf_token: "other" }],
+    );
+    await getMe();
+    const err = await createPlaylist("n", [{ title: "t", artist: "a" }]).catch((e) => e);
+    expect(err.status).toBe(403);
+    expect(fn).toHaveBeenCalledTimes(3);
+  });
+});
+
 describe("api", () => {
   it("getMe returns the parsed body", async () => {
     mockFetch(200, { authenticated: true, id: "u1", display_name: "Tetsu" });

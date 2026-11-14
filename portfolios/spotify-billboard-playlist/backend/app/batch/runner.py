@@ -75,6 +75,6 @@ def process_pending(db: Database, fetcher: PageFetcher) -> dict[int, str]:
         try:
             process_source(db, source_id, fetcher)
             results[source_id] = "done"
-        except BatchError:
+        except Exception:  # 想定外の例外でも残りの URL の処理は続ける（failed は記録済み）
             results[source_id] = "failed"
     return results

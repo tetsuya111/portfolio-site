@@ -105,7 +105,9 @@ def create_app(
         if current is None:
             return
         token = request.headers.get(CSRF_HEADER, "")
-        if not secrets.compare_digest(token.encode(), current[1].csrf_token.encode()):
+        expected = current[1].csrf_token
+        # 期待値が空（create() を経ていないセッション）のときも空ヘッダーで通さない
+        if not expected or not secrets.compare_digest(token.encode(), expected.encode()):
             logger.warning("CSRF token mismatch for %s", request.url.path)
             raise HTTPException(status_code=403, detail="不正なリクエストです（CSRFトークン）")
 

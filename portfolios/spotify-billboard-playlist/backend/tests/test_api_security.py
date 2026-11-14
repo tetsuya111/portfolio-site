@@ -124,3 +124,8 @@ def test_cookie_secure_follows_settings(db, fetcher, spotify, sessions):
     )
     res = client.get("/auth/login")
     assert "Secure" in res.headers["set-cookie"]
+
+
+def test_session_without_csrf_token_rejected(client, logged_in, sessions):
+    sessions.get(logged_in).csrf_token = ""
+    assert _post(client, CHART, headers={"X-CSRF-Token": ""}).status_code == 403
