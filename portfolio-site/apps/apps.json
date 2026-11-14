@@ -11,6 +11,12 @@
       "outputDir": "out",
       "buildArgs": [],
       "mock": true
+    },
+    {
+      "slug": "media-feed",
+      "outputDir": "out",
+      "buildArgs": [],
+      "mock": true
     }
   ]
 }
