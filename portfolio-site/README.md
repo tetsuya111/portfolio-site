@@ -46,6 +46,16 @@ npm run dev        # http://localhost:4321/ （管理画面は http://localhost:
 
 各ファイルの項目・書式・スラッグのルール・管理画面の制限は [docs/content-files.md](docs/content-files.md) にまとめています。
 
+## デザインテーマの切り替え
+
+公開ページのデザインは `minimal`（既定）と `campus` から選べます。`src/site.config.ts` の `theme` を変えるか、ビルド時に環境変数で指定します（環境変数が優先）。
+
+```bash
+PUBLIC_THEME=campus npm run build
+```
+
+テーマの中身・追加方法は [docs/themes.md](docs/themes.md) を参照してください。
+
 ## AWS への構築・デプロイ
 
 S3 + CloudFront での配信と、CodeBuild による CI/CD の構成・削除方法は [infra/README.md](infra/README.md)、構築手順は [docs/infra-setup.md](docs/infra-setup.md) にまとめています。

@@ -62,7 +62,9 @@ portfolio-site/
 │   ├── layouts/                  # 公開ページの共通レイアウト
 │   ├── components/               # 公開ページの部品
 │   ├── admin/                    # 管理画面（src/pages の外に置き、本番ビルドに含めない）
-│   └── styles/global.css         # Tailwind CSS と typography プラグインの読み込み
+│   ├── site.config.ts            # サイト名と既定のデザインテーマ（docs/themes.md）
+│   └── styles/global.css         # Tailwind CSS の読み込みと、デザインテーマごとの色・書体（docs/themes.md）
+├── public/favicon.svg            # ファビコン
 ├── tests/                        # vitest のテスト（単体・ビルド成果物）
 └── e2e/                          # Playwright の E2E テスト
 ```
@@ -95,7 +97,8 @@ portfolio-site/
 
 | 部品 | 内容 |
 |---|---|
-| `layouts/BaseLayout.astro` | `<html>`・ヘッダー・フッターと、`global.css` の読み込み |
+| `layouts/BaseLayout.astro` | `<html data-theme>`・ファビコン・ヘッダー・フッターと、`global.css` の読み込み |
+| `components/SectionHeading.astro` | 英大文字の小見出し（読み上げない）と日本語の見出し |
 | `components/SiteHeader.astro` | サイト名とナビゲーション（ホーム・自己紹介・ポートフォリオ・記事） |
 | `components/PortfolioTile.astro` | ポートフォリオのタイル。タイトルのリンクをタイル全体に広げ（stretched link）、URL ボタンは入れ子にせず手前に重ねる |
 | `components/TagList.astro` | タグの一覧（タグがなければ何も出さない） |
@@ -114,6 +117,7 @@ portfolio-site/
 | `content-query.ts` | 一覧の並び順、下書きの除外、日付の表示形式 | 公開ページ |
 | `admin-api.ts` | 保存 API の処理本体。Origin・Content-Type の検査、ルーティング、エラーと HTTP ステータスの対応 | `integrations/local-admin.ts` |
 | `portfolio-cli.ts` | ポートフォリオ追加コマンドの引数解析と実行 | `scripts/new-portfolio.mjs` |
+| `theme.ts` | デザインテーマの一覧と、ビルドに使うテーマ名の決定（`PUBLIC_THEME` → `site.config.ts`） | `layouts/BaseLayout.astro` |
 
 依存の向き（矢印の先を使う）:
 
@@ -163,6 +167,7 @@ flowchart TD
 | `slug.test.ts`・`schemas.test.ts`・`markdown-file.test.ts` | スラッグ検証・スキーマ・md の解析 |
 | `content-store.test.ts` | md の書き込み（上書き禁止、検証失敗時にファイルを変えない、ディレクトリ外に書かない） |
 | `content-query.test.ts` | 並び順・下書き除外・日付表示 |
+| `theme.test.ts`・`theme-css.test.ts`・`no-hardcoded-colors.test.ts` | テーマ名の決定、全テーマの変数の揃いとコントラスト比、公開ページに色の直接指定がないこと |
 | `portfolio-cli.test.ts` | ポートフォリオ追加コマンド |
 | `admin-api.test.ts`・`admin-client.test.ts`・`local-admin.test.ts` | 保存 API、管理画面の md 組み立て、dev 限定のルート登録と本文サイズ上限 |
 | `infra-template.test.ts`（`helpers/cfn-yaml.ts` で読み込み）・`buildspec.test.ts` | CloudFormation の設定値と buildspec の手順 |
@@ -187,6 +192,7 @@ Playwright でブラウザ（Chromium）を動かし、実際の画面操作を�
 | `e2e/site/portfolios.spec.ts` | 一覧・タイル（タグ、URL ボタンの有無と別タブ、タイル全体のクリック、キーボード操作）・詳細ページ |
 | `e2e/site/articles.spec.ts` | 記事一覧（並び順・日付・説明・タグ、下書き除外）・詳細ページ（画像の代替テキスト）・下書きは 404 |
 | `e2e/site/not-found.spec.ts` | 404 ページ、本番ビルドに管理画面と保存 API がないこと |
+| `e2e/site/design.spec.ts` | 見た目の強弱（トップの氏名が最大、タイルのタイトル＞タグ、URL ボタンの塗り）とフォーカス表示 |
 | `e2e/site/responsive-a11y.spec.ts` | 幅 375・768・1280px で横スクロールが出ないこと、タイルの列数（1・2・3列）、axe-core による WCAG 2.1 A/AA の検査、Tab キーでの移動 |
 | `e2e/admin/profile.spec.ts` | 自己紹介の編集（保存して公開ページに反映、必須項目なし・frontmatter なしの拒否、通信失敗の表示、再読み込み後もメッセージが残る） |
 | `e2e/admin/articles.spec.ts` | 記事の追加（フォーム・アップロード、下書き、重複スラッグ、ブラウザ側とサーバー側のスラッグ検証、date なしの拒否） |
