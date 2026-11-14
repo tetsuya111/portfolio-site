@@ -9,6 +9,10 @@
   const base = ((script && script.dataset && script.dataset.base) || "").replace(/\/+$/, "");
   const realFetch = window.fetch.bind(window);
   const handlers = [];
+  // 横取りするオリジン: アプリと同じオリジンと、開発時のバックエンド（localhost）。外部の API はそのまま通信する
+  const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
+  // ファイル名に見える区間（例 1.txt）。パスの引数には一致させない（静的ファイル・Next.js のページデータを横取りしない）
+  const FILE_NAME = /\.[A-Za-z][A-Za-z0-9]{0,7}$/;
 
   function segments(path) {
     return path.replace(/\/+$/, "").split("/").filter((s) => s !== "");
@@ -27,7 +31,10 @@
     if (pattern.length !== actual.length) return null;
     const params = {};
     for (let i = 0; i < pattern.length; i++) {
-      if (pattern[i].startsWith(":")) params[pattern[i].slice(1)] = decode(actual[i]);
+      if (pattern[i].startsWith(":")) {
+        if (FILE_NAME.test(actual[i])) return null;
+        params[pattern[i].slice(1)] = decode(actual[i]);
+      }
       else if (pattern[i] !== actual[i]) return null;
     }
     return params;
@@ -75,7 +82,8 @@
     const isRequest = typeof Request !== "undefined" && input instanceof Request;
     const url = new URL(isRequest ? input.url : String(input), window.location.href);
     const method = String((init && init.method) || (isRequest ? input.method : "GET")).toUpperCase();
-    const found = find(method, url.pathname);
+    const own = url.origin === new URL(window.location.href).origin || LOCAL_HOSTS.includes(url.hostname);
+    const found = own ? find(method, url.pathname) : null;
     if (!found) return realFetch(input, init);
     try {
       const body = await readBody(input, init, isRequest);

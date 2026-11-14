@@ -1,7 +1,7 @@
 // ポートフォリオのフロントエンド（apps/<スラッグ>/）を S3 で配信するための管理ファイル apps/apps.json の
 // 検証とビルド。デプロイ時に scripts/build-apps.mjs から呼び、成果物を dist/apps/<スラッグ>/ に置く
 // （dist は buildspec の s3 sync でそのまま配信される）。apps.json は portfolio-importer が追記する。
-import { cpSync, existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, normalize, sep } from "node:path";
 import { isValidSlug } from "./slug";
 
@@ -123,6 +123,8 @@ export function buildApps(apps: AppEntry[], { appsDir, distDir, run, mockRuntime
       throw new Error(`${app.slug}: ビルド成果物 ${app.outputDir} がありません`);
     }
     const dest = join(distDir, "apps", app.slug);
+    // 前回のビルドの残り（消えたページなど）に、モックを二重に差し込まないよう空にしてからコピーする
+    rmSync(dest, { recursive: true, force: true });
     cpSync(out, dest, { recursive: true });
     if (runtime !== undefined) installMock(app.slug, cwd, dest, runtime);
   }

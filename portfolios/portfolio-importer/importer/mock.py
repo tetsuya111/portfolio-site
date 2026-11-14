@@ -19,8 +19,10 @@ _METHODS = "get|post|put|patch|delete"
 # FastAPI など: @app.get("/x") / @router.post(\n "/x", ...)
 _PY_METHOD = re.compile(rf"""@\w+(?:\.\w+)*\.({_METHODS})\(\s*["']([^"']+)["']""")
 # Flask: @app.route("/x", methods=["GET", "POST"])
-_PY_ROUTE = re.compile(r"""@\w+(?:\.\w+)*\.route\(\s*["']([^"']+)["']([^)]*)\)""")
+_PY_ROUTE = re.compile(r"""@\w+(?:\.\w+)*\.route\(\s*["']([^"']+)["']""")
+# methods はデコレーターの残り（次の def まで）から探す。リスト・タプル・複数行のどれでも読めるようにする
 _PY_ROUTE_METHODS = re.compile(r"""methods\s*=\s*[\[(]([^\])]*)[\])]""")
+_PY_DEF = re.compile(r"^\s*(?:async\s+)?def\s", re.MULTILINE)
 # Express・Fastify・Hono など: app.get("/x", ...) / router.post(`/x`, ...)
 _NODE_METHOD = re.compile(rf"""\b(\w+)\.({_METHODS})\(\s*(["'`])(/[^"'`]*)\3""")
 # ルートの定義ではなく、HTTP クライアントの呼び出しとみなす名前（axios.get("/x") など）
@@ -49,7 +51,8 @@ def _normalize(path: str) -> str:
 def _python_routes(text: str) -> list[tuple[int, Route]]:
     found = [(m.start(), Route(m.group(1).upper(), _normalize(m.group(2)))) for m in _PY_METHOD.finditer(text)]
     for m in _PY_ROUTE.finditer(text):
-        methods_m = _PY_ROUTE_METHODS.search(m.group(2))
+        end = _PY_DEF.search(text, m.end())
+        methods_m = _PY_ROUTE_METHODS.search(text, m.end(), end.start() if end else len(text))
         methods = re.findall(r"""["'](\w+)["']""", methods_m.group(1)) if methods_m else ["GET"]
         found += [(m.start(), Route(x.upper(), _normalize(m.group(1)))) for x in methods]
     return found

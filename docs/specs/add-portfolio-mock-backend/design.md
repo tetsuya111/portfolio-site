@@ -55,7 +55,7 @@ portfolioMock.handle("POST", "/api/items/:id", (req) => {
 
 1. `document.currentScript.dataset.base` から配信パスを得る。
 2. `window.portfolioMock = { handle(method, path, fn) }` を定義する。パスは末尾の `/` を除き、`/` で区切った区間の配列として保持する。
-3. `window.fetch` を差し替える。`new Request(input, init)` でメソッドと URL を得て、`URL.pathname` と、配信パスで始まればそれを除いたパスの両方で、登録順に一致を探す（R3-6）。オリジンは問わない（外部のバックエンド URL を呼ぶフロントエンドにも効かせるため）。
+3. `window.fetch` を差し替える。`new Request(input, init)` でメソッドと URL を得て、`URL.pathname` と、配信パスで始まればそれを除いたパスの両方で、登録順に一致を探す（R3-6）。オリジンは、アプリと同じものと `localhost`・`127.0.0.1`・`[::1]` だけを対象にする（開発時のバックエンド URL のまま呼ぶフロントエンドに効かせ、外部 API は横取りしない）。パスの引数はファイル名に見える区間（`\.[A-Za-z][A-Za-z0-9]{0,7}$`）に一致させない。
 4. 一致したら `request.text()` の本文を JSON として読めれば変換し、ハンドラーを呼ぶ。例外は `console.error` して 500（R3-8）。一致しなければ元の `fetch(input, init)`（R3-7）。
 
 `<head>` 直後の同期スクリプトのため、アプリの `type="module"`・`defer`・`async` のスクリプトより先に実行される。

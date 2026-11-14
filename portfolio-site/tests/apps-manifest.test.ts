@@ -147,6 +147,15 @@ describe("buildApps", () => {
       expect(out("app.js")).toBe("<head>");
     });
 
+    it("starts from a clean output so a rebuild does not inject twice", () => {
+      mkdirSync(join(root, "dist", "apps", "my-app"), { recursive: true });
+      writeFileSync(join(root, "dist", "apps", "my-app", "stale.html"), "<html><head></head></html>");
+      build();
+      build();
+      expect(existsSync(join(root, "dist", "apps", "my-app", "stale.html"))).toBe(false);
+      expect(out("index.html").split("__mock__/runtime.js").length).toBe(2);
+    });
+
     it("does not inject when mock is false", () => {
       buildApps([entry()], {
         appsDir: join(root, "apps"),

@@ -78,11 +78,23 @@ describe("mock-runtime", () => {
     expect(body).toBe("plain");
   });
 
-  it("matches a path under the app base and other origins", async () => {
+  it("matches a path under the app base and local development origins", async () => {
     win.portfolioMock.handle("GET", "/api/me", () => ({ ok: 1 }));
     expect(await (await win.fetch("api/me")).json()).toEqual({ ok: 1 });
     expect(await (await win.fetch("http://localhost:8000/api/me")).json()).toEqual({ ok: 1 });
+    expect(await (await win.fetch("http://127.0.0.1:8000/api/me")).json()).toEqual({ ok: 1 });
     expect(realFetch).not.toHaveBeenCalled();
+  });
+
+  it("does not intercept other origins", async () => {
+    win.portfolioMock.handle("GET", "/users/:id", () => ({}));
+    expect(await (await win.fetch("https://api.github.com/users/octocat")).text()).toBe("real");
+  });
+
+  it("does not match a file name with a path parameter", async () => {
+    win.portfolioMock.handle("GET", "/items/:id", (req) => ({ id: req.params.id }));
+    expect(await (await win.fetch("/apps/my-app/items/1.txt?_rsc=x")).text()).toBe("real");
+    expect(await (await win.fetch("/items/1")).json()).toEqual({ id: "1" });
   });
 
   it("uses the real fetch when nothing matches", async () => {
