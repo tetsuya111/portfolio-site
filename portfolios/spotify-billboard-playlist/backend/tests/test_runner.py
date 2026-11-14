@@ -145,3 +145,24 @@ def test_process_chart_page_returns_title_of_parsed_page(db):
     assert page.title == "ビルボード Hot 100 全順位（2025年11月15日付）"
     assert [e.rank for e in page.entries] == [1, 2, 99]
     assert db.tracks(sid) == page.entries
+
+
+def test_unexpected_error_marks_failed(db):
+    source_id = db.add_source(HOT_URL)
+    with pytest.raises(RuntimeError):
+        process_chart_page(db, source_id, FakeFetcher(error=RuntimeError("boom")))
+    assert db.get_source(source_id)["status"] == "failed"
+
+
+def test_process_pending_continues_after_unexpected_error(db):
+    class FlakyFetcher(FakeFetcher):
+        def get(self, url):
+            if not self.calls:
+                self.calls.append(url)
+                raise RuntimeError("boom")
+            return super().get(url)
+
+    first = db.add_source(HOT_URL)
+    second = db.add_source(HOT_URL)
+    results = process_pending(db, FlakyFetcher({HOT_URL: _hot100()}))
+    assert results == {first: "failed", second: "done"}

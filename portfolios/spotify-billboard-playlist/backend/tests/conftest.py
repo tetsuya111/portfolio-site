@@ -82,11 +82,13 @@ def db():
 @pytest.fixture
 def client(settings, db, fetcher, spotify, sessions):
     app = create_app(settings, db, fetcher, spotify, sessions)
-    return TestClient(app, base_url=ORIGIN, follow_redirects=False)
+    # ブラウザと同じく、状態を変えるリクエストには Origin が付く前提にする
+    return TestClient(app, base_url=ORIGIN, follow_redirects=False, headers={"Origin": ORIGIN})
 
 
 @pytest.fixture
 def logged_in(client, sessions):
     sid = sessions.create(Session("access", "refresh", 9_999_999_999.0, "u1", "Tetsu"))
     client.cookies.set("sid", sid)
+    client.headers["X-CSRF-Token"] = sessions.get(sid).csrf_token
     return sid

@@ -13,7 +13,10 @@ export class ApiError extends Error {
 /** OAuth はバックエンドへのページ遷移で開始する（fetch ではなくリンクで使う）。 */
 export const LOGIN_PATH = "/auth/login";
 
-export type Me ={ authenticated: false } | { authenticated: true; id: string; display_name: string };
+/** csrf_token は状態を変えるリクエストに X-CSRF-Token ヘッダーで送り返す。 */
+export type Me =
+  | { authenticated: false }
+  | { authenticated: true; id: string; display_name: string; csrf_token: string };
 
 export type Track = { title: string; artist: string };
 export type ChartTrack = Track & { rank: number };
@@ -32,16 +35,36 @@ function detailMessage(detail: unknown): string | null {
   return null;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+/** 直近の getMe で受け取った CSRF トークン（未ログインなら null）。 */
+let csrfToken: string | null = null;
+/** csrfToken を受け取ったときのログイン中の利用者 ID。 */
+let csrfUserId: string | null = null;
+
+async function request<T>(path: string, init?: RequestInit, retryOnForbidden = true): Promise<T> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const unsafe = method !== "GET" && method !== "HEAD";
+  const headers = new Headers(init?.headers);
+  if (unsafe && csrfToken) headers.set("X-CSRF-Token", csrfToken);
   let res: Response;
   try {
-    res = await fetch(path, { credentials: "same-origin", ...init });
+    res = await fetch(path, { credentials: "same-origin", ...init, headers });
   } catch {
     throw new ApiError(0, "サーバーに接続できませんでした");
   }
   if (res.status === 204) return undefined as T;
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) {
+    if (res.status === 403 && unsafe && retryOnForbidden) {
+      // 別タブでの再ログインなどでトークンが古い（または未取得の）可能性がある。
+      // 取り直してトークンが変わったときだけ1回再送する（403 は処理前に拒否されるので再送しても安全）
+      // 別のアカウントに切り替わっていたら再送しない（画面の表示と違うアカウントで操作しないため）
+      const before = csrfToken;
+      const beforeUser = csrfUserId;
+      await getMe().catch(() => null);
+      if (csrfToken && csrfToken !== before && csrfUserId === beforeUser) {
+        return request<T>(path, init, false);
+      }
+    }
     const detail = body && typeof body === "object" && "detail" in body ? body.detail : null;
     throw new ApiError(res.status, detailMessage(detail) ?? `エラーが発生しました（HTTP ${res.status}）`);
   }
@@ -56,12 +79,17 @@ function postJson<T>(path: string, payload: unknown): Promise<T> {
   });
 }
 
-export function getMe(): Promise<Me> {
-  return request<Me>("/api/me");
+export async function getMe(): Promise<Me> {
+  const me = await request<Me>("/api/me");
+  csrfToken = me.authenticated ? me.csrf_token : null;
+  csrfUserId = me.authenticated ? me.id : null;
+  return me;
 }
 
 export async function logout(): Promise<void> {
   await request<void>("/auth/logout", { method: "POST" });
+  csrfToken = null;
+  csrfUserId = null;
 }
 
 export function fetchChart(url: string): Promise<Chart> {

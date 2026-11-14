@@ -28,12 +28,16 @@ CREATE TABLE IF NOT EXISTS chart_tracks (
 """
 
 
+MAX_SOURCES = 1000  # 保持するチャートURLの件数。超えたら処理済みのものを古い順に削除する
+
+
 def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 class Database:
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, max_sources: int = MAX_SOURCES) -> None:
+        self._max_sources = max_sources
         if path != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(path, check_same_thread=False)
@@ -47,6 +51,13 @@ class Database:
         with self._lock, self._conn:
             cur = self._conn.execute(
                 "INSERT INTO chart_sources (url, created_at) VALUES (?, ?)", (url, _now())
+            )
+            # 処理済み（done / failed）のうち古いものを削除する。曲データは ON DELETE CASCADE で
+            # 一緒に消える。未処理（pending）は処理中・バッチ待ちのため消さない
+            self._conn.execute(
+                "DELETE FROM chart_sources WHERE status != 'pending' AND id NOT IN "
+                "(SELECT id FROM chart_sources WHERE status != 'pending' ORDER BY id DESC LIMIT ?)",
+                (self._max_sources,),
             )
             return int(cur.lastrowid)
 

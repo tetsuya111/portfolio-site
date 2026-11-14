@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import App from "@/components/App";
 import * as api from "@/lib/api";
 
-const me: api.Me = { authenticated: true, id: "u1", display_name: "Tetsu" };
+const me: api.Me = { authenticated: true, id: "u1", display_name: "Tetsu", csrf_token: "tok" };
 
 describe("App", () => {
   it("loads the login state on mount", async () => {

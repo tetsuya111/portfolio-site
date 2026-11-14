@@ -2,7 +2,7 @@ from app.batch.fetcher import FetchError
 from tests.conftest import ORIGIN
 
 
-def test_post_chart_returns_tracks(client, db):
+def test_post_chart_returns_tracks(client, logged_in, db):
     res = client.post(
         "/api/charts",
         json={"url": "https://billboard.mryogaku.com/php/chart.php?date=2025-11-15"},
@@ -17,19 +17,19 @@ def test_post_chart_returns_tracks(client, db):
     assert db.get_source(body["id"])["status"] == "done"
 
 
-def test_post_chart_invalid_url_400(client, db):
+def test_post_chart_invalid_url_400(client, logged_in, db):
     res = client.post("/api/charts", json={"url": "https://example.com/"})
     assert res.status_code == 400
     assert "billboard.mryogaku.com" in res.json()["detail"]
     assert db.get_source(1)["status"] == "failed"
 
 
-def test_post_chart_too_long_url_422(client):
+def test_post_chart_too_long_url_422(client, logged_in):
     res = client.post("/api/charts", json={"url": "https://billboard.mryogaku.com/" + "a" * 2100})
     assert res.status_code == 422
 
 
-def test_post_chart_fetch_error_502(client, fetcher):
+def test_post_chart_fetch_error_502(client, logged_in, fetcher):
     fetcher.error = FetchError("チャートページの取得に失敗しました（HTTP 500）")
     res = client.post(
         "/api/charts",
@@ -39,7 +39,7 @@ def test_post_chart_fetch_error_502(client, fetcher):
     assert "HTTP 500" in res.json()["detail"]
 
 
-def test_post_rejects_foreign_origin_403(client):
+def test_post_rejects_foreign_origin_403(client, logged_in):
     res = client.post(
         "/api/charts",
         json={"url": "https://billboard.mryogaku.com/"},
@@ -48,7 +48,7 @@ def test_post_rejects_foreign_origin_403(client):
     assert res.status_code == 403
 
 
-def test_post_allows_same_origin(client):
+def test_post_allows_same_origin(client, logged_in):
     res = client.post(
         "/api/charts",
         json={"url": "https://billboard.mryogaku.com/php/dispHot100.php?date=2025-11-15"},
