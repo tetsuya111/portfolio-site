@@ -5,6 +5,16 @@ import { z } from "astro/zod";
 /** http/https の URL だけを受け付ける（javascript: などをリンクにしないため）。 */
 const httpUrl = z.url({ protocol: /^https?$/ });
 
+/**
+ * サイト内のパス（例 /apps/<スラッグ>/）。表示中のドメインで開くため、本番・dev で同じ md を使える。
+ * //host・/\host はブラウザが別ホストとして解釈し、\ は / に読み替えられるため、空白・制御文字とともに拒否する。
+ */
+// eslint-disable-next-line no-control-regex
+const sitePath = z.string().regex(/^\/(?![/\\])[^\s\\\x00-\x1f\x7f]*$/);
+
+/** 掲載 md の url。http(s) の URL かサイト内のパスを受け付ける（profile の links は http(s) のみ）。 */
+const portfolioUrl = z.union([httpUrl, sitePath]);
+
 export const profileSchema = z.object({
   name: z.string().min(1),
   role: z.string().min(1),
@@ -15,7 +25,7 @@ export const profileSchema = z.object({
 export const portfolioSchema = z.object({
   title: z.string().min(1),
   tags: z.array(z.string().min(1)).default([]),
-  url: httpUrl.optional(),
+  url: portfolioUrl.optional(),
   date: z.coerce.date().optional(),
 });
 

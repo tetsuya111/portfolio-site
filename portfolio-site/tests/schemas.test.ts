@@ -16,6 +16,11 @@ describe("profileSchema", () => {
     });
     expect(r.success).toBe(false);
   });
+
+  it("rejects site-relative links", () => {
+    const r = profileSchema.safeParse({ name: "Taro", role: "Engineer", links: [{ label: "x", url: "/apps/x/" }] });
+    expect(r.success).toBe(false);
+  });
 });
 
 describe("portfolioSchema", () => {
@@ -32,6 +37,17 @@ describe("portfolioSchema", () => {
       "https://example.com",
     );
   });
+
+  it("accepts a site-relative path", () => {
+    expect(portfolioSchema.parse({ title: "App", url: "/apps/my-app/" }).url).toBe("/apps/my-app/");
+  });
+
+  it.each(["//evil.com/", "/\\evil.com/", "/a b", "/a\\b", "/a\nb", "/a\tb", "apps/x/", ""])(
+    "rejects an unsafe or non-root path %j",
+    (url) => {
+      expect(portfolioSchema.safeParse({ title: "App", url }).success).toBe(false);
+    },
+  );
 
   it("requires title", () => {
     expect(portfolioSchema.safeParse({ tags: ["a"] }).success).toBe(false);
