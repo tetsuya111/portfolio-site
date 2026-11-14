@@ -84,5 +84,14 @@ npm run build   # next build
 
 - HTTPS の検証には OS の証明書ストアを使う（ウイルス対策ソフトの HTTPS 検査などで独自のルート証明書が入っている環境でも、検証を無効にせず接続できるようにするため）。
 - ログイン状態はバックエンドのメモリに保持するため、バックエンドを再起動すると再ログインが必要。
+
+## セキュリティ上の制限と設定
+
+- チャートの取得（`POST /api/charts`）はログイン必須。利用者ごとに 60 秒あたり 10 回まで（超えると 429）。
+- 保存するチャートURLは最新 1000 件まで（古いものから曲データごと削除）。
+- ログインセッションは作成から 7 日、または 24 時間操作が無いと切れる。同時に保持するのは 1000 件まで（超えると最も古いものを削除）。
+- 状態を変える POST は、フロントエンドのオリジンからのみ受け付ける（`Origin` が無い場合は `Sec-Fetch-Site: same-origin` のときだけ）。ログイン中は `GET /api/me` が返す `csrf_token` を `X-CSRF-Token` ヘッダーで送る必要がある。
+- `FRONTEND_URL`・`SPOTIFY_REDIRECT_URI` は https で指定する。http はループバックのホスト（`127.0.0.1`・`localhost`・`::1`）だけ許され、それ以外はバックエンドが起動しない。
+- Cookie の Secure 属性は `COOKIE_SECURE=true|false` で指定する。未指定なら `FRONTEND_URL` が https のときだけ付ける。
 - Next.js の匿名テレメトリを止めたい場合は環境変数 `NEXT_TELEMETRY_DISABLED=1` を設定する。
 - Windows でドライブ文字が小文字のパス（`c:\…`）から vitest を起動すると失敗するため、`npm test` は `frontend/scripts/vitest.mjs` 経由でパスを正規化して起動している。
