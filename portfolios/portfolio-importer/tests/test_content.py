@@ -62,6 +62,15 @@ class WritePortfolioMdTest(TempDirMixin, unittest.TestCase):
         self.call(app_url="https://example.com/apps/my-app/")
         self.assertIn('url: "https://example.com/apps/my-app/"', self.out.read_text(encoding="utf-8"))
 
+    def test_relative_app_url_is_saved(self):
+        self.call(app_url="/apps/my-app/")
+        self.assertIn('url: "/apps/my-app/"', self.out.read_text(encoding="utf-8"))
+
+    def test_relative_url_in_metadata_is_dropped(self):
+        write(self.tmp / "portfolios/docs/my-app.md", "---\ntitle: x\nurl: /foo/\n---\n")
+        self.call()
+        self.assertNotIn("url:", self.out.read_text(encoding="utf-8"))
+
     def test_non_http_url_is_dropped(self):
         write(self.tmp / "portfolios/docs/my-app.md", "---\ntitle: x\nurl: javascript:alert(1)\n---\n")
         self.call()

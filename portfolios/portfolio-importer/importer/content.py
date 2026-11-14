@@ -103,9 +103,12 @@ def write_portfolio_md(slug: str, project: Path, repo_root: Path, tags: list[str
     title = title or slug
     doc_tags = [t for t in meta.get("tags", []) if isinstance(t, str) and t] if isinstance(meta.get("tags"), list) else []
     final_tags = doc_tags or tags
-    url = app_url or (meta.get("url") if isinstance(meta.get("url"), str) else None)
-    if url and not _HTTP.match(url):
-        url = None
+    # app_url は呼び出し側が組み立てた値（相対パス /apps/<スラッグ>/ または絶対 URL）なので、そのまま使う。
+    # 元のプロジェクトのメタデータの url は、http(s) のものだけを使う。
+    url = app_url
+    if url is None:
+        meta_url = meta.get("url")
+        url = meta_url if isinstance(meta_url, str) and _HTTP.match(meta_url) else None
     if not body.strip():
         body = "## 概要\n\n（ここにポートフォリオの説明を書く）\n"
     if not body.endswith("\n"):
