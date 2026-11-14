@@ -1,6 +1,8 @@
 ---
 // タイル全体をクリック可能にしつつ、URL ボタンを入れ子の <a> にしないため
 // タイトルのリンクを疑似要素でタイル全体に広げる（stretched link）。
+// タイトルのリンクにフォーカスしたときはタイル全体に枠を出す（URL ボタンのときはボタンの枠だけ）。
+// 情報の強弱: タイトル（大・太字）＞ URL ボタン（アクセントの塗り）＞ タグ（小・淡色）
 import TagList from "./TagList.astro";
 
 interface Props {
@@ -14,9 +16,9 @@ const { slug, title, tags, url } = Astro.props;
 ---
 
 <article
-  class="relative flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition focus-within:ring-2 focus-within:ring-sky-500 hover:shadow-md"
+  class="relative flex flex-col gap-3 rounded-card border border-t-4 border-line border-t-accent bg-surface p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg has-[h3_a:focus-visible]:ring-3 has-[h3_a:focus-visible]:ring-focus motion-reduce:transition-none motion-reduce:hover:translate-y-0"
 >
-  <h3 class="text-base font-semibold">
+  <h3 class="font-heading text-lg leading-snug font-bold">
     <a href={`/portfolios/${slug}/`} class="after:absolute after:inset-0 focus:outline-none">{title}</a>
   </h3>
   <TagList tags={tags} />
@@ -26,7 +28,7 @@ const { slug, title, tags, url } = Astro.props;
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        class="relative z-10 mt-auto self-start rounded border border-sky-600 px-2 py-0.5 text-xs text-sky-700 hover:bg-sky-50"
+        class="btn-accent relative z-10 mt-auto self-start px-3.5 py-1 text-sm"
       >
         {/* 読み上げ名は見える文字を含める（WCAG 2.5.3）。どのポートフォリオか・別タブで開くことは読み上げ用に補う */}
         ポートフォリオのURL ↗<span class="sr-only">（{title}、新しいタブで開く）</span>

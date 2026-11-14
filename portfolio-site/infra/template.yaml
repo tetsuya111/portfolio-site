@@ -54,7 +54,9 @@ Parameters:
   DeployBranch:
     Type: String
     Default: ""
-    Description: push されたときに本番へデプロイするブランチ。未指定（空）なら任意のブランチへの push でデプロイする
+    Description: >-
+      push されたときに本番へデプロイするブランチ。未指定（空）なら任意のブランチへの push でデプロイする。
+      プルリクエストのテスト（<スタック名>-test）も、このブランチを向き先とする PR だけで実行する（未指定なら任意のブランチ向け）
   GitHubActorAccountId:
     Type: String
     Description: >-
@@ -351,7 +353,7 @@ Resources:
     Condition: UsePrTests
     Properties:
       Name: !Sub "${AWS::StackName}-test"
-      Description: portfolio-site のプルリクエストのテスト・lint・ビルド（デプロイしない）
+      Description: portfolio-site の DeployBranch（未指定なら任意のブランチ）向けのプルリクエストのテスト・lint・ビルド（デプロイしない）
       ServiceRole: !GetAtt CodeBuildTestRole.Arn
       TimeoutInMinutes: 20
       # PR の連続更新などでビルドが並行して増え、料金が膨らむのを防ぐ
@@ -379,6 +381,9 @@ Resources:
               Pattern: PULL_REQUEST_CREATED,PULL_REQUEST_UPDATED,PULL_REQUEST_REOPENED
             - Type: FILE_PATH
               Pattern: ^portfolio-site/
+            # PR の向き先が DeployBranch のときだけ（未指定なら任意のブランチ向け）。dev 向けの PR で本番のテストを動かさない
+            - Type: BASE_REF
+              Pattern: !If [HasDeployBranch, !Sub "^refs/heads/${DeployBranch}$", "^refs/heads/"]
             # 公開リポジトリのため、fork から第三者が出した PR のコードを実行しない
             - Type: ACTOR_ACCOUNT_ID
               Pattern: !Sub "^${GitHubActorAccountId}$"

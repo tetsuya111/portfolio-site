@@ -4,7 +4,7 @@
 
 - フロントエンド: [Astro](https://astro.build/)（静的出力）+ [Tailwind CSS](https://tailwindcss.com/) v4
 - 配信: S3（非公開）+ CloudFront（OAC）+ ACM + Route 53
-- CI/CD: CodeBuild（GitHub と連携。PR でテスト、`main` への push でデプロイ）
+- CI/CD: CodeBuild（GitHub と連携。`main` 向けの PR でテスト、`main` への push でデプロイ）
 
 ## 必要なもの
 
@@ -46,11 +46,21 @@ npm run dev        # http://localhost:4321/ （管理画面は http://localhost:
 
 各ファイルの項目・書式・スラッグのルール・管理画面の制限は [docs/content-files.md](docs/content-files.md) にまとめています。
 
+## デザインテーマの切り替え
+
+公開ページのデザインは `minimal`（既定）と `campus` から選べます。公開するサイトのテーマは `src/site.config.ts` の `theme` で指定します。手元で別のテーマを試すときは、ビルド時に環境変数で上書きできます。
+
+```bash
+PUBLIC_THEME=campus npm run build
+```
+
+テーマの中身・追加方法は [docs/themes.md](docs/themes.md) を参照してください。
+
 ## AWS への構築・デプロイ
 
 S3 + CloudFront での配信と、CodeBuild による CI/CD の構成・削除方法は [infra/README.md](infra/README.md)、構築手順は [docs/infra-setup.md](docs/infra-setup.md) にまとめています。
 
 概要だけ示すと、us-east-1 に CloudFormation スタックを1つ作成したあと、`portfolio-site/` 配下の変更を次のように扱います。
 
-- プルリクエスト: CodeBuild がテスト・lint・ビルドを実行し、結果を GitHub に表示
+- `main`（本番スタックの `DeployBranch`）向けのプルリクエスト: CodeBuild がテスト・lint・ビルドを実行し、結果を GitHub に表示（ほかのブランチ向けの PR ではテストしない）
 - `main` への push: 同じ処理が成功したら、S3 に反映して CloudFront のキャッシュを無効化

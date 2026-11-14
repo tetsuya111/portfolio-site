@@ -1,6 +1,8 @@
 ---
 import "../styles/global.css";
 import SiteHeader from "../components/SiteHeader.astro";
+import { siteConfig } from "../site.config";
+import { resolveTheme } from "../lib/theme";
 
 interface Props {
   title: string;
@@ -8,23 +10,26 @@ interface Props {
 }
 
 const { title, description } = Astro.props;
-const siteName = "Portfolio";
+const siteName = siteConfig.name;
+// ビルド時にテーマを決める（環境変数 PUBLIC_THEME → site.config.ts）。存在しない名前ならビルドが失敗する
+const theme = resolveTheme(import.meta.env.PUBLIC_THEME, siteConfig.theme);
 ---
 
 <!doctype html>
-<html lang="ja">
+<html lang="ja" data-theme={theme}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>{title === siteName ? title : `${title} | ${siteName}`}</title>
     {description && <meta name="description" content={description} />}
   </head>
-  <body class="min-h-screen bg-slate-50 text-slate-800 antialiased">
+  <body class="flex min-h-screen flex-col bg-page font-sans text-fg antialiased">
     <SiteHeader siteName={siteName} />
-    <main class="mx-auto max-w-5xl px-4 py-10">
+    <main class="mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:py-14">
       <slot />
     </main>
-    <footer class="border-t border-slate-200 py-6 text-center text-sm text-slate-500">
+    <footer class="border-t border-line bg-surface py-8 text-center text-sm text-muted">
       &copy; {new Date().getFullYear()} {siteName}
     </footer>
   </body>

@@ -1,0 +1,12 @@
+---
+// 見出しの上に添える英大文字の小見出し。飾りなので読み上げない（見出しの名前を変えない）
+interface Props {
+  class?: string;
+}
+
+const { class: className } = Astro.props;
+---
+
+<p aria-hidden="true" class:list={["font-eyebrow text-xs font-bold tracking-[0.2em] text-link uppercase", className]}>
+  <slot />
+</p>

@@ -1,7 +1,10 @@
 // astro build 後の dist/ を検証する（npm run test:build で実行）
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { loadEnv } from "vite";
 import { describe, expect, it } from "vitest";
+import { resolveTheme } from "../src/lib/theme";
+import { siteConfig } from "../src/site.config";
 
 const dist = join(import.meta.dirname, "..", "dist");
 const html = (p: string) => readFileSync(join(dist, p, "index.html"), "utf8");
@@ -53,6 +56,20 @@ describe("build output", () => {
 
   it("contains no admin pages", () => {
     expect(existsSync(join(dist, "admin"))).toBe(false);
+  });
+
+  it("applies the selected design theme to every page", () => {
+    // ビルドと同じ規則で期待値を決める。PUBLIC_THEME は astro build と同じく環境変数と .env ファイルの両方から読む
+    const env = loadEnv("production", join(import.meta.dirname, ".."), "PUBLIC_");
+    const theme = resolveTheme(env.PUBLIC_THEME, siteConfig.theme);
+    for (const p of [".", "about", "portfolios", "articles"]) {
+      expect(html(p)).toContain(`<html lang="ja" data-theme="${theme}"`);
+    }
+  });
+
+  it("has an svg favicon linked from the pages", () => {
+    expect(existsSync(join(dist, "favicon.svg"))).toBe(true);
+    expect(html(".")).toMatch(/<link rel="icon" type="image\/svg\+xml" href="\/favicon.svg"/);
   });
 
   it("has a 404 page", () => {
