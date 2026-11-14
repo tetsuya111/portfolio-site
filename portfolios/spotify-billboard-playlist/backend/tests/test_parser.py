@@ -2,7 +2,17 @@ from pathlib import Path
 
 import pytest
 
-from app.batch.parser import ChartEntry, ParseError, find_latest_hot100_url, parse_hot100
+from app.batch.parser import (
+    ChartEntry,
+    ParseError,
+    _unescape_js_string,
+    extract_data_table_html,
+    find_latest_hot100_url,
+    parse_chart_page,
+    parse_detail_page,
+    parse_hot100,
+    parse_page_title,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -73,3 +83,177 @@ def test_parse_missing_chart_file_message():
     )
     with pytest.raises(ParseError, match="この日付のチャートデータがありません"):
         parse_hot100(html)
+
+
+def test_unescape_js_string():
+    assert _unescape_js_string(r"a\"b\'c\\d\/e’f\x41\n") == "a\"b'c\\d/e’fA\n"
+
+
+def test_extract_data_table_html_joins_calls_in_order():
+    fragment = extract_data_table_html(_read("detail.html"))
+    assert fragment is not None
+    assert fragment.index(">2</div>") < fragment.index(">1</div>") < fragment.index(">3</div>")
+    assert "Choosin’ Texas" in fragment
+    assert "</span>" in fragment and "\\" not in fragment
+
+
+def test_extract_ignores_other_targets():
+    assert "Decoy" not in extract_data_table_html(_read("detail.html"))
+
+
+def test_extract_returns_none_without_append():
+    assert extract_data_table_html(_read("hot100.html")) is None
+
+
+def test_parse_detail_page_rows():
+    assert parse_detail_page(_read("detail.html")) == [
+        ChartEntry(1, "A Bar Song (Tipsy)", "Shaboozey"),
+        ChartEntry(2, "Choosin’ Texas", "Ella Langley"),
+        ChartEntry(3, "Rock & Roll", "Simon & Garfunkel"),
+    ]
+
+
+def _detail(*rows: str) -> str:
+    calls = "".join(f'$("#data-table").append("{r}");' for r in rows)
+    return f"<script>{calls}</script>"
+
+
+def test_parse_detail_missing_artist_does_not_shift():
+    html = _detail(
+        "<div class='number'>1</div><span class='title'>A</span>",
+        "<div class='number'>2</div><span class='title'>B</span><span class='artistLink'>X</span>",
+    )
+    assert parse_detail_page(html) == [ChartEntry(1, "A", ""), ChartEntry(2, "B", "X")]
+
+
+def test_parse_detail_duplicate_rank_moves_down():
+    # 同順位（タイ）は捨てずに、それまでの最大順位+1 に繰り下げて主キーの重複を避ける
+    html = _detail(
+        "<div class='number'>1</div><span class='title'>First</span>",
+        "<div class='number'>1</div><span class='title'>Second</span>",
+        "<div class='number'>3</div><span class='title'>Third</span>",
+    )
+    assert parse_detail_page(html) == [
+        ChartEntry(1, "First", ""),
+        ChartEntry(2, "Second", ""),
+        ChartEntry(3, "Third", ""),
+    ]
+
+
+def test_parse_detail_real_layout_title_before_number():
+    # 実ページ（2026-11-14 確認）は同じセル内で 曲名 → div.number → アーティスト の順
+    assert parse_detail_page(_read("detail_real.html")) == [
+        ChartEntry(1, "A Bar Song (Tipsy)", "Shaboozey"),
+        ChartEntry(2, "Ordinary", "Alex Warren"),
+        ChartEntry(3, "Choosin’ Texas", "Ella Langley"),
+        ChartEntry(4, "Blinding Lights", "The Weeknd"),
+    ]
+
+
+def test_parse_detail_skips_bad_rank_and_empty_title():
+    html = _detail(
+        "<div class='number'>x</div><span class='title'>Bad</span>",
+        "<div class='number'>2</div><span class='title'> </span>",
+        "<div class='number'>3</div><span class='title'>Ok</span>",
+    )
+    assert parse_detail_page(html) == [ChartEntry(3, "Ok", "")]
+
+
+def test_parse_detail_empty_raises():
+    with pytest.raises(ParseError, match="詳細表示ページから曲を取り出せませんでした"):
+        parse_detail_page(_detail("<p>no rows</p>"))
+
+
+def test_parse_chart_page_dispatches():
+    assert parse_chart_page(_read("detail.html"))[0].title == "A Bar Song (Tipsy)"
+    assert parse_chart_page(_read("hot100.html")) == parse_hot100(_read("hot100.html"))
+
+
+def test_unescape_js_string_surrogate_pair_and_controls():
+    assert _unescape_js_string("\\uD83C\\uDFB5") == "\U0001f3b5"
+    assert _unescape_js_string("a\\uD83Cb") == "a�b"  # 対のないサロゲートは置換文字に
+    assert _unescape_js_string(r"\0\b\f\v") == "\0\b\f\v"
+
+
+def test_parse_detail_number_wrapped_in_own_div():
+    # div.number だけを包む要素があっても、曲名を含む上位の要素を1行として読む
+    html = _detail(
+        "<td><span class='title'>X</span><div class='h'><div class='number'>1</div></div>"
+        "<span class='artistLink'>Y</span></td>",
+    )
+    assert parse_detail_page(html) == [ChartEntry(1, "X", "Y")]
+
+
+def test_parse_detail_tie_out_of_order():
+    html = _detail(
+        "<div class='number'>3</div><span class='title'>C</span>",
+        "<div class='number'>1</div><span class='title'>A</span>",
+        "<div class='number'>1</div><span class='title'>B</span>",
+    )
+    assert parse_detail_page(html) == [
+        ChartEntry(1, "A", ""),
+        ChartEntry(2, "B", ""),
+        ChartEntry(3, "C", ""),
+    ]
+
+
+def test_parse_chart_page_falls_back_to_table_when_detail_empty():
+    html = _read("hot100.html").replace(
+        "</body>", "<script>$('#data-table').append('<tr><th>h</th></tr>');</script></body>"
+    )
+    assert parse_chart_page(html) == parse_hot100(_read("hot100.html"))
+
+
+def test_parse_chart_page_detail_error_when_both_fail():
+    with pytest.raises(ParseError, match="詳細表示ページから曲を取り出せませんでした"):
+        parse_chart_page("<script>$('#data-table').append('<p>x</p>');</script>")
+
+
+def test_parse_detail_missing_title_in_row_container_does_not_borrow_next():
+    # 行のセル内に曲名が無い行は、次の行の曲名を借りずに捨てる
+    html = _detail(
+        "<tr><td><div class='number'>1</div><span class='artistLink'>A1</span></td></tr>",
+        "<tr><td><span class='title'>T2</span><div class='number'>2</div>"
+        "<span class='artistLink'>A2</span></td></tr>",
+    )
+    assert parse_detail_page(html) == [ChartEntry(2, "T2", "A2")]
+
+
+def test_parse_detail_skips_out_of_range_rank():
+    html = _detail(
+        "<div class='number'>0</div><span class='title'>Zero</span>",
+        "<div class='number'>99999999999999999999</div><span class='title'>Huge</span>",
+        "<div class='number'>5</div><span class='title'>Ok</span>",
+    )
+    assert parse_detail_page(html) == [ChartEntry(5, "Ok", "")]
+
+
+def test_parse_detail_rank_must_be_ascii_digits():
+    html = _detail(
+        "<div class='number'>+3</div><span class='title'>Plus</span>",
+        "<div class='number'>１</div><span class='title'>Wide</span>",
+        "<div class='number'>1_0</div><span class='title'>Under</span>",
+        "<div class='number'>7</div><span class='title'>Ok</span>",
+    )
+    assert parse_detail_page(html) == [ChartEntry(7, "Ok", "")]
+
+
+def test_parse_chart_page_keeps_missing_chart_message():
+    html = (
+        "<p>チャートファイルが見つかりません</p>"
+        "<script>$('#data-table').append('<p>x</p>');</script>"
+    )
+    with pytest.raises(ParseError, match="この日付のチャートデータがありません"):
+        parse_chart_page(html)
+
+
+def test_parse_page_title_strips_site_name():
+    page = "ビルボード歴代ヒット曲ランキング 1〜20位（オールタイム・チャート）"
+    assert parse_page_title(f"<title>{page}｜ビルボード・データベース</title>") == page
+    assert parse_page_title("<title> A  B | Site </title>") == "A B"
+
+
+def test_parse_page_title_from_fixture_and_missing():
+    assert parse_page_title(_read("hot100.html")) == "ビルボード Hot 100 全順位（2025年11月15日付）"
+    assert parse_page_title("<html><body>no title</body></html>") == ""
+    assert parse_page_title("<title>｜Site</title>") == ""

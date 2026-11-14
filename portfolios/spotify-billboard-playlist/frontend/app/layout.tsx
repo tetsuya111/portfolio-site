@@ -9,7 +9,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="ja">
+    // Dark Reader などのブラウザ拡張が <html> に属性を足すことによる hydration 警告を抑える。
+    // この要素自身の属性だけが対象で、子要素の不一致は引き続き警告される。
+    <html lang="ja" suppressHydrationWarning>
       <body>{children}</body>
     </html>
   );

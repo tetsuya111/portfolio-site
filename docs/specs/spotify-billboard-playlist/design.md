@@ -67,10 +67,10 @@ portfolios/spotify-billboard-playlist/
 |---|---|
 | `/`、`/index.php`、`/s/`（フラグメント `#…` は無視） | トップページ |
 | `/php/chart.php?date=D`、`/php/dispHot100.php?date=D`、`/s/php/…` の同名 | `https://billboard.mryogaku.com/php/dispHot100.php?date=D` |
-| 上記以外の同一ホストのパス（例: `/php/artist.php?artist=…`） | `https://billboard.mryogaku.com<パス>?<クエリ>`（フラグメントは除く）をそのまま取得し、Hot 100 と同じセレクター（`table tbody tr` の順位・曲名 `<b>`）で解析する。曲が1件も取れなければ `ParseError` |
+| 上記以外の同一ホストのパス（例: `/php/artist.php?artist=…`） | `https://billboard.mryogaku.com<パス>?<クエリ>`（フラグメントは除く）をそのまま取得する。`<script>` 内に `$('#data-table').append(…)` がある詳細表示形式なら `parse_detail_page` で、なければ Hot 100 と同じセレクター（`table tbody tr` の順位・曲名 `<b>`）で解析する（`parse_chart_page` が中身で振り分ける）。曲が1件も取れなければ `ParseError`。詳細は [spotify-detail-page-scraping/design.md](../spotify-detail-page-scraping/design.md) |
 | `chart.php`・`dispHot100.php` で `D` が `YYYY-MM-DD` でない、ホスト不一致、ユーザー情報・ポート指定付き | `InvalidChartUrl` |
 
-取得は常に `https://` で行う。`chart.php` は曲データをJavaScript文字列で埋め込み上位40曲しか持たないため、同日付の `dispHot100.php`（素直な `<table>` で100曲）に寄せる（2026-11-13 に実ページで構造を確認）。その他のページは同じ表構造であれば使える。2026-11-13 時点では、トップページからリンクされたランキング系ページ（`alltime.php`・`no1weeks.php` など）はこの構造ではなく、解析に失敗する。
+取得は常に `https://` で行う。`chart.php` は曲データをJavaScript文字列で埋め込み上位40曲しか持たないため、同日付の `dispHot100.php`（素直な `<table>` で100曲）に寄せる（2026-11-13 に実ページで構造を確認）。その他のページは同じ表構造であれば使える。ランキング系ページ（`alltime.php` など）のように曲を `<script>` に埋め込んだ詳細表示形式なら `parse_detail_page` で解析する。詳細は [docs/specs/spotify-detail-page-scraping/design.md](../spotify-detail-page-scraping/design.md)。
 
 曲数が100を超えるページでは、フロントエンドが先頭100曲だけを `POST /api/playlists` に送り、その旨を結果に表示する。
 
@@ -105,7 +105,7 @@ chart_tracks(source_id INTEGER REFERENCES chart_sources(id), rank INTEGER, title
 
 | メソッド・パス | 説明 | 主な応答 |
 |---|---|---|
-| `POST /api/charts` `{url}` | URL を `pending` で登録し、その場で `process_source` を実行（R7） | 200 `{id, url, tracks:[{rank,title,artist}]}` ／ 400 不正URL（R8）／ 502 取得・解析失敗（R9） |
+| `POST /api/charts` `{url}` | URL を `pending` で登録し、その場で `process_chart_page` を実行（R7） | 200 `{id, url, title, tracks:[{rank,title,artist}]}`（`title` はページ名） ／ 400 不正URL（R8）／ 502 取得・解析失敗（R9） |
 | `GET /auth/login` | `state` を生成し `oauth_state` Cookie（HttpOnly, 10分）に保存、Spotify 認可URLへ 302（R10） | 302 |
 | `GET /auth/callback?code&state` | `state` を Cookie と `secrets.compare_digest` で照合（R12）→トークン交換→`GET /me`→セッション作成、`sid` Cookie を設定し `FRONTEND_URL` へ 302（R11） | 302 ／ 400 |
 | `GET /api/me` | ログイン状態（R13） | `{authenticated:false}` ／ `{authenticated:true, id, display_name}` |
@@ -148,7 +148,7 @@ chart_tracks(source_id INTEGER REFERENCES chart_sources(id), rank INTEGER, title
 ```
 
 - `AuthStatus`: マウント時に `GET /api/me`。ログインは `<a href="/auth/login">`（ページ遷移）、ログアウトは `POST /auth/logout` 後に再取得。
-- `PlaylistForm`: 送信で `POST /api/charts` → 成功なら `POST /api/playlists`（名前は `ビルボード Hot 100-yyyy/mm/dd` 形式で自動生成。日付はURLの `date`、なければ今日）。各段階の失敗時はバックエンドの `detail` を表示（R23）。
+- `PlaylistForm`: 送信で `POST /api/charts` → 成功なら `POST /api/playlists`（名前は `{ページ名}-yyyy/mm/dd` 形式で自動生成。ページ名は `POST /api/charts` が返す `title`＝解析したページの `<title>` から「｜サイト名」以降を除いたもの、日付は末尾に付けるため、ページ名内の日付表記（`（2025年11月15日付）`・`2025/11/15`・`2025-11-15` など。括弧で囲まれていれば括弧ごと）は除く。何も残らなければ `ビルボード Hot 100`。名前が100文字を超えないようページ名を切り詰める。日付はURLの `date`、なければ今日）。各段階の失敗時はバックエンドの `detail` を表示（R23）。
 - `lib/api.ts`: `fetch` の薄いラッパー。エラー時は `ApiError(status, detail)` を投げる。
 - `next.config.ts` の `rewrites` で `/api/:path*`・`/auth/:path*` を `BACKEND_URL`（既定 `http://127.0.0.1:8000`）へ。
 
