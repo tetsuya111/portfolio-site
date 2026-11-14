@@ -44,10 +44,10 @@ process_source
 `parse_detail_page(html: str) -> list[ChartEntry]`
 
 1. `extract_data_table_html` の結果を `BeautifulSoup(fragment, "html.parser")` で読む。HTML エンティティ（`&amp;`・`&rsquo;` など）はこの時点で文字に戻る（R5）。
-2. 断片内の `div.number` ごとに1行を組む。`div.number` から親をたどって最初に `span.title` を含む要素（実ページでは `td.rborder`）を探し、それが `div.number` を1つだけ含むなら、その要素内の最初の `span.title` を曲名、最初の `span.artistLink` をアーティスト名とする（要素内の並び順は問わない）。複数行が同じ親に平たく並ぶ場合は、次の `div.number` までに現れた最初の `span.title`・`span.artistLink` を使う。
+2. 断片内の `div.number` ごとに1行を組む。`div.number` から親をたどり、その `div.number` だけを含む最も外側の要素（実ページでは曲ごとの `<tr>`）を行とみなし、その中の最初の `span.title` を曲名、最初の `span.artistLink` をアーティスト名とする（行内の並び順は問わない。行内に曲名が無ければその行は捨て、他の行の曲名は借りない）。複数行が同じ親に平たく並ぶ場合は、次の `div.number` までに現れた最初の `span.title`・`span.artistLink` を使う。
    - 2026-11-14 に実ページで確認した構造: 1曲ごとに `<tr>` の中の `td.rborder` に、`span.title` → 非表示の `div.number` → `span.artistLink` の順で並ぶ（曲名が `div.number` より前）。当初の「`div.number` から次の `div.number` まで」の規則だけでは、曲名が1行ずつずれるため上記に改めた。
 3. テキストは既存の `_clean`（空白正規化）を通す。アーティストは `span.artistLink` の `get_text()`（中の `<a>` が複数でも連結される）。
-4. 採用条件: 順位が整数に変換でき、曲名が空でない。アーティストが無い行は空文字で採用する（A5）。同じ順位が再び現れたら、後の行は捨てずに残す（手順5で繰り下げる。A4）。
+4. 採用条件: 順位が整数に変換でき（1〜100000 の範囲外は捨てる）、曲名が空でない。アーティストが無い行は空文字で採用する（A5）。同じ順位が再び現れたら、後の行は捨てずに残す（手順5で繰り下げる。A4）。
 5. 順位で安定ソートし、直前の行以下の順位になった行は直前の順位+1 に繰り下げて返す（R3・A4）。
 6. 1件も採用できなければ `ParseError("詳細表示ページから曲を取り出せませんでした")`（R4）。
 

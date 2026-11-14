@@ -23,6 +23,7 @@ _DATA_TABLE_APPEND_RE = re.compile(
     rf"((?:{_JS_STRING})(?:\s*\+\s*(?:{_JS_STRING}))*)"
     r"\s*\)"
 )
+_MAX_RANK = 100_000
 _JS_ESCAPE_RE = re.compile(r"\\(u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|.)", re.DOTALL)
 _JS_SIMPLE_ESCAPES = {
     "n": "\n", "t": "\t", "r": "\r", "0": "\0", "b": "\b", "f": "\f", "v": "\v"
@@ -140,16 +141,18 @@ def _is_artist(tag: Tag) -> bool:
 def _row_parts(number: Tag) -> tuple[Tag | None, Tag | None]:
     """div.number に対応する曲名・アーティストの要素を返す。
 
-    div.number から親をたどって最初に span.title を含む要素を探し、それが div.number を
-    1つだけ含む（＝1行分の）要素なら、その中の最初の span.title・span.artistLink を使う
-    （実ページは 曲名 → div.number → アーティスト の順で同じセルに並ぶ）。
-    複数行が同じ親に平たく並ぶ場合は、次の div.number までに現れたものを使う。
+    div.number から親をたどり、div.number をこの1つだけ含む最も外側の要素を「行」とみなして、
+    その中の最初の span.title・span.artistLink を使う（実ページは 曲名 → div.number →
+    アーティスト の順で同じ行に並ぶ）。行の中に曲名が無ければ None のまま返し、他の行の曲名は
+    借りない。複数行が同じ親に平たく並ぶ場合は、次の div.number までに現れたものを使う。
     """
+    row: Tag | None = None
     container = number.parent
-    while container is not None and container.find(_is_title) is None:
+    while container is not None and len(container.find_all(_is_number, limit=2)) == 1:
+        row = container
         container = container.parent
-    if container is not None and len(container.find_all(_is_number, limit=2)) == 1:
-        return container.find(_is_title), container.find(_is_artist)
+    if row is not None:
+        return row.find(_is_title), row.find(_is_artist)
     title = artist = None
     for tag in number.find_all_next(True):
         if _is_number(tag):
@@ -168,6 +171,8 @@ def _parse_detail_fragment(fragment: str) -> list[ChartEntry]:
         try:
             rank = int(_clean(number.get_text()))
         except ValueError:
+            continue
+        if not 1 <= rank <= _MAX_RANK:  # DB の INTEGER を超える値や 0 以下は順位として扱わない
             continue
         title_tag, artist_tag = _row_parts(number)
         title = _clean(title_tag.get_text()) if title_tag is not None else ""

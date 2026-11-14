@@ -169,8 +169,8 @@ def test_parse_chart_page_dispatches():
 
 
 def test_unescape_js_string_surrogate_pair_and_controls():
-    assert _unescape_js_string(r"🎵") == "\U0001f3b5"
-    assert _unescape_js_string(r"a\uD83Cb") == "a�b"  # 対のないサロゲートは置換文字に
+    assert _unescape_js_string("\\uD83C\\uDFB5") == "\U0001f3b5"
+    assert _unescape_js_string("a\\uD83Cb") == "a�b"  # 対のないサロゲートは置換文字に
     assert _unescape_js_string(r"\0\b\f\v") == "\0\b\f\v"
 
 
@@ -206,3 +206,22 @@ def test_parse_chart_page_falls_back_to_table_when_detail_empty():
 def test_parse_chart_page_detail_error_when_both_fail():
     with pytest.raises(ParseError, match="詳細表示ページから曲を取り出せませんでした"):
         parse_chart_page("<script>$('#data-table').append('<p>x</p>');</script>")
+
+
+def test_parse_detail_missing_title_in_row_container_does_not_borrow_next():
+    # 行のセル内に曲名が無い行は、次の行の曲名を借りずに捨てる
+    html = _detail(
+        "<tr><td><div class='number'>1</div><span class='artistLink'>A1</span></td></tr>",
+        "<tr><td><span class='title'>T2</span><div class='number'>2</div>"
+        "<span class='artistLink'>A2</span></td></tr>",
+    )
+    assert parse_detail_page(html) == [ChartEntry(2, "T2", "A2")]
+
+
+def test_parse_detail_skips_out_of_range_rank():
+    html = _detail(
+        "<div class='number'>0</div><span class='title'>Zero</span>",
+        "<div class='number'>99999999999999999999</div><span class='title'>Huge</span>",
+        "<div class='number'>5</div><span class='title'>Ok</span>",
+    )
+    assert parse_detail_page(html) == [ChartEntry(5, "Ok", "")]
