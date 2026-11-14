@@ -58,6 +58,11 @@ def process_chart_page(db: Database, source_id: int, fetcher: PageFetcher) -> Ch
         logger.warning("chart source %s failed: %s", source_id, exc)
         db.mark_failed(source_id, str(exc))
         raise
+    except Exception:
+        # 想定外の例外でも pending のまま残さない（残ると保持件数の削除対象にならず溜まり続ける）
+        logger.exception("chart source %s failed unexpectedly", source_id)
+        db.mark_failed(source_id, "内部エラー")
+        raise
     db.mark_done(source_id, entries)
     logger.info("chart source %s done: %d tracks from %s", source_id, len(entries), url)
     return ChartPage(title=parse_page_title(html), entries=entries)

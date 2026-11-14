@@ -89,3 +89,14 @@ def test_logout_rejects_foreign_origin(client, logged_in, sessions):
     res = client.post("/auth/logout", headers={"Origin": "https://evil.example"})
     assert res.status_code == 403
     assert sessions.get(logged_in) is not None
+
+
+def test_callback_profile_without_id_400(client, spotify, sessions):
+    async def no_id(access_token):
+        return {"display_name": "No Id"}
+
+    spotify.me = no_id
+    state = _login(client)
+    res = client.get("/auth/callback", params={"code": "good-code", "state": state})
+    assert res.status_code == 400
+    assert "sid" not in client.cookies

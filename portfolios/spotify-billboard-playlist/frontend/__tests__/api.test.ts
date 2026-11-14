@@ -53,6 +53,14 @@ describe("csrf token", () => {
     expect(new Headers(fn.mock.calls[2][1].headers).get("X-CSRF-Token")).toBeNull();
   });
 
+  it("logout 後はトークンを送らない", async () => {
+    const fn = mockFetchSequence([200, LOGGED_IN], [204, undefined], [200, { id: 1, url: "u", tracks: [] }]);
+    await getMe();
+    await logout();
+    await fetchChart("x");
+    expect(new Headers(fn.mock.calls[2][1].headers).get("X-CSRF-Token")).toBeNull();
+  });
+
   it("GET には付けない", async () => {
     const fn = mockFetchSequence([200, LOGGED_IN], [200, LOGGED_IN]);
     await getMe();

@@ -81,6 +81,7 @@ export async function getMe(): Promise<Me> {
 
 export async function logout(): Promise<void> {
   await request<void>("/auth/logout", { method: "POST" });
+  csrfToken = null;
 }
 
 export function fetchChart(url: string): Promise<Chart> {

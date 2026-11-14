@@ -56,7 +56,7 @@ class Database:
             # 一緒に消える。未処理（pending）は処理中・バッチ待ちのため消さない
             self._conn.execute(
                 "DELETE FROM chart_sources WHERE status != 'pending' AND id NOT IN "
-                "(SELECT id FROM chart_sources ORDER BY id DESC LIMIT ?)",
+                "(SELECT id FROM chart_sources WHERE status != 'pending' ORDER BY id DESC LIMIT ?)",
                 (self._max_sources,),
             )
             return int(cur.lastrowid)

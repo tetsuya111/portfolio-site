@@ -109,15 +109,21 @@ def create_app(
             logger.warning("CSRF token mismatch for %s", request.url.path)
             raise HTTPException(status_code=403, detail="不正なリクエストです（CSRFトークン）")
 
-    # same_origin → セッション → CSRF の順に判定する
+    def require_login(current: CurrentSession) -> tuple[str, Session]:
+        if current is None:
+            raise HTTPException(status_code=401, detail="Spotify にログインしてください")
+        return current
+
+    LoggedIn = Annotated[tuple[str, Session], Depends(require_login)]
+
+    # same_origin → CSRF（セッションがあれば）の順に判定する。ログイン必須のエンドポイントは
+    # さらに LoggedIn を引数に取り、未ログインを 401 にする
     protected = [Depends(require_same_origin), Depends(require_csrf)]
 
     # ---- チャート ----
 
     @app.post("/api/charts", response_model=ChartResponse, dependencies=protected)
-    def post_chart(body: ChartRequest, current: CurrentSession) -> ChartResponse:
-        if current is None:
-            raise HTTPException(status_code=401, detail="Spotify にログインしてください")
+    def post_chart(body: ChartRequest, current: LoggedIn) -> ChartResponse:
         if not limiter.allow(current[1].user_id):
             logger.warning("chart rate limit exceeded")
             detail = "リクエストが多すぎます。しばらく待ってから再度お試しください"
@@ -175,13 +181,18 @@ def create_app(
             logger.warning("OAuth callback failed: %s", exc.status)
             detail = "Spotify へのログインに失敗しました"
             raise HTTPException(status_code=400, detail=detail) from exc
+        user_id = str(profile.get("id") or "")
+        if not user_id:
+            # 利用者ごとの上限・回数制限のキーになるため、ID の無いプロフィールではログインさせない
+            logger.warning("OAuth callback: profile without id")
+            raise HTTPException(status_code=400, detail="Spotify へのログインに失敗しました")
         sid = sessions.create(
             Session(
                 access_token=tokens.access_token,
                 refresh_token=tokens.refresh_token,
                 expires_at=tokens.expires_at,
-                user_id=str(profile.get("id", "")),
-                display_name=str(profile.get("display_name") or profile.get("id", "")),
+                user_id=user_id,
+                display_name=str(profile.get("display_name") or user_id),
             )
         )
         response = RedirectResponse(settings.frontend_url + "/", status_code=302)
@@ -226,9 +237,7 @@ def create_app(
         response_model=PlaylistResponse,
         dependencies=protected,
     )
-    async def create_playlist(body: PlaylistRequest, current: CurrentSession) -> PlaylistResponse:
-        if current is None:
-            raise HTTPException(status_code=401, detail="Spotify にログインしてください")
+    async def create_playlist(body: PlaylistRequest, current: LoggedIn) -> PlaylistResponse:
         sid, session = current
         try:
             result = await spotify.build_playlist(

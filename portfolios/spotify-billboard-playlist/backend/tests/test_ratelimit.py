@@ -1,4 +1,4 @@
-from app.ratelimit import SWEEP_THRESHOLD, RateLimiter
+from app.ratelimit import RateLimiter
 
 
 def _limiter(limit=3, window=60.0):
@@ -27,10 +27,13 @@ def test_keys_are_independent():
     assert limiter.allow("b") is True
 
 
-def test_stale_keys_are_swept_when_many():
+def test_stale_keys_are_swept_once_per_window():
     now, limiter = _limiter()
-    for i in range(SWEEP_THRESHOLD + 1):
+    for i in range(100):
         limiter.allow(f"k{i}")
-    now[0] += 61
+    now[0] += 30
+    limiter.allow("mid")  # ウィンドウ内なので全体の掃除はまだ行わない
+    assert len(limiter._hits) == 101
+    now[0] += 31
     limiter.allow("new")
-    assert len(limiter._hits) == 1
+    assert set(limiter._hits) == {"mid", "new"}

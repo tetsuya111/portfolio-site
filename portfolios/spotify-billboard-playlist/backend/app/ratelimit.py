@@ -9,7 +9,6 @@ from collections.abc import Callable
 
 CHART_RATE_LIMIT = 10  # /api/charts を利用者ごとに CHART_RATE_WINDOW 秒あたり何回まで許すか
 CHART_RATE_WINDOW = 60.0
-SWEEP_THRESHOLD = 1024  # キー数がこれを超えたら、全キーの期限切れの記録をまとめて掃除する
 
 
 class RateLimiter:
@@ -20,16 +19,18 @@ class RateLimiter:
         self._window = window
         self._clock = clock
         self._hits: dict[str, deque[float]] = {}
+        self._next_sweep = 0.0
         self._lock = threading.Lock()
 
     def allow(self, key: str) -> bool:
         """許可するなら呼び出しを記録して True、上限を超えていれば False を返す。"""
         now = self._clock()
         with self._lock:
-            # 普段は呼ばれたキーだけを掃除し、キー数が増えたときだけ全体を掃除する
-            if len(self._hits) > SWEEP_THRESHOLD:
+            # 普段は呼ばれたキーだけを掃除し、全キーの掃除はウィンドウごとに1回だけ行う
+            if now >= self._next_sweep:
                 for k in list(self._hits):
                     self._prune(k, now)
+                self._next_sweep = now + self._window
             hits = self._hits.setdefault(key, deque())
             self._prune_deque(hits, now)
             if len(hits) >= self._limit:
