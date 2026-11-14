@@ -37,6 +37,23 @@ class RegisterFrontendTest(TempDirMixin, unittest.TestCase):
         self.assertEqual([a["slug"] for a in self.manifest()["apps"]], ["a", "my-app"])
         self.assertTrue(any("既に" in w for w in warnings))
 
+    def test_mock_is_added_to_new_entry(self):
+        registered, warnings = register_frontend(self.fe, "my-app", self.repo, self.tmp / "proj", mock=True)
+        self.assertTrue(registered)
+        self.assertEqual(warnings, [])
+        self.assertEqual(self.manifest()["apps"][0]["mock"], True)
+
+    def test_warns_when_registered_entry_lacks_mock(self):
+        write_json(self.apps / "apps.json", {"apps": [{"slug": "my-app", "outputDir": "dist", "buildArgs": []}]})
+        _, warnings = register_frontend(self.fe, "my-app", self.repo, self.tmp / "proj", mock=True)
+        self.assertNotIn("mock", self.manifest()["apps"][0])
+        self.assertTrue(any('"mock": true' in w for w in warnings))
+
+    def test_no_mock_warning_when_registered_entry_has_mock(self):
+        write_json(self.apps / "apps.json", {"apps": [{"slug": "my-app", "outputDir": "dist", "buildArgs": [], "mock": True}]})
+        _, warnings = register_frontend(self.fe, "my-app", self.repo, self.tmp / "proj", mock=True)
+        self.assertFalse(any('"mock": true' in w for w in warnings))
+
     def test_existing_app_dir_is_not_overwritten(self):
         write(self.apps / "my-app/index.html", "mine")
         register_frontend(self.fe, "my-app", self.repo, self.tmp / "proj")

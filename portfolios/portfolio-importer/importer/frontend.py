@@ -27,10 +27,11 @@ def _load_manifest(path: Path) -> dict:
 
 
 def register_frontend(frontend: Frontend, slug: str, repo_root: Path, project: Path,
-                      exclude: list[Path] | None = None) -> tuple[bool, list[str]]:
+                      exclude: list[Path] | None = None, mock: bool = False) -> tuple[bool, list[str]]:
     """配信登録したか（既に登録済みも True）と、警告を返す。
 
     exclude（バックエンドのディレクトリなど）は apps/ へのコピーから除く。
+    mock なら、新しく追加する項目に "mock": true（ビルド時にモックを差し込む）を入れる。
     """
     if frontend.kind is None:
         return False, [f"フロントエンドを配信登録しませんでした: {frontend.reason}"]
@@ -45,10 +46,16 @@ def register_frontend(frontend: Frontend, slug: str, repo_root: Path, project: P
     else:
         copy_tree(frontend.dir, dest, root=project, exclude=exclude)
 
-    if any(isinstance(a, dict) and a.get("slug") == slug for a in manifest["apps"]):
+    existing = next((a for a in manifest["apps"] if isinstance(a, dict) and a.get("slug") == slug), None)
+    if existing is not None:
         warnings.append(f"apps.json に {slug} が既に登録されているため、登録内容を変更しませんでした")
+        if mock and existing.get("mock") is not True:
+            warnings.append(f'モックを使うには apps.json の {slug} の項目に "mock": true を追加してください')
     else:
-        manifest["apps"].append({"slug": slug, "outputDir": frontend.output_dir, "buildArgs": frontend.build_args})
+        entry = {"slug": slug, "outputDir": frontend.output_dir, "buildArgs": frontend.build_args}
+        if mock:
+            entry["mock"] = True
+        manifest["apps"].append(entry)
         apps.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
                                  encoding="utf-8", newline="\n")

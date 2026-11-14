@@ -1,7 +1,6 @@
 import contextlib
 import io
 import json
-import subprocess
 import unittest
 from datetime import date
 
@@ -21,18 +20,16 @@ class CliTest(TempDirMixin, unittest.TestCase):
         write(self.src / "frontend/index.html", "<p>hi</p>")
         write(self.src / "frontend/package-lock.json", "{}")
         write(self.src / "backend/requirements.txt", "fastapi\n")
-        write(self.src / "backend/main.py", "from fastapi import FastAPI\napp = FastAPI()\n")
+        write(self.src / "backend/main.py", 'from fastapi import FastAPI\napp = FastAPI()\n@app.get("/api/me")\ndef me(): ...\n')
         write(self.src / "backend/app.sqlite")
-        self.calls = []
 
     def run_main(self, *args):
-        def run(argv, **kwargs):
-            self.calls.append(argv)
-            return subprocess.CompletedProcess(argv, 0)
-
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = main(list(args), repo_root=self.repo, run=run, today=date(2026, 11, 14))
+            try:
+                code = main(list(args), repo_root=self.repo, today=date(2026, 11, 14))
+            except SystemExit as e:  # argparse の引数エラー
+                code = e.code
         return code, out.getvalue(), err.getvalue()
 
     def test_imports_outside_project_end_to_end(self):
@@ -42,10 +39,15 @@ class CliTest(TempDirMixin, unittest.TestCase):
         self.assertEqual(result["slug"], "my-app")
         self.assertEqual(result["projectDir"], "portfolios/my-app")
         self.assertTrue(result["copied"])
-        self.assertEqual(result["frontend"], {"dir": "portfolios/my-app/frontend", "kind": "vite", "registered": True})
-        self.assertEqual(result["backend"]["kind"], "python")
-        self.assertEqual(result["backend"]["dockerfile"], "portfolios/my-app/backend/Dockerfile")
-        self.assertIsNone(result["backend"]["image"])
+        self.assertEqual(result["frontend"], {"dir": "portfolios/my-app/frontend", "kind": "vite", "registered": True,
+                                              "mock": "portfolio-site/apps/my-app/mock/handlers.js"})
+        self.assertEqual(result["backend"], {"dir": "portfolios/my-app/backend", "kind": "python", "routes": 1})
+        self.assertFalse((self.repo / "portfolios/my-app/backend/Dockerfile").exists())
+        self.assertFalse((self.repo / "portfolios/my-app/backend/.dockerignore").exists())
+        handlers = (self.repo / result["frontend"]["mock"]).read_text(encoding="utf-8")
+        self.assertIn('portfolioMock.handle("GET", "/api/me"', handlers)
+        manifest = json.loads((self.repo / "portfolio-site/apps/apps.json").read_text(encoding="utf-8"))
+        self.assertTrue(manifest["apps"][0]["mock"])
         self.assertEqual(result["content"], "portfolio-site/src/content/portfolios/my-app.md")
         self.assertFalse((self.repo / "portfolios/my-app/backend/app.sqlite").exists())
         self.assertTrue((self.repo / "portfolio-site/apps/my-app/index.html").is_file())
@@ -53,7 +55,7 @@ class CliTest(TempDirMixin, unittest.TestCase):
         self.assertIn('  - "FastAPI"', md)
         self.assertIn('  - "Vite"', md)
         self.assertNotIn("url:", md)
-        self.assertEqual(self.calls, [])
+        self.assertNotIn("Docker", md)
 
     def test_warns_when_frontend_and_backend_share_root(self):
         root = self.tmp / "same"
@@ -76,18 +78,32 @@ class CliTest(TempDirMixin, unittest.TestCase):
         self.assertIn("http", err)
         self.assertFalse((self.repo / "portfolios/my-app").exists())
 
-    def test_build_image_runs_docker(self):
-        code, out, _ = self.run_main(str(self.src), "--build-image")
-        self.assertEqual(code, 0)
-        self.assertEqual([c[:2] for c in self.calls], [["docker", "build"], ["docker", "save"]])
-        self.assertEqual(json.loads(out)["backend"]["image"], "portfolios/docker-images/my-app-backend.tar")
+    def test_build_image_option_is_removed(self):
+        code, _, err = self.run_main(str(self.src), "--build-image")
+        self.assertEqual(code, 2)
+        self.assertIn("--build-image", err)
+        self.assertFalse((self.repo / "portfolios/my-app").exists())
 
-    def test_build_image_skipped_without_cmd(self):
-        (self.src / "backend/main.py").unlink()
-        code, out, _ = self.run_main(str(self.src), "--build-image")
+    def test_no_mock_without_backend(self):
+        import shutil
+        shutil.rmtree(self.src / "backend")
+        code, out, _ = self.run_main(str(self.src))
         self.assertEqual(code, 0)
-        self.assertEqual(self.calls, [])
-        self.assertTrue(any("CMD" in w for w in json.loads(out)["warnings"]))
+        result = json.loads(out)
+        self.assertIsNone(result["backend"])
+        self.assertIsNone(result["frontend"]["mock"])
+        self.assertFalse((self.repo / "portfolio-site/apps/my-app/mock").exists())
+        manifest = json.loads((self.repo / "portfolio-site/apps/apps.json").read_text(encoding="utf-8"))
+        self.assertNotIn("mock", manifest["apps"][0])
+
+    def test_no_mock_when_frontend_not_registered(self):
+        (self.src / "frontend/package-lock.json").unlink()
+        code, out, _ = self.run_main(str(self.src))
+        self.assertEqual(code, 0)
+        result = json.loads(out)
+        self.assertFalse(result["frontend"]["registered"])
+        self.assertIsNone(result["frontend"]["mock"])
+        self.assertEqual(result["backend"]["routes"], 1)
 
     def test_rerun_in_place_does_not_copy(self):
         self.run_main(str(self.src))
