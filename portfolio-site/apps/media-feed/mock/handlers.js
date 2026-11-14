@@ -21,19 +21,24 @@
 // - 1件もなければ一覧の API は 404 を返し、フィードは空になる（画面は壊れない）。
 // タイトル・ユーザー名・タグは公開されるため、架空のもの（サンプル・demo など）にすること。
 // ---------------------------------------------------------------------------------------------
+// type: "video"（既定）か "image"。画像は type: "image" を指定する（poster は動画のみ）。
+// 例: { src: "https://example.com/a.mp4", title: "サンプル動画", poster: "https://example.com/a.jpg" }
+//     { type: "image", src: "https://example.com/b.webp", title: "サンプル画像" }
 const MOCK_VIDEOS = [
-  // { src: "https://example.com/media-feed/output_000.mp4", title: "サンプル動画 01" },
-  // { src: "https://example.com/media-feed/output_001.mp4", poster: "https://example.com/media-feed/output_001.jpg" },
+  { type: "image", src: "https://officialsite.cds-jp.online/prod/main/104/83/5c7313c88d6b43b3bcb8e5e797260031.webp" },
+  { type: "image", src: "https://officialsite.cds-jp.online/prod/board/104/81/29702/232ae522039c4da3a06cc53f21486dbb.webp" },
+  { type: "image", src: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQdmrs1197e1l4wOUcYcgh4bF1Za5p-TM4vQtlwIOkuQg&s=10" },
 ];
 
 const isHttps = (u) => typeof u === "string" && u.startsWith("https://");
 
 const MOCK_CONTENTS = MOCK_VIDEOS.filter((v) => v && isHttps(v.src)).map((v, i) => {
   const url = v.src;
+  const type = v.type === "image" ? "image" : "video";
   return {
     id: `mock-${i + 1}`,
-    type: "video",
-    title: v.title || `サンプル動画 ${String(i + 1).padStart(2, "0")}`,
+    type,
+    title: v.title || `サンプル${type === "image" ? "画像" : "動画"} ${String(i + 1).padStart(2, "0")}`,
     path: "",
     link: url,
     source_url: "",
@@ -42,7 +47,7 @@ const MOCK_CONTENTS = MOCK_VIDEOS.filter((v) => v && isHttps(v.src)).map((v, i) 
     tags: [{ name: "サンプル" }],
     created_at: "2026-01-01T00:00:00Z",
     media_url: url,
-    poster_url: isHttps(v.poster) ? v.poster : undefined,
+    poster_url: type === "video" && isHttps(v.poster) ? v.poster : undefined,
   };
 });
 
