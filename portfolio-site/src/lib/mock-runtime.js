@@ -71,30 +71,41 @@
     return new Response(JSON.stringify(value), { status: 200, headers: { "Content-Type": "application/json" } });
   }
 
+  // バックエンドがない状態の既定の応答。500（サーバーエラー）や通信エラーにせず、404 で「データなし」として扱わせる
+  function notFound() {
+    return new Response(JSON.stringify({ error: "not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   window.portfolioMock = {
     /** ハンドラーを登録する。path の「:名前」は任意の1区間に一致し、req.params に入る */
     handle(method, path, fn) {
       handlers.push({ method: String(method).toUpperCase(), pattern: segments(String(path)), fn });
     },
+    /** 404 の JSON 応答。応答データを書いていないハンドラーの既定の戻り値 */
+    notFound,
   };
 
   window.fetch = async function (input, init) {
     const isRequest = typeof Request !== "undefined" && input instanceof Request;
     const url = new URL(isRequest ? input.url : String(input), window.location.href);
     const method = String((init && init.method) || (isRequest ? input.method : "GET")).toUpperCase();
-    const own = url.origin === window.location.origin || LOCAL_HOSTS.includes(url.hostname);
-    const found = own ? find(method, url.pathname) : null;
-    if (!found) return realFetch(input, init);
+    const local = LOCAL_HOSTS.includes(url.hostname);
+    const found = local || url.origin === window.location.origin ? find(method, url.pathname) : null;
+    if (!found) {
+      // 開発時のバックエンド（localhost）は配信先に存在せず通信エラーになるため、一致しなくても 404 で答える
+      return local ? notFound() : realFetch(input, init);
+    }
     try {
       const body = await readBody(input, init, isRequest);
       const value = await found.handler.fn({ method, path: found.path, params: found.params, query: url.searchParams, body });
       return toResponse(value);
     } catch (e) {
+      // ハンドラーの不具合でもサーバーエラー（500）にしない
       console.error(`モックのハンドラーでエラーが発生しました（${method} ${url.pathname}）`, e);
-      return new Response(JSON.stringify({ error: "mock handler failed" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
+      return notFound();
     }
   };
 })();

@@ -96,6 +96,8 @@ _HEADER = """\
 // - パスの「:名前」は任意の1区間に一致し、req.params.名前 に入る。
 // - req = { method, path, params, query（URLSearchParams）, body（JSON なら変換済み） }
 // - 戻り値: オブジェクトなど → 200 の JSON / undefined・null → 204 / new Response(...) → そのまま。async も可。
+// - 既定は portfolioMock.notFound()（404）。正確なデータより、500（サーバーエラー）にしないことを優先する。
+//   ハンドラーが例外を投げても 404 になる。localhost 宛てで一致しない通信も 404 になる。
 // - このファイルは公開されるため、秘密情報を書かないこと。
 """
 
@@ -109,8 +111,8 @@ _EXAMPLE = """\
 
 def _handler(route: Route) -> str:
     return (f"\nportfolioMock.handle({json.dumps(route.method)}, {json.dumps(route.path)}, (req) => {{\n"
-            "  // TODO: バックエンドの実装に合わせた応答を返す\n"
-            "  return {};\n"
+            "  // TODO: 応答データを返す場合は書き換える。既定の 404 はフロントエンドが「データなし」として扱える\n"
+            "  return portfolioMock.notFound();\n"
             "});\n")
 
 

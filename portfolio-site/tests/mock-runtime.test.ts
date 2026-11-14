@@ -7,7 +7,10 @@ const code = readFileSync(join(__dirname, "..", "src", "lib", "mock-runtime.js")
 interface MockWindow {
   location: { href: string; origin: string };
   fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-  portfolioMock: { handle: (method: string, path: string, fn: (req: any) => unknown) => void };
+  portfolioMock: {
+    handle: (method: string, path: string, fn: (req: any) => unknown) => void;
+    notFound: () => Response;
+  };
 }
 
 /** ランタイムを偽の window・document で実行し、window を返す */
@@ -107,14 +110,31 @@ describe("mock-runtime", () => {
     expect(realFetch).toHaveBeenCalledTimes(3);
   });
 
-  it("answers 500 when the handler throws", async () => {
+  it("answers 404 instead of 500 when the handler throws", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     win.portfolioMock.handle("GET", "/api/boom", () => {
       throw new Error("boom");
     });
-    expect((await win.fetch("/api/boom")).status).toBe(500);
+    win.portfolioMock.handle("GET", "/api/reject", async () => Promise.reject(new Error("x")));
+    expect((await win.fetch("/api/boom")).status).toBe(404);
+    expect((await win.fetch("/api/reject")).status).toBe(404);
     expect(error).toHaveBeenCalled();
     error.mockRestore();
+  });
+
+  it("answers 404 JSON with portfolioMock.notFound()", async () => {
+    win.portfolioMock.handle("GET", "/api/me", () => win.portfolioMock.notFound());
+    const res = await win.fetch("/api/me");
+    expect(res.status).toBe(404);
+    expect(res.headers.get("Content-Type")).toBe("application/json");
+    expect(await res.json()).toEqual({ error: "not found" });
+  });
+
+  it("answers 404 for unmatched local development origins without a network error", async () => {
+    for (const url of ["http://localhost:8000/api/x", "http://127.0.0.1:3000/x", "http://[::1]:8000/x"]) {
+      expect((await win.fetch(url, { method: "POST" })).status).toBe(404);
+    }
+    expect(realFetch).not.toHaveBeenCalled();
   });
 
   it("passes a malformed percent-escape through without throwing", async () => {

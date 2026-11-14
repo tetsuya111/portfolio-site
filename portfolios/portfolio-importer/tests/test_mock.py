@@ -67,6 +67,9 @@ class WriteMockHandlersTest(TempDirMixin, unittest.TestCase):
         self.assertIn('portfolioMock.handle("GET", "/api/me", (req) => {', text)
         self.assertIn('portfolioMock.handle("POST", "/api/items/:id", (req) => {', text)
         self.assertEqual(text.count("TODO"), 2)
+        # 応答データを書くまでは 404 を返す（500・通信エラーにしない）
+        self.assertEqual(text.count("return portfolioMock.notFound();"), 2)
+        self.assertNotIn("return {};", text)
 
     def test_writes_example_only_and_warns_without_routes(self):
         path, warnings = write_mock_handlers(self.tmp, [])

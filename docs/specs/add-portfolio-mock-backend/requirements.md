@@ -57,6 +57,7 @@
 - **R1-7**: WHEN モックの雛形を作った, THE SYSTEM SHALL 新しく追加する `apps.json` の項目に `"mock": true` を入れる。
 - **R1-8**: IF `apps.json` に同じスラッグが登録済み, THEN THE SYSTEM SHALL 登録内容を変えず、`"mock": true` がなければ手で追加するよう警告を出す。
 - **R1-9**: THE SYSTEM SHALL 結果の JSON の `frontend.mock` に雛形のパス（作らなかった場合は null）を、`backend.routes` に検出したルートの数を出す。
+- **R1-10**: THE SYSTEM SHALL 雛形の各ハンドラーが既定で `portfolioMock.notFound()`（状態 404）を返すようにする。
 
 ### モックの接続（portfolio-site のビルド）
 
@@ -73,8 +74,9 @@
 - **R3-4**: THE SYSTEM SHALL パスの `:名前` の部分を任意の1区間に一致させ、その値をハンドラーに渡す。
 - **R3-5**: THE SYSTEM SHALL ハンドラーに、メソッド・パス・パスの引数・クエリ・リクエスト本文（JSON として読めれば変換した値）を渡す。
 - **R3-6**: THE SYSTEM SHALL リクエスト先のパスがアプリの配信パス（`/apps/<スラッグ>`）で始まる場合、それを除いたパスでも一致を判定する。
-- **R3-7**: WHEN 一致するハンドラーがない, THE SYSTEM SHALL 元の `fetch` で通信する。
-- **R3-8**: IF ハンドラーが例外を投げた, THEN THE SYSTEM SHALL 状態 500 の応答を返す。
+- **R3-7**: WHEN 一致するハンドラーがない, THE SYSTEM SHALL 元の `fetch` で通信する。ただし宛先が `localhost`・`127.0.0.1`・`[::1]` なら、状態 404 の応答を返す（配信先に存在しないバックエンドへの通信エラーにしない）。
+- **R3-8**: IF ハンドラーが例外を投げた, THEN THE SYSTEM SHALL 状態 500 ではなく状態 404 の応答を返す。
+- **R3-9**: THE SYSTEM SHALL 状態 404 の JSON 応答を返す `portfolioMock.notFound()` を提供する。
 
 ### Docker イメージ作成処理の削除
 
@@ -84,7 +86,7 @@
 
 ### ドキュメント
 
-- **R5-1**: THE SYSTEM SHALL スキル `/add-portfolio` の手順に、モックの雛形の中身（応答データ）を書く工程を含め、イメージ作成の工程をなくす。
+- **R5-1**: THE SYSTEM SHALL スキル `/add-portfolio` の手順に、モックの雛形を仕上げる工程を含め、イメージ作成の工程をなくす。仕上げでは、正確な応答データより、フロントエンドが呼ぶ API がすべて 404 で答え 500・通信エラーにならないことを優先し、データは 404 で画面が表示できない箇所にだけ書く。
 - **R5-2**: THE SYSTEM SHALL importer の README と配信の仕組みのドキュメント（`portfolio-site/docs/apps.md`）に、モックの作り方・制約を書く。
 
 ## 非機能要件

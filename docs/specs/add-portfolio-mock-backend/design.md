@@ -48,6 +48,7 @@ portfolioMock.handle("POST", "/api/items/:id", (req) => {
 
 - 戻り値: `Response` → そのまま／`undefined`・`null` → 204／それ以外 → `JSON.stringify` して 200・`Content-Type: application/json`。`async` 関数（Promise）も可。
 - 状態コードを変えたいときは `new Response(...)` を返す。
+- 雛形の既定は `return portfolioMock.notFound();`（404 の JSON、R1-10・R3-9）。正確なデータより、500・通信エラーにしないことを優先する（データがない 404 はフロントエンドが扱えるが、500 や通信エラーはエラー画面になりやすい）。
 
 ### ランタイム（`src/lib/mock-runtime.js`, R3-*）
 
@@ -56,7 +57,7 @@ portfolioMock.handle("POST", "/api/items/:id", (req) => {
 1. `document.currentScript.dataset.base` から配信パスを得る。
 2. `window.portfolioMock = { handle(method, path, fn) }` を定義する。パスは末尾の `/` を除き、`/` で区切った区間の配列として保持する。
 3. `window.fetch` を差し替える。`new Request(input, init)` でメソッドと URL を得て、`URL.pathname` と、配信パスで始まればそれを除いたパスの両方で、登録順に一致を探す（R3-6）。オリジンは、アプリと同じものと `localhost`・`127.0.0.1`・`[::1]` だけを対象にする（開発時のバックエンド URL のまま呼ぶフロントエンドに効かせ、外部 API は横取りしない）。パスの引数は静的ファイルの拡張子（`.txt`・`.json`・`.js`・画像・フォントなど）で終わる区間に一致させない。
-4. 一致したら `request.text()` の本文を JSON として読めれば変換し、ハンドラーを呼ぶ。例外は `console.error` して 500（R3-8）。一致しなければ元の `fetch(input, init)`（R3-7）。
+4. 一致したら `request.text()` の本文を JSON として読めれば変換し、ハンドラーを呼ぶ。例外は `console.error` して 404（R3-8）。一致しなければ元の `fetch(input, init)`。ただし `localhost` などの宛先は配信先に存在せず通信エラーになるため 404 で答える（R3-7）。
 
 `<head>` 直後の同期スクリプトのため、アプリの `type="module"`・`defer`・`async` のスクリプトより先に実行される。
 
@@ -89,7 +90,7 @@ portfolioMock.handle("POST", "/api/items/:id", (req) => {
 
 ### 雛形の生成（R1-1, R1-5, R1-6）
 
-- ルートごとに `portfolioMock.handle(<メソッド>, <パス>, (req) => { // TODO ...; return {}; });` を書く。文字列は `json.dumps` で JS の文字列リテラルにする。
+- ルートごとに `portfolioMock.handle(<メソッド>, <パス>, (req) => { // TODO ...; return portfolioMock.notFound(); });` を書く。文字列は `json.dumps` で JS の文字列リテラルにする。
 - ルートが0件なら、書き方の例をコメントだけで書き、警告を出す。
 - 既にあれば書かずに警告。
 
@@ -119,10 +120,10 @@ portfolioMock.handle("POST", "/api/items/:id", (req) => {
 
 | 要件 | 設計要素 |
 |---|---|
-| R1-1〜R1-6 | `importer/mock.py` |
+| R1-1〜R1-6, R1-10 | `importer/mock.py` |
 | R1-7, R1-8 | `importer/frontend.py` の `mock` 引数 |
 | R1-9 | `importer/cli.py` の出力 |
 | R2-1〜R2-4 | `apps-manifest.ts` |
-| R3-1〜R3-8 | `src/lib/mock-runtime.js` |
+| R3-1〜R3-9 | `src/lib/mock-runtime.js` |
 | R4-1〜R4-3 | `importer/backend.py` の削除、`importer/cli.py` |
 | R5-1, R5-2 | スキル、importer の README、`portfolio-site/docs/apps.md` |
