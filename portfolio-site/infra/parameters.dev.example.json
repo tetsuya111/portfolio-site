@@ -1,0 +1,16 @@
+{
+  "Parameters": {
+    "DomainName": "dev.portfolio.example.com",
+    "HostedZoneId": "Z0123456789ABCDEFGHIJ",
+    "GitHubRepoUrl": "https://github.com/owner/repo.git",
+    "DeployBranch": "dev-release",
+    "GitHubActorAccountId": "12345678",
+    "BudgetAlertEmail": "you@example.com",
+    "MonthlyBudgetUsd": "10",
+    "EnableWaf": "false",
+    "EnableCloudFront": "true",
+    "SiteBucketName": "portfolio-site-dev-example",
+    "DeployPath": "",
+    "EnablePrTests": "false"
+  }
+}

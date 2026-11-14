@@ -6,3 +6,5 @@ playwright-report/
 
 # スタックのパラメーター（メールアドレス・ホストゾーン ID などを含む）。infra/parameters.example.json をコピーして作る
 infra/parameters.json
+# dev 環境のスタックのパラメーター。infra/parameters.dev.example.json をコピーして作る
+infra/parameters.dev.json
