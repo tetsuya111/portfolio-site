@@ -40,7 +40,10 @@ export function sortByOrder<T extends { data: { order: number; title?: string; n
   return [...items].sort((a, b) => a.data.order - b.data.order || label(a).localeCompare(label(b), "ja"));
 }
 
+/** ポートフォリオのタイルに出すタグの最大件数 */
+export const TILE_TAG_LIMIT = 5;
+
 /** タイルに出すタグを先頭 max 件に絞り、残りの件数を返す（「+N」の表示用）。 */
-export function limitTags(tags: string[], max = 5): { shown: string[]; rest: number } {
+export function limitTags(tags: string[], max = TILE_TAG_LIMIT): { shown: string[]; rest: number } {
   return { shown: tags.slice(0, max), rest: Math.max(0, tags.length - max) };
 }

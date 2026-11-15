@@ -102,6 +102,17 @@ test.describe("相談ボタン", () => {
     await expect(dialog.getByText("メールソフトが開かない場合は")).toBeHidden();
   });
 
+  test("空白だけの入力では送信しない", async ({ page }) => {
+    await page.getByRole("button", { name: "フォームで相談する" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("お名前").fill("   ");
+    await dialog.getByLabel("返信先メールアドレス").fill("taro@example.com");
+    await dialog.getByLabel("ご相談内容").fill("   ");
+    await dialog.getByRole("button", { name: "メールソフトで送信する" }).click();
+    await expect(dialog.getByRole("link", { name: "こちらから開く" })).toBeHidden();
+    await expect(dialog.getByLabel("お名前")).toBeFocused();
+  });
+
   test("必須項目が空なら送信せず、Esc でダイアログを閉じる", async ({ page }) => {
     await page.getByRole("button", { name: "フォームで相談する" }).click();
     const dialog = page.getByRole("dialog");

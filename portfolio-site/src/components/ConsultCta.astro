@@ -41,6 +41,7 @@ const field = "mt-1 w-full rounded-lg border border-line bg-page px-3 py-2 text-
         <a
           role="link"
           aria-disabled="true"
+          tabindex="0"
           class="inline-block w-full cursor-not-allowed rounded-full border-2 border-line px-8 py-4 text-center text-lg font-bold text-muted sm:w-auto"
         >
           タスク百葉箱で相談する（準備中）
@@ -134,8 +135,18 @@ const field = "mt-1 w-full rounded-lg border border-line bg-page px-3 py-2 text-
     });
     dialog.querySelector("[data-consult-close]")?.addEventListener("click", () => dialog.close());
     // 必須項目が空のときはブラウザの検証で submit 自体が起きない
+    // required は空白だけの入力を通すため、前後の空白を除いて空なら送信せず、その欄に戻す
+    const fields = form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea");
+    for (const f of fields) f.addEventListener("input", () => f.setCustomValidity(""));
     form.addEventListener("submit", (e) => {
       e.preventDefault();
+      const blank = [...fields].find((f) => f.required && f.value.trim() === "");
+      if (blank) {
+        blank.setCustomValidity("入力してください。");
+        blank.reportValidity();
+        blank.focus();
+        return;
+      }
       const data = new FormData(form);
       const value = (key: string) => String(data.get(key) ?? "").trim();
       const url = buildMailto(dialog.dataset.contactEmail ?? "", {
