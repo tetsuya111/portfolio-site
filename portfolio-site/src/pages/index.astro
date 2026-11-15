@@ -1,28 +1,66 @@
 ---
+// トップページ。冒頭（氏名・得意分野・相談ボタン）→ サービス → ポートフォリオ → スキル → 最新の記事 → IT ニュースの順に並べる
 import { getCollection, getEntry } from "astro:content";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import PortfolioTile from "../components/PortfolioTile.astro";
+import ServiceTile from "../components/ServiceTile.astro";
+import SkillTile from "../components/SkillTile.astro";
+import ConsultCta from "../components/ConsultCta.astro";
+import ArticleList from "../components/ArticleList.astro";
 import SectionHeading from "../components/SectionHeading.astro";
 import PortfolioMockNote from "../components/PortfolioMockNote.astro";
 import Eyebrow from "../components/Eyebrow.astro";
 import { siteConfig } from "../site.config";
-import { formatDisplayDate, publishedArticles, sortPortfolios } from "../lib/content-query";
+import { publishedArticles, sortByOrder, sortPortfolios } from "../lib/content-query";
+import { resolveConsultation } from "../lib/consultation";
 
 const profile = await getEntry("profile", "profile");
 if (!profile) throw new Error("src/content/profile/profile.md がありません");
-const portfolios = sortPortfolios(await getCollection("portfolios"));
+const services = sortByOrder(await getCollection("services"));
+const skills = sortByOrder(await getCollection("skills"));
+const specialties = skills.slice(0, 6).map((s) => s.data.name);
+const portfolios = sortPortfolios(await getCollection("portfolios")).slice(0, 6);
 const latestArticles = publishedArticles(await getCollection("articles")).slice(0, 3);
+const latestItArticles = publishedArticles(await getCollection("itArticles")).slice(0, 3);
+// 宛先・遷移先はビルド時の環境変数で決める（未設定・不正ならフォームを出さない／モックの URL を使う）
+const consultation = resolveConsultation(
+  { contactEmail: import.meta.env.PUBLIC_CONTACT_EMAIL, taskBoxUrl: import.meta.env.PUBLIC_TASK_BOX_URL },
+  siteConfig,
+);
+const moreLink = "mt-6 inline-block text-sm font-semibold text-link hover:underline";
+const grid = "grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3";
 ---
 
 <BaseLayout title={siteConfig.name} description={profile.data.summary}>
-  <section class="mb-16 rounded-card bg-linear-to-br from-hero-from to-hero-to px-6 py-12 sm:px-10 sm:py-16">
+  <section class="mb-16 rounded-card bg-linear-to-br from-hero-from to-hero-to px-6 py-10 sm:px-10 sm:py-12">
     <Eyebrow>Hello</Eyebrow>
     <h1 class="mt-3 font-heading text-4xl leading-tight font-bold tracking-tight break-words sm:text-5xl">
       {profile.data.name}
     </h1>
     <p class="mt-3 text-lg font-medium text-muted">{profile.data.role}</p>
-    {profile.data.summary && <p class="mt-5 max-w-2xl leading-relaxed">{profile.data.summary}</p>}
-    <a href="/about/" class="btn-accent mt-8 px-5 py-2.5 text-sm">経歴・自己紹介を見る →</a>
+    {profile.data.summary && <p class="mt-4 max-w-2xl leading-relaxed">{profile.data.summary}</p>}
+    {
+      specialties.length > 0 && (
+        <div class="mt-5 flex flex-wrap items-center gap-2">
+          <p class="text-sm font-semibold text-muted">得意分野</p>
+          <ul aria-label="得意分野" class="flex flex-wrap gap-2">
+            {specialties.map((name) => (
+              <li class="rounded-full border border-line bg-surface px-3 py-1 text-sm font-semibold">{name}</li>
+            ))}
+          </ul>
+        </div>
+      )
+    }
+    <ConsultCta consultation={consultation} />
+    <a href="/about/" class="mt-6 inline-block text-sm font-semibold text-link hover:underline">経歴・自己紹介を見る →</a>
+  </section>
+
+  <section class="mb-16">
+    <SectionHeading eyebrow="Services" title="サービス" class="mb-6" />
+    <div class={grid}>
+      {services.map((s) => <ServiceTile title={s.data.title} description={s.data.description} />)}
+    </div>
+    <p class="mt-4 text-sm text-muted">※このサービスは一例です。相談していただければなんでも対応します。</p>
   </section>
 
   <section class="mb-16">
@@ -32,38 +70,48 @@ const latestArticles = publishedArticles(await getCollection("articles")).slice(
       portfolios.length === 0 ? (
         <p class="text-muted">まだありません。</p>
       ) : (
-        <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div class={grid}>
           {portfolios.map((p) => (
-            <PortfolioTile slug={p.id} title={p.data.title} tags={p.data.tags} url={p.data.url} />
+            <PortfolioTile
+              slug={p.id}
+              title={p.data.title}
+              description={p.data.description}
+              tags={p.data.tags}
+              url={p.data.url}
+            />
           ))}
         </div>
       )
     }
-    <a href="/portfolios/" class="mt-6 inline-block text-sm font-semibold text-link hover:underline"
-      >ポートフォリオ一覧へ →</a
-    >
+    <a href="/portfolios/" class={moreLink}>ポートフォリオ一覧へ →</a>
+  </section>
+
+  <section class="mb-16">
+    <SectionHeading eyebrow="Skills" title="スキル" class="mb-6" />
+    <div class={grid}>
+      {
+        skills.map((s) => (
+          <SkillTile
+            name={s.data.name}
+            category={s.data.category}
+            description={s.data.description}
+            examples={s.data.examples}
+            famous={s.data.famous}
+          />
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="mb-16">
+    <SectionHeading eyebrow="Articles" title="最新の記事" class="mb-6" />
+    <ArticleList articles={latestArticles} basePath="/articles/" headingLevel="h3" />
+    <a href="/articles/" class={moreLink}>記事一覧へ →</a>
   </section>
 
   <section>
-    <SectionHeading eyebrow="Articles" title="最新の記事" class="mb-6" />
-    {
-      latestArticles.length === 0 ? (
-        <p class="text-muted">まだありません。</p>
-      ) : (
-        <ul class="divide-y divide-line overflow-hidden rounded-card border border-line bg-surface">
-          {latestArticles.map((a) => (
-            <li class="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-baseline sm:gap-4">
-              <time class="shrink-0 text-sm text-muted tabular-nums" datetime={a.data.date.toISOString()}>
-                {formatDisplayDate(a.data.date)}
-              </time>
-              <a href={`/articles/${a.id}/`} class="font-medium hover:text-link hover:underline">
-                {a.data.title}
-              </a>
-            </li>
-          ))}
-        </ul>
-      )
-    }
-    <a href="/articles/" class="mt-6 inline-block text-sm font-semibold text-link hover:underline">記事一覧へ →</a>
+    <SectionHeading eyebrow="IT News" title="IT ニュース" class="mb-6" />
+    <ArticleList articles={latestItArticles} basePath="/it-news/" headingLevel="h3" />
+    <a href="/it-news/" class={moreLink}>IT ニュース一覧へ →</a>
   </section>
 </BaseLayout>

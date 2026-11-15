@@ -2,17 +2,18 @@
 // タイル全体をクリック可能にしつつ、URL ボタンを入れ子の <a> にしないため
 // タイトルのリンクを疑似要素でタイル全体に広げる（stretched link）。
 // タイトルのリンクにフォーカスしたときはタイル全体に枠を出す（URL ボタンのときはボタンの枠だけ）。
-// 情報の強弱: タイトル（大・太字）＞ URL ボタン（アクセントの塗り）＞ タグ（小・淡色）
+// 情報の強弱: タイトル（大・太字）＞ URL ボタン（アクセントの塗り）＞ 概要 ＞ タグ（小・淡色。先頭5件＋「+N」）
 import TagList from "./TagList.astro";
 
 interface Props {
   slug: string;
   title: string;
+  description?: string | undefined;
   tags: string[];
   url?: string | undefined;
 }
 
-const { slug, title, tags, url } = Astro.props;
+const { slug, title, description, tags, url } = Astro.props;
 ---
 
 <article
@@ -21,7 +22,8 @@ const { slug, title, tags, url } = Astro.props;
   <h3 class="font-heading text-lg leading-snug font-bold">
     <a href={`/portfolios/${slug}/`} class="after:absolute after:inset-0 focus:outline-none">{title}</a>
   </h3>
-  <TagList tags={tags} />
+  {description && <p class="line-clamp-3 text-sm leading-relaxed text-muted">{description}</p>}
+  <TagList tags={tags} max={5} />
   {
     url && (
       <a

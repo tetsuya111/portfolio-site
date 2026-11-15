@@ -3,8 +3,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseMarkdown } from "../src/lib/markdown-file";
-import { articleSchema, portfolioSchema, profileSchema } from "../src/lib/schemas";
-import { formatDisplayDate, publishedArticles, sortPortfolios } from "../src/lib/content-query";
+import { articleSchema, portfolioSchema, profileSchema, serviceSchema, skillSchema } from "../src/lib/schemas";
+import { formatDisplayDate, limitTags, publishedArticles, sortByOrder, sortPortfolios } from "../src/lib/content-query";
 import { CONTENT_ROOT } from "./fixtures";
 
 function load<T>(dir: string, parse: (data: unknown) => T): { id: string; data: T; body: string }[] {
@@ -32,12 +32,27 @@ export function loadPublishedArticles() {
   return publishedArticles(load("articles", (d) => articleSchema.parse(d)));
 }
 
+/** 公開される IT 記事（新しい順）。md は定期実行で作るため、0件のこともある */
+export function loadPublishedItArticles() {
+  return publishedArticles(load("it-articles", (d) => articleSchema.parse(d)));
+}
+
+/** 表示順（order の昇順）に並べたサービス */
+export function loadServices() {
+  return sortByOrder(load("services", (d) => serviceSchema.parse(d)));
+}
+
+/** 表示順（order の昇順）に並べたスキル */
+export function loadSkills() {
+  return sortByOrder(load("skills", (d) => skillSchema.parse(d)));
+}
+
 /** 下書きの記事 */
 export function loadDraftArticles() {
   return load("articles", (d) => articleSchema.parse(d)).filter((a) => a.data.draft);
 }
 
-export { formatDisplayDate };
+export { formatDisplayDate, limitTags };
 
 /** すべての公開ページの URL */
 export function allPublicPaths(): string[] {

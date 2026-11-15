@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { loadEnv } from "vite";
 import { describe, expect, it } from "vitest";
 import { parseMarkdown } from "../src/lib/markdown-file";
+import { resolveConsultation } from "../src/lib/consultation";
 import { resolveTheme } from "../src/lib/theme";
 import { siteConfig } from "../src/site.config";
 
@@ -13,6 +14,22 @@ const html = (p: string) => readFileSync(join(dist, p, "index.html"), "utf8");
 describe("build output", () => {
   it("has dist/", () => {
     expect(existsSync(dist)).toBe(true);
+  });
+
+  it("shows the consultation buttons, services and skills on the top page", () => {
+    const top = html(".");
+    expect(top).toMatch(/<h2[^>]*>ご相談はこちら<\/h2>/);
+    expect(top).toMatch(/<h2[^>]*>サービス<\/h2>/);
+    expect(top).toMatch(/<h2[^>]*>スキル<\/h2>/);
+    expect(top).toContain("※このサービスは一例です。相談していただければなんでも対応します。");
+    // フォームは宛先が有効なときだけ出す。ビルドと同じく環境変数と .env ファイルの両方から読む
+    const env = loadEnv("production", join(import.meta.dirname, ".."), "PUBLIC_");
+    const c = resolveConsultation(
+      { contactEmail: env.PUBLIC_CONTACT_EMAIL, taskBoxUrl: env.PUBLIC_TASK_BOX_URL },
+      siteConfig,
+    );
+    expect(top.includes("<dialog")).toBe(c.contactEmail !== null);
+    if (c.taskBox) expect(top).toContain(`href="${c.taskBox.href}"`);
   });
 
   it("shows portfolio tiles with title, tags and url button on the top page", () => {

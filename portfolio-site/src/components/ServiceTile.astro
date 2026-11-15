@@ -1,0 +1,14 @@
+---
+// トップページの「サービス」のタイル。ポートフォリオのタイルと同じカードの見た目で、タイトルと説明だけを出す（リンクなし）
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+---
+
+<article class="flex flex-col gap-2 rounded-card border border-t-4 border-line border-t-accent bg-surface p-5 shadow-sm">
+  <h3 class="font-heading text-lg leading-snug font-bold">{title}</h3>
+  <p class="text-sm leading-relaxed text-muted">{description}</p>
+</article>

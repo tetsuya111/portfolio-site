@@ -1,0 +1,120 @@
+---
+// トップページ冒頭の「ご相談はこちら」。大きなボタン2つ（コンタクトフォーム・タスク百葉箱）を置く。
+// 宛先・遷移先はビルド時に決まる（src/lib/consultation.ts）。サイトは静的配信のため、
+// フォームは入力内容から mailto: リンクを作って訪問者のメールソフトを開くだけで、サイト側には何も送らない。
+import type { Consultation } from "../lib/consultation";
+
+interface Props {
+  consultation: Consultation;
+}
+
+const { contactEmail, taskBox } = Astro.props.consultation;
+// 他のボタンより大きく（文字 18px・高さ 56px 以上）、スマートフォンでは横幅いっぱいにする
+const big = "btn-accent w-full px-8 py-4 text-center text-lg font-bold sm:w-auto";
+const field = "mt-1 w-full rounded-lg border border-line bg-page px-3 py-2 text-fg";
+---
+
+<div class="mt-8 rounded-card border-2 border-accent bg-surface p-5 shadow-sm sm:p-6">
+  <h2 class="font-heading text-2xl font-bold tracking-tight">ご相談はこちら</h2>
+  <p class="mt-1 text-sm text-muted">開発・インフラ・AI の活用など、どんなことでもお気軽にご相談ください。</p>
+  <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+    {
+      contactEmail && (
+        <button type="button" class={big} data-consult-open>
+          フォームで相談する
+        </button>
+      )
+    }
+    {
+      taskBox ? (
+        <a
+          href={taskBox.href}
+          class={big}
+          {...(taskBox.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+        >
+          タスク百葉箱で相談する{taskBox.external && " ↗"}
+          {taskBox.external && <span class="sr-only">（新しいタブで開く）</span>}
+        </a>
+      ) : (
+        // 遷移先がないときは押しても何も起きないリンクにする（href なし）。色だけでなく文言でも示す
+        <a
+          role="link"
+          aria-disabled="true"
+          class="inline-block w-full cursor-not-allowed rounded-full border-2 border-line px-8 py-4 text-center text-lg font-bold text-muted sm:w-auto"
+        >
+          タスク百葉箱で相談する（準備中）
+        </a>
+      )
+    }
+  </div>
+</div>
+
+{
+  contactEmail && (
+    <dialog
+      id="consult-dialog"
+      data-contact-email={contactEmail}
+      aria-labelledby="consult-dialog-title"
+      class="m-auto w-[min(32rem,calc(100%-2rem))] rounded-card border border-line bg-surface p-6 text-fg shadow-lg backdrop:bg-fg/50"
+    >
+      <h2 id="consult-dialog-title" class="font-heading text-xl font-bold">
+        フォームで相談する
+      </h2>
+      <p class="mt-2 text-sm text-muted">
+        送信すると、入力内容を書き込んだメールソフトが開きます。内容を確かめてから送信してください。
+      </p>
+      <form class="mt-4 flex flex-col gap-4">
+        <label class="text-sm font-semibold">
+          お名前
+          <input name="name" required autocomplete="name" class={field} />
+        </label>
+        <label class="text-sm font-semibold">
+          返信先メールアドレス
+          <input name="email" type="email" required autocomplete="email" class={field} />
+        </label>
+        <label class="text-sm font-semibold">
+          ご相談内容
+          <textarea name="message" required rows="5" class={field} />
+        </label>
+        <div class="flex flex-wrap gap-3">
+          <button type="submit" class="btn-accent px-5 py-2.5 text-sm">
+            メールソフトで送信する
+          </button>
+          <button
+            type="button"
+            data-consult-close
+            class="rounded-full border border-line px-5 py-2.5 text-sm font-semibold"
+          >
+            閉じる
+          </button>
+        </div>
+      </form>
+    </dialog>
+  )
+}
+
+<script>
+  import { buildMailto } from "../lib/mailto";
+
+  const dialog = document.querySelector<HTMLDialogElement>("#consult-dialog");
+  const openButton = document.querySelector<HTMLButtonElement>("[data-consult-open]");
+  const form = dialog?.querySelector("form");
+  if (dialog && openButton && form) {
+    openButton.addEventListener("click", () => dialog.showModal());
+    dialog.querySelector("[data-consult-close]")?.addEventListener("click", () => dialog.close());
+    // 必須項目が空のときはブラウザの検証で submit 自体が起きない
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const data = new FormData(form);
+      const value = (key: string) => String(data.get(key) ?? "").trim();
+      const url = buildMailto(dialog.dataset.contactEmail ?? "", {
+        name: value("name"),
+        email: value("email"),
+        message: value("message"),
+      });
+      // 作ったリンクを残す（E2E テストでの確認用。ヘッドレスのブラウザでは mailto: を開いても何も起きない）
+      dialog.dataset.lastMailto = url;
+      window.location.href = url;
+    });
+  }
+</script>
