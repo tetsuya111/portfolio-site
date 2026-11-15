@@ -1,6 +1,6 @@
 import { defineCollection } from "astro:content";
 import { glob } from "astro/loaders";
-import { articleSchema, portfolioSchema, profileSchema } from "./lib/schemas";
+import { articleSchema, portfolioSchema, profileSchema, serviceSchema, skillSchema } from "./lib/schemas";
 
 // md ファイルの frontmatter をコレクションのデータ（「DB」）として扱う
 const profile = defineCollection({
@@ -31,4 +31,15 @@ const securityArticles = defineCollection({
   schema: articleSchema,
 });
 
-export const collections = { profile, portfolios, articles, itArticles, securityArticles };
+// トップページの「サービス」「スキル」。frontmatter だけを使う（本文は表示しない）
+const services = defineCollection({
+  loader: glob({ pattern: "**/*.md", base: "./src/content/services" }),
+  schema: serviceSchema,
+});
+
+const skills = defineCollection({
+  loader: glob({ pattern: "**/*.md", base: "./src/content/skills" }),
+  schema: skillSchema,
+});
+
+export const collections = { profile, portfolios, articles, itArticles, securityArticles, services, skills };
