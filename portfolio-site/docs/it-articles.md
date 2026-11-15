@@ -2,6 +2,8 @@
 
 AI（Perplexity）が最新の IT ニュースから記事を自動で作成し、`/it-news/`（一覧）と `/it-news/<スラッグ>/`（記事ページ）に掲載する仕組み。手で書いた記事（`/articles/`・トップの新着欄）とは並べない。記事を作るバッチは、サイトに依存しない汎用の道具として [../../portfolios/batch/](../../portfolios/batch/README.md) に置いている。
 
+セキュリティ記事（`/security-news/`）も同じ定期実行の中で作る（[security-articles.md](security-articles.md)）。
+
 ## 流れ
 
 ```

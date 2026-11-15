@@ -54,6 +54,9 @@ class ChooseFileNameTest(unittest.TestCase):
         self.assertEqual(choose_file_name("2026-11-14", "日本語", set()), "2026-11-14-it-news")
         self.assertEqual(choose_file_name("2026-11-14", "Bad_Slug--x", set()), "2026-11-14-bad-slug-x")
 
+    def test_uses_the_given_fallback(self):
+        self.assertEqual(choose_file_name("2026-11-14", "日本語", set(), fallback="security-news"), "2026-11-14-security-news")
+
     def test_avoids_taken_names(self):
         taken = {"2026-11-14-a", "2026-11-14-a-2"}
         self.assertEqual(choose_file_name("2026-11-14", "a", taken), "2026-11-14-a-3")

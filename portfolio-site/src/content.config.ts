@@ -25,4 +25,10 @@ const itArticles = defineCollection({
   schema: articleSchema,
 });
 
-export const collections = { profile, portfolios, articles, itArticles };
+// 自動作成のセキュリティ記事。IT 記事と同じく別フォルダで管理し、/security-news/ に分けて表示する（正本は S3。docs/security-articles.md）
+const securityArticles = defineCollection({
+  loader: glob({ pattern: "**/*.md", base: "./src/content/security-articles" }),
+  schema: articleSchema,
+});
+
+export const collections = { profile, portfolios, articles, itArticles, securityArticles };

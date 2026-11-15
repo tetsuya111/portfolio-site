@@ -76,18 +76,21 @@ def load_existing(dirs: list[Path]) -> Existing:
     return ex
 
 
-def _clean_slug(slug: str) -> str:
+def _clean_slug(slug: str, fallback: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "-", slug.lower()).strip("-")
-    return s or FALLBACK_SLUG
+    return s or fallback
 
 
 def _fit(base: str, suffix: str) -> str:
     return base[: MAX_NAME_LENGTH - len(suffix)].rstrip("-") + suffix
 
 
-def choose_file_name(date: str, slug: str, taken: set[str]) -> str:
-    """`YYYY-MM-DD-<slug>`（拡張子なし、64 文字以内）。taken と重なれば -2、-3 … を付ける。"""
-    base = f"{date}-{_clean_slug(slug)}"
+def choose_file_name(date: str, slug: str, taken: set[str], fallback: str = FALLBACK_SLUG) -> str:
+    """`YYYY-MM-DD-<slug>`（拡張子なし、64 文字以内）。taken と重なれば -2、-3 … を付ける。
+
+    slug に使える文字（英小文字・数字）が無ければ fallback を使う。
+    """
+    base = f"{date}-{_clean_slug(slug, fallback)}"
     name = _fit(base, "")
     n = 2
     while name in taken:

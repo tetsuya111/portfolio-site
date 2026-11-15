@@ -1,6 +1,6 @@
 # CodeBuild 用・IT 記事の定期作成（infra/template.yaml の ItArticlesProject から参照。EventBridge Scheduler が起動する）
-# 1. S3 に保存済みの過去の記事を src/content/it-articles/ に取り込む
-# 2. 汎用バッチ（portfolios/batch/）で新しい記事を Perplexity で作り、同じフォルダに md で置く
+# 1. S3 に保存済みの過去の記事を src/content/it-articles/・src/content/security-articles/ に取り込む
+# 2. 汎用バッチ（portfolios/batch/）で新しい IT 記事・セキュリティ記事を Perplexity で作り、同じフォルダに md で置く
 # 3. サイト全体をビルドし、成功したときだけ記事を S3 に保存して、内容（MD5）が変わったファイルだけを配信用バケットに送る
 # apps/ はビルドしないため、配信用バケットのファイルは削除しない（掃除は push 時の buildspec.yml の s3 sync --delete に任せる）
 version: 0.2
@@ -20,10 +20,13 @@ phases:
     commands:
       - test -n "$IT_ARTICLES_BUCKET"
       - aws s3 sync "s3://$IT_ARTICLES_BUCKET/it-articles/" src/content/it-articles/ --exclude "*" --include "*.md"
+      - aws s3 sync "s3://$IT_ARTICLES_BUCKET/security-articles/" src/content/security-articles/ --exclude "*" --include "*.md"
   build:
     commands:
       # PERPLEXITY_API_KEY（SSM Parameter Store から）・PERPLEXITY_MODEL・IT_ARTICLES_PER_RUN はプロジェクトの環境変数
       - python ../portfolios/batch/generate_it_articles.py --out-dir src/content/it-articles
+      # セキュリティ記事（SECURITY_ARTICLES_PER_RUN が 0 ならバッチが何もせずに終わる）。失敗しても IT 記事の公開は続ける
+      - python ../portfolios/batch/generate_security_articles.py --out-dir src/content/security-articles || echo "セキュリティ記事を作成できませんでした（IT 記事の公開は続けます）"
       # push のデプロイ（buildspec.yml）と同じく、テストと lint に通ったコードだけを公開する
       - npm test
       - npm run lint
@@ -36,6 +39,7 @@ phases:
           # 記事の保存に失敗したら公開しない（保存されていない記事のページは、次の push のデプロイで消えてしまう）
           set -e
           aws s3 sync src/content/it-articles/ "s3://$IT_ARTICLES_BUCKET/it-articles/" --exclude "*" --include "*.md"
+          aws s3 sync src/content/security-articles/ "s3://$IT_ARTICLES_BUCKET/security-articles/" --exclude "*" --include "*.md"
           DIST_DIR=dist BUCKET="$SITE_BUCKET" PREFIX="$DEPLOY_PATH" DISTRIBUTION_ID="$DISTRIBUTION_ID" python ../portfolios/batch/deploy_diff.py
         else
           echo "ビルドが失敗したため、記事の保存とデプロイを省略します"
