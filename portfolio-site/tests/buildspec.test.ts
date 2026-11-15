@@ -69,6 +69,13 @@ describe("buildspec.yml", () => {
     expect(pre).toContain('--exclude "*" --include "*.md"');
   });
 
+  it("restores the auto-generated security articles from S3 too", () => {
+    const pre = commands("pre_build").join("\n");
+    expect(pre).toMatch(
+      /if \[ -n "\$IT_ARTICLES_BUCKET" \]; then\s*\n(\s*aws s3 sync [^\n]*\n)*\s*aws s3 sync "s3:\/\/\$IT_ARTICLES_BUCKET\/security-articles\/" src\/content\/security-articles\/ --exclude "\*" --include "\*\.md"\n/,
+    );
+  });
+
   it("does not run aws commands outside pre_build and post_build", () => {
     for (const phase of ["install", "build"]) {
       expect(commands(phase).join("\n")).not.toMatch(/\baws\b/);
@@ -120,6 +127,25 @@ describe("buildspec.it-articles.yml", () => {
     // 記事の保存に失敗したら、公開しない（保存されていない記事は次の push のデプロイで消えるため）
     expect(post.indexOf("set -e")).toBeGreaterThan(guard);
     expect(post.indexOf("set -e")).toBeLessThan(save);
+  });
+
+  it("restores, generates and saves the security articles too", () => {
+    expect(c("pre_build").join("\n")).toContain(
+      'aws s3 sync "s3://$IT_ARTICLES_BUCKET/security-articles/" src/content/security-articles/ --exclude "*" --include "*.md"',
+    );
+    const build = c("build");
+    const it = build.findIndex((l) => l.includes("generate_it_articles.py"));
+    const sec = build.findIndex((l) => l.includes("generate_security_articles.py --out-dir src/content/security-articles"));
+    const site = build.findIndex((l) => l.includes("npm run test:build"));
+    expect(sec).toBeGreaterThan(it);
+    expect(sec).toBeLessThan(site);
+    // 本数が 0 なら作らない。作成に失敗しても IT 記事の公開は続ける
+    expect(build[sec]).toMatch(/if \[ "\$\{SECURITY_ARTICLES_PER_RUN:-3\}" -gt 0 \]; then/);
+    expect(build[sec]).toMatch(/generate_security_articles\.py [^\n]*\|\| echo /);
+    const post = c("post_build").join("\n");
+    const save = post.indexOf('aws s3 sync src/content/security-articles/ "s3://$IT_ARTICLES_BUCKET/security-articles/" --exclude "*" --include "*.md"');
+    expect(save).toBeGreaterThan(post.indexOf("set -e"));
+    expect(save).toBeLessThan(post.indexOf("deploy_diff.py"));
   });
 
   it("never deletes from the buckets (apps/ is not built here)", () => {

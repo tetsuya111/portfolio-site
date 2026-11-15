@@ -15,6 +15,7 @@
     "ItArticlesScheduleExpression": "rate(1 day)",
     "ItArticlesScheduleState": "DISABLED",
     "ItArticlesPerRun": "5",
+    "SecurityArticlesPerRun": "3",
     "PerplexityModel": "sonar",
     "PerplexityApiKeyParameterName": "/portfolio-site-dev/perplexity-api-key"
   }
