@@ -134,6 +134,60 @@ def _tags(fixed: list[str], generated: list[str]) -> list[str]:
     return tags
 
 
+def valid_references(references: list[dict]) -> list[dict]:
+    """参考リンクに使える（http(s) で、空白・改行・制御文字・<>"\\ を含まない）ものだけを返す。
+
+    それ以外の URL は、リンクの行を壊して HTML を差し込めるため使わない。
+    """
+    return [r for r in references if _REFERENCE_URL.match(str(r.get("url", "")))]
+
+
+def valid_glossary(glossary: list[dict]) -> list[dict]:
+    return [g for g in glossary if _one_line(g.get("term", "")) and _one_line(g.get("description", ""))]
+
+
+def frontmatter_lines(*, title: str, date: str, tags: list[str], generated_tags: list[str], description: str,
+                      source_url: str, generator: str) -> list[str]:
+    """frontmatter（区切りの --- を含む）の行。値は JSON で書く（JSON の文字列・配列は YAML としても正しく、エスケープが確実なため）。"""
+    fm: dict[str, object] = {"title": title, "date": date, "tags": _tags(tags, list(generated_tags))}
+    description = _one_line(description)
+    if description:
+        fm["description"] = description
+    fm["sourceUrl"] = source_url
+    fm["generator"] = generator
+    return ["---", *(f"{k}: {json.dumps(v, ensure_ascii=False)}" for k, v in fm.items()), "---"]
+
+
+def ai_notice(generator: str, date: str) -> str:
+    return (
+        f"> この記事は AI（{_sanitize_text(generator)}）が {date} に自動で作成しました。"
+        "内容の正確性は参考リンクの出典で確認してください。"
+    )
+
+
+def glossary_lines(glossary: list[dict]) -> list[str]:
+    return [
+        f"- **{_sanitize_text(_one_line(g['term']))}**: {_sanitize_text(_one_line(g['description']))}" for g in glossary
+    ]
+
+
+def reference_lines(refs: list[dict]) -> list[str]:
+    lines = []
+    for i, r in enumerate(refs, 1):
+        # 角かっこは無害化の前に全角にする（後にすると、エスケープの \ が画面に残る）
+        label = _sanitize_text(_one_line(r.get("title") or r["url"]).replace("[", "［").replace("]", "］"))
+        url = str(r["url"]).replace("(", "%28").replace(")", "%29")
+        lines.append(f"{i}. [{label}]({url})")
+    return lines
+
+
+def check_title_and_date(title: str, date: str) -> None:
+    if not title:
+        raise ValueError("タイトルが空です")
+    if not _valid_date(date):
+        raise ValueError(f"日付が不正です: {date}")
+
+
 def build_article_markdown(
     *,
     article: dict,
@@ -145,51 +199,27 @@ def build_article_markdown(
 ) -> str:
     """frontmatter（title・date・tags・description・sourceUrl・generator）つきの Markdown を返す。
 
-    frontmatter の値は JSON で書く（JSON の文字列・配列は YAML としても正しく、エスケープが確実なため）。
     条件（タイトル・日付・参考情報・用語解説 1 件以上・http(s) の参考リンク 1 件以上）を満たさなければ ValueError。
     """
     title = _one_line(article.get("title", ""))
-    if not title:
-        raise ValueError("タイトルが空です")
-    if not _valid_date(date):
-        raise ValueError(f"日付が不正です: {date}")
-    # 空白・改行・制御文字・<>"\ を含む URL は、リンクの行を壊して HTML を差し込めるため使わない
-    refs = [r for r in references if _REFERENCE_URL.match(str(r.get("url", "")))]
+    check_title_and_date(title, date)
+    refs = valid_references(references)
     if not refs:
         raise ValueError("参考リンク（http/https）がありません")
-    glossary = [g for g in article.get("glossary", []) if _one_line(g.get("term", "")) and _one_line(g.get("description", ""))]
+    glossary = valid_glossary(article.get("glossary", []))
     if not glossary:
         raise ValueError("用語解説がありません")
     background = str(article.get("background", "")).strip()
     if not background:
         raise ValueError("参考情報がありません")
 
-    fm = {
-        "title": title,
-        "date": date,
-        "tags": _tags(tags, list(article.get("tags", []))),
-    }
-    description = _one_line(article.get("description", ""))
-    if description:
-        fm["description"] = description
-    fm["sourceUrl"] = source_url
-    fm["generator"] = generator
-
-    lines = ["---", *(f"{k}: {json.dumps(v, ensure_ascii=False)}" for k, v in fm.items()), "---", ""]
-    lines.append(
-        f"> この記事は AI（{_sanitize_text(generator)}）が {date} に自動で作成しました。"
-        "内容の正確性は参考リンクの出典で確認してください。"
+    lines = frontmatter_lines(
+        title=title, date=date, tags=tags, generated_tags=article.get("tags", []),
+        description=article.get("description", ""), source_url=source_url, generator=generator,
     )
+    lines += ["", ai_notice(generator, date)]
     lines += ["", sanitize_markdown(str(article.get("body", "")).strip()), ""]
     lines += ["## 参考情報", "", sanitize_markdown(background), ""]
-    lines += ["## 用語解説", ""]
-    lines += [
-        f"- **{_sanitize_text(_one_line(g['term']))}**: {_sanitize_text(_one_line(g['description']))}" for g in glossary
-    ]
-    lines += ["", "## 参考リンク", ""]
-    for i, r in enumerate(refs, 1):
-        # 角かっこは無害化の前に全角にする（後にすると、エスケープの \ が画面に残る）
-        label = _sanitize_text(_one_line(r.get("title") or r["url"]).replace("[", "［").replace("]", "］"))
-        url = str(r["url"]).replace("(", "%28").replace(")", "%29")
-        lines.append(f"{i}. [{label}]({url})")
+    lines += ["## 用語解説", "", *glossary_lines(glossary)]
+    lines += ["", "## 参考リンク", "", *reference_lines(refs)]
     return "\n".join(lines) + "\n"
