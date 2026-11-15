@@ -1,0 +1,163 @@
+---
+// トップページ冒頭の「ご相談はこちら」。大きなボタン2つ（コンタクトフォーム・タスク百葉箱）を置く。
+// 宛先・遷移先はビルド時に決まる（src/lib/consultation.ts）。サイトは静的配信のため、
+// フォームは入力内容から mailto: リンクを作って訪問者のメールソフトを開くだけで、サイト側には何も送らない。
+import type { Consultation } from "../lib/consultation";
+import { MAILTO_LIMITS } from "../lib/mailto";
+
+interface Props {
+  consultation: Consultation;
+}
+
+const { contactEmail, taskBox } = Astro.props.consultation;
+// 他のボタンより大きく（文字 18px・高さ 56px 以上）、スマートフォンでは横幅いっぱいにする
+const big = "btn-accent w-full px-8 py-4 text-center text-lg font-bold sm:w-auto";
+const field = "mt-1 w-full rounded-lg border border-line bg-page px-3 py-2 text-fg";
+---
+
+<div class="mt-8 rounded-card border-2 border-accent bg-surface p-5 shadow-sm sm:p-6">
+  <h2 class="font-heading text-2xl font-bold tracking-tight">ご相談はこちら</h2>
+  <p class="mt-1 text-sm text-muted">開発・インフラ・AI の活用など、どんなことでもお気軽にご相談ください。</p>
+  <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+    {
+      contactEmail && (
+        <button type="button" class={big} data-consult-open>
+          フォームで相談する
+        </button>
+      )
+    }
+    {
+      taskBox ? (
+        <a
+          href={taskBox.href}
+          class={big}
+          {...(taskBox.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+        >
+          タスク百葉箱で相談する{taskBox.external && " ↗"}
+          {taskBox.external && <span class="sr-only">（新しいタブで開く）</span>}
+        </a>
+      ) : (
+        // 遷移先がないときは押しても何も起きないリンクにする（href なし）。色だけでなく文言でも示す
+        <a
+          role="link"
+          aria-disabled="true"
+          tabindex="0"
+          class="inline-block w-full cursor-not-allowed rounded-full border-2 border-line px-8 py-4 text-center text-lg font-bold text-muted sm:w-auto"
+        >
+          タスク百葉箱で相談する（準備中）
+        </a>
+      )
+    }
+  </div>
+</div>
+
+{
+  contactEmail && (
+    <dialog
+      id="consult-dialog"
+      data-contact-email={contactEmail}
+      aria-labelledby="consult-dialog-title"
+      class="m-auto w-[min(32rem,calc(100%-2rem))] rounded-card border border-line bg-surface p-6 text-fg shadow-lg backdrop:bg-fg/50"
+    >
+      <h2 id="consult-dialog-title" class="font-heading text-xl font-bold">
+        フォームで相談する
+      </h2>
+      <p class="mt-2 text-sm text-muted">
+        送信すると、入力内容を書き込んだメールソフトが開きます。内容を確かめてから送信してください。
+      </p>
+      <form class="mt-4 flex flex-col gap-4">
+        <label class="text-sm font-semibold">
+          お名前
+          <input name="name" required maxlength={MAILTO_LIMITS.name} autocomplete="name" class={field} />
+        </label>
+        <label class="text-sm font-semibold">
+          返信先メールアドレス
+          <input
+            name="email"
+            type="email"
+            required
+            maxlength={MAILTO_LIMITS.email}
+            autocomplete="email"
+            class={field}
+          />
+        </label>
+        <label class="text-sm font-semibold">
+          ご相談内容
+          <textarea
+            name="message"
+            required
+            rows="4"
+            maxlength={MAILTO_LIMITS.message}
+            aria-describedby="consult-message-note"
+            class={field}
+          />
+        </label>
+        <p id="consult-message-note" class="-mt-2 text-xs text-muted">
+          {MAILTO_LIMITS.message}文字まで（メールソフトに渡せる長さの上限のため）。詳しい内容や資料は、開いたメールに追記してください。
+        </p>
+        <div class="flex flex-wrap gap-3">
+          <button type="submit" class="btn-accent px-5 py-2.5 text-sm">
+            メールソフトで送信する
+          </button>
+          <button
+            type="button"
+            data-consult-close
+            class="rounded-full border border-line px-5 py-2.5 text-sm font-semibold"
+          >
+            閉じる
+          </button>
+        </div>
+        {/* 送信後に出す案内。メールソフトが開かなかったときに、もう一度開くリンクと宛先を示す */}
+        <p data-consult-sent hidden role="status" class="text-sm">
+          メールソフトが開かない場合は、<a data-consult-mailto class="font-semibold text-link underline">こちらから開く</a>
+          か、{contactEmail} 宛てに直接お送りください。
+        </p>
+      </form>
+    </dialog>
+  )
+}
+
+<script>
+  import { buildMailto } from "../lib/mailto";
+
+  const dialog = document.querySelector<HTMLDialogElement>("#consult-dialog");
+  const openButton = document.querySelector<HTMLButtonElement>("[data-consult-open]");
+  const form = dialog?.querySelector("form");
+  if (dialog && openButton && form) {
+    const sent = dialog.querySelector<HTMLElement>("[data-consult-sent]");
+    const reopen = dialog.querySelector<HTMLAnchorElement>("[data-consult-mailto]");
+    // 開くたびに前回の入力と送信後の案内を消す
+    openButton.addEventListener("click", () => {
+      form.reset();
+      if (sent) sent.hidden = true;
+      reopen?.removeAttribute("href");
+      dialog.showModal();
+    });
+    dialog.querySelector("[data-consult-close]")?.addEventListener("click", () => dialog.close());
+    // 必須項目が空のときはブラウザの検証で submit 自体が起きない
+    // required は空白だけの入力を通すため、前後の空白を除いて空なら送信せず、その欄に戻す
+    const fields = form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea");
+    for (const f of fields) f.addEventListener("input", () => f.setCustomValidity(""));
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const blank = [...fields].find((f) => f.required && f.value.trim() === "");
+      if (blank) {
+        blank.setCustomValidity("入力してください。");
+        blank.reportValidity();
+        blank.focus();
+        return;
+      }
+      const data = new FormData(form);
+      const value = (key: string) => String(data.get(key) ?? "").trim();
+      const url = buildMailto(dialog.dataset.contactEmail ?? "", {
+        name: value("name"),
+        email: value("email"),
+        message: value("message"),
+      });
+      // メールソフトが開かない環境のために、同じリンクと宛先の案内を出す
+      reopen?.setAttribute("href", url);
+      if (sent) sent.hidden = false;
+      window.location.href = url;
+    });
+  }
+</script>

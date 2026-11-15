@@ -62,7 +62,7 @@ portfolio-site/
 │   ├── layouts/                  # 公開ページの共通レイアウト
 │   ├── components/               # 公開ページの部品
 │   ├── admin/                    # 管理画面（src/pages の外に置き、本番ビルドに含めない）
-│   ├── site.config.ts            # サイト名と既定のデザインテーマ（docs/themes.md）
+│   ├── site.config.ts            # サイト名・既定のデザインテーマ（docs/themes.md）・タスク百葉箱のモック URL
 │   └── styles/global.css         # Tailwind CSS の読み込みと、デザインテーマごとの色・書体（docs/themes.md）
 ├── public/favicon.svg            # ファビコン
 ├── tests/                        # vitest のテスト（単体・ビルド成果物）
@@ -78,6 +78,8 @@ portfolio-site/
 | `profile/profile.md` | `profile` | 自己紹介・経歴（1件だけ） |
 | `portfolios/<スラッグ>.md` | `portfolios` | ポートフォリオ1件 |
 | `articles/<スラッグ>.md` | `articles` | 記事1件 |
+| `services/<スラッグ>.md` | `services` | トップページの「サービス」1件（frontmatter だけ） |
+| `skills/<スラッグ>.md` | `skills` | トップページの「スキル」1件（frontmatter だけ。先頭6件は得意分野にも出す） |
 | `it-articles/<YYYY-MM-DD-スラッグ>.md` | `itArticles` | 自動作成の IT 記事1件（スキーマは `articles` と同じ。正本は S3 で git には入らない。[it-articles.md](it-articles.md)） |
 | `security-articles/<YYYY-MM-DD-スラッグ>.md` | `securityArticles` | 自動作成のセキュリティ記事1件（スキーマは `articles` と同じ。正本は S3 で git には入らない。[security-articles.md](security-articles.md)） |
 
@@ -107,9 +109,12 @@ portfolio-site/
 | `components/SectionHeading.astro` | 英大文字の小見出しと日本語の見出し |
 | `components/Eyebrow.astro` | 見出しに添える英大文字の小見出し（飾りなので読み上げない） |
 | `components/SiteHeader.astro` | サイト名とナビゲーション（ホーム・自己紹介・ポートフォリオ・記事） |
-| `components/PortfolioTile.astro` | ポートフォリオのタイル。タイトルのリンクをタイル全体に広げ（stretched link）、URL ボタンは入れ子にせず手前に重ねる |
-| `components/TagList.astro` | タグの一覧（タグがなければ何も出さない） |
-| `components/ArticleList.astro` | 記事の一覧（`/articles/` と `/it-news/` で共用。リンク先の基準パスを受け取る） |
+| `components/PortfolioTile.astro` | ポートフォリオのタイル（タイトル・概要・タグ5件まで・URL ボタン）。タイトルのリンクをタイル全体に広げ（stretched link）、URL ボタンは入れ子にせず手前に重ねる |
+| `components/TagList.astro` | タグの一覧（タグがなければ何も出さない）。`max` を渡すと先頭 max 件と「+N」を出す |
+| `components/ArticleList.astro` | 記事の一覧（`/articles/`・`/it-news/`・トップページで共用。リンク先の基準パスと、タイトルの見出しの階層を受け取る） |
+| `components/ConsultCta.astro` | トップページの「ご相談はこちら」。フォームのボタン（`<dialog>` を開き、送信で mailto: を開く）とタスク百葉箱のボタン |
+| `components/ServiceTile.astro` | トップページの「サービス」のタイル |
+| `components/SkillTile.astro` | トップページの「スキル」のタイル（分類・解説・作れるもの・使われている例） |
 | `components/ArticleBody.astro` | 記事ページの本体（戻りリンク・見出し・日付・タグ・本文。`/articles/` と `/it-news/` で共用） |
 
 ## src/lib（共有の処理）
@@ -118,12 +123,14 @@ portfolio-site/
 
 | ファイル | 役割 | 主な利用元 |
 |---|---|---|
-| `schemas.ts` | frontmatter の zod スキーマ（profile・portfolio・article）。ビルド時と保存時で同じものを使う | `content.config.ts`、`content-store.ts`、`portfolio-cli.ts` |
+| `schemas.ts` | frontmatter の zod スキーマ（profile・portfolio・article・service・skill）と、リンク先に使える値かの判定（`isLinkTarget`）。ビルド時と保存時で同じものを使う | `content.config.ts`、`content-store.ts`、`portfolio-cli.ts` |
 | `markdown-file.ts` | md の全文を frontmatter と本文に分ける／組み立てる | `content-store.ts` |
 | `slug.ts` | スラッグの検証（英小文字・数字・ハイフン、64文字まで）。パスを組み立てる前に必ず通す | `content-store.ts`、`portfolio-cli.ts` |
 | `errors.ts` | `ContentValidationError`（入力が不正）、`ContentConflictError`（同名ファイルがある） | 各モジュール |
 | `content-store.ts` | md ファイルの書き込み。自己紹介の置き換え（一時ファイル + rename）、記事・ポートフォリオの新規作成（既存は上書きしない） | `admin-api.ts`、`portfolio-cli.ts` |
-| `content-query.ts` | 一覧の並び順、下書きの除外、日付の表示形式 | 公開ページ |
+| `content-query.ts` | 一覧の並び順（日付順・order 順）、下書きの除外、日付の表示形式、タイルのタグの件数制限 | 公開ページ |
+| `consultation.ts` | 相談ボタンの宛先・遷移先の決定（`PUBLIC_CONTACT_EMAIL`・`PUBLIC_TASK_BOX_URL` → `site.config.ts`） | `pages/index.astro` |
+| `mailto.ts` | コンタクトフォームの入力から mailto: リンクを作る（ブラウザでも動くよう依存なし） | `components/ConsultCta.astro` |
 | `admin-api.ts` | 保存 API の処理本体。Origin・Content-Type の検査、ルーティング、エラーと HTTP ステータスの対応 | `integrations/local-admin.ts` |
 | `portfolio-cli.ts` | ポートフォリオ追加コマンドの引数解析と実行 | `scripts/new-portfolio.mjs` |
 | `theme.ts` | デザインテーマの一覧と、ビルドに使うテーマ名の決定（`PUBLIC_THEME` → `site.config.ts`） | `layouts/BaseLayout.astro` |

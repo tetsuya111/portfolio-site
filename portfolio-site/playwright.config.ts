@@ -37,6 +37,8 @@ export default defineConfig({
     {
       command: `npm run build && npx astro preview --port ${SITE_PORT}`,
       url: `http://localhost:${SITE_PORT}/`,
+      // トップページのコンタクトフォームを表示させるため、テスト用の宛先を設定してビルドする
+      env: { PUBLIC_CONTACT_EMAIL: "contact@example.com" },
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
     },

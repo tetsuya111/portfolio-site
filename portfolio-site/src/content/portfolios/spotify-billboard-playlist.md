@@ -1,5 +1,6 @@
 ---
 title: "Billboard → Spotify Playlist"
+description: "Billboard Hot 100 のチャートページのURLを入力すると、その週の100曲を収めた非公開プレイリストを自分の Spotify アカウントに作るWebアプリです。"
 tags:
   - "Python"
   - "FastAPI"

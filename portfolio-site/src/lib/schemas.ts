@@ -20,6 +20,11 @@ const portfolioUrl = z.union([httpUrl, sitePath], {
   error: "http(s) の URL か、/ で始まるサイト内のパス（例 /apps/my-app/）にしてください",
 });
 
+/** 相談ボタンの遷移先などに使える値か（掲載 md の url と同じ規則: http(s) の URL かサイト内のパス）。 */
+export function isLinkTarget(value: string): boolean {
+  return portfolioUrl.safeParse(value).success;
+}
+
 export const profileSchema = z.object({
   name: z.string().min(1),
   role: z.string().min(1),
@@ -30,8 +35,30 @@ export const profileSchema = z.object({
 export const portfolioSchema = z.object({
   title: z.string().min(1),
   tags: z.array(z.string().min(1)).default([]),
+  /** タイルに表示する概要（1〜2文） */
+  description: z.string().optional(),
   url: portfolioUrl.optional(),
   date: z.coerce.date().optional(),
+});
+
+/** トップページの「サービス」1件（src/content/services/*.md）。order の昇順に並べる。 */
+export const serviceSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().min(1),
+  order: z.number().int().default(0),
+});
+
+/** トップページの「スキル」1件（src/content/skills/*.md）。order の昇順に並べ、先頭6件を冒頭の得意分野にも出す。 */
+export const skillSchema = z.object({
+  name: z.string().min(1),
+  /** 分類（例: 言語・フレームワーク・インフラ） */
+  category: z.string().min(1),
+  description: z.string().min(1),
+  /** その技術で作れるものの例 */
+  examples: z.array(z.string().min(1)).default([]),
+  /** その技術が使われている有名なサイト・ソフトウェア */
+  famous: z.array(z.string().min(1)).default([]),
+  order: z.number().int().default(0),
 });
 
 export const articleSchema = z.object({
@@ -45,6 +72,8 @@ export const articleSchema = z.object({
 export type Profile = z.infer<typeof profileSchema>;
 export type Portfolio = z.infer<typeof portfolioSchema>;
 export type Article = z.infer<typeof articleSchema>;
+export type Service = z.infer<typeof serviceSchema>;
+export type Skill = z.infer<typeof skillSchema>;
 
 /** zod の検証エラーを「項目: 理由」の文字列配列にする（API・コマンドの表示用）。 */
 export function formatIssues(error: z.ZodError): string[] {

@@ -1,17 +1,28 @@
 ---
+// タグの一覧。max を指定すると先頭 max 件だけを出し、残りは「+N」で件数を示す（ポートフォリオのタイル用）
+import { limitTags } from "../lib/content-query";
+
 interface Props {
   tags: string[];
+  max?: number;
 }
 
-const { tags } = Astro.props;
+const { tags, max } = Astro.props;
+const { shown, rest } = limitTags(tags, max ?? Infinity);
 ---
 
 {
   tags.length > 0 && (
     <ul class="flex flex-wrap gap-1.5" aria-label="タグ">
-      {tags.map((t) => (
+      {shown.map((t) => (
         <li class="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs text-on-accent-soft">{t}</li>
       ))}
+      {rest > 0 && (
+        <li class="rounded-full border border-line px-2.5 py-0.5 text-xs text-muted">
+          +{rest}
+          <span class="sr-only">（ほか {rest} 件）</span>
+        </li>
+      )}
     </ul>
   )
 }
