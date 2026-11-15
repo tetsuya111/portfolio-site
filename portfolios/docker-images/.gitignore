@@ -1,0 +1,2 @@
+# Docker イメージ（docker save の tar）は大きいため git で管理しない
+*.tar

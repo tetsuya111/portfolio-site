@@ -1,7 +1,11 @@
 // astro build 後の dist/ を検証する（npm run test:build で実行）
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { loadEnv } from "vite";
 import { describe, expect, it } from "vitest";
+import { parseMarkdown } from "../src/lib/markdown-file";
+import { resolveTheme } from "../src/lib/theme";
+import { siteConfig } from "../src/site.config";
 
 const dist = join(import.meta.dirname, "..", "dist");
 const html = (p: string) => readFileSync(join(dist, p, "index.html"), "utf8");
@@ -41,7 +45,11 @@ describe("build output", () => {
   });
 
   it("renders the profile on the about page", () => {
-    expect(html("about")).toContain("山田 太郎");
+    // 名前はプロフィールの差し替えで変わるため、profile.md の frontmatter から読む
+    const profile = parseMarkdown(readFileSync(join(import.meta.dirname, "..", "src", "content", "profile", "profile.md"), "utf8"));
+    const name = profile.data.name;
+    expect(typeof name === "string" && name.length > 0).toBe(true);
+    expect(html("about")).toContain(`>${String(name)}</h1>`);
   });
 
   it("lists published articles and excludes drafts", () => {
@@ -51,8 +59,48 @@ describe("build output", () => {
     expect(existsSync(join(dist, "articles", "draft-sample"))).toBe(false);
   });
 
+  it("has the IT news list page for auto-generated articles, linked from the article list", () => {
+    expect(html("it-news")).toMatch(/<h1[^>]*>IT ニュース<\/h1>/);
+    expect(html("it-news")).toContain("<title>IT ニュース | Portfolio</title>");
+    expect(html("articles")).toMatch(/<a href="\/it-news\/"/);
+  });
+
+  it("has the security news list page for auto-generated articles, linked from the article list", () => {
+    expect(html("security-news")).toMatch(/<h1[^>]*>セキュリティニュース<\/h1>/);
+    expect(html("security-news")).toContain("<title>セキュリティニュース | Portfolio</title>");
+    expect(html("articles")).toMatch(/<a href="\/security-news\/"/);
+  });
+
+  it("lists the security news generator as a portfolio", () => {
+    expect(html("portfolios")).toContain('href="/portfolios/security-news-auto-articles/"');
+    expect(html("portfolios/security-news-auto-articles")).toContain("セキュリティニュース自動作成");
+  });
+
+  it("lists the IT news generator as a portfolio", () => {
+    expect(html("portfolios")).toContain('href="/portfolios/it-news-auto-articles/"');
+    expect(html("portfolios/it-news-auto-articles")).toContain("IT ニュース自動作成");
+  });
+
+  it("keeps the back link on hand-written article pages", () => {
+    expect(html("articles/hello-world")).toMatch(/<a href="\/articles\/"[^>]*>← 記事一覧<\/a>/);
+  });
+
   it("contains no admin pages", () => {
     expect(existsSync(join(dist, "admin"))).toBe(false);
+  });
+
+  it("applies the selected design theme to every page", () => {
+    // ビルドと同じ規則で期待値を決める。PUBLIC_THEME は astro build と同じく環境変数と .env ファイルの両方から読む
+    const env = loadEnv("production", join(import.meta.dirname, ".."), "PUBLIC_");
+    const theme = resolveTheme(env.PUBLIC_THEME, siteConfig.theme);
+    for (const p of [".", "about", "portfolios", "articles", "it-news", "security-news"]) {
+      expect(html(p)).toContain(`<html lang="ja" data-theme="${theme}"`);
+    }
+  });
+
+  it("has an svg favicon linked from the pages", () => {
+    expect(existsSync(join(dist, "favicon.svg"))).toBe(true);
+    expect(html(".")).toMatch(/<link rel="icon" type="image\/svg\+xml" href="\/favicon.svg"/);
   });
 
   it("has a 404 page", () => {

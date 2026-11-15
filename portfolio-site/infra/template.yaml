@@ -79,6 +79,45 @@ Parameters:
     Description: >-
       CloudFront に AWS WAF（IP ごとのレート制限）を付けるか。付けると Web ACL とルールの月額固定費がかかる
       （料金の歯止めは BudgetAlertEmail の通知が基本）
+  ItArticlesScheduleExpression:
+    Type: String
+    Default: rate(1 day)
+    Description: >-
+      IT 記事の定期作成（<スタック名>-it-articles）を実行する間隔。EventBridge Scheduler の rate(...) か cron(...)。
+      cron のタイムゾーンは Asia/Tokyo（例 cron(0 6 * * ? *) で毎日 6:00）
+    AllowedPattern: "^(rate|cron)\\(.+\\)$"
+  ItArticlesScheduleState:
+    Type: String
+    Default: DISABLED
+    AllowedValues: ["ENABLED", "DISABLED"]
+    Description: >-
+      IT 記事の定期作成の ON（ENABLED）/ OFF（DISABLED）。PerplexityApiKeyParameterName の SSM パラメーターを作ってから ENABLED にする
+  ItArticlesPerRun:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    MaxValue: 10
+    Description: 1回の定期作成で作る IT 記事の数（出典が既存の記事と重なる題材は除くため、これより少なくなることがある）
+  SecurityArticlesPerRun:
+    Type: Number
+    Default: 3
+    MinValue: 0
+    MaxValue: 10
+    Description: >-
+      1回の定期作成（<スタック名>-it-articles）で、IT 記事に続けて作るセキュリティ記事の数。0 で作らない
+      （出典が既存の記事と重なる題材は除くため、これより少なくなることがある）
+  PerplexityModel:
+    Type: String
+    Default: sonar
+    AllowedValues: ["sonar", "sonar-pro"]
+    Description: IT 記事の作成に使う Perplexity のモデル（sonar-pro は高品質だが料金が高い）
+  PerplexityApiKeyParameterName:
+    Type: String
+    Default: /portfolio-site/perplexity-api-key
+    Description: >-
+      Perplexity の API キーを入れた SSM パラメーター（SecureString、既定の aws/ssm キーで暗号化）の名前。
+      テンプレートの外で手動で作る（キーをテンプレート・パラメーターファイルに書かないため）
+    AllowedPattern: "^/[A-Za-z0-9_.\\-/]+$"
 
 Conditions:
   UseCloudFront: !Equals [!Ref EnableCloudFront, "true"]
@@ -444,6 +483,22 @@ Resources:
                   Action: cloudfront:CreateInvalidation
                   Resource: !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}"
                 - !Ref "AWS::NoValue"
+              # 定期実行で作った IT 記事・セキュリティ記事を取り込んでからビルドする（buildspec.yml の pre_build）。読み取りだけ
+              - Sid: ListItArticles
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt ItArticlesBucket.Arn
+                Condition:
+                  StringLike:
+                    s3:prefix:
+                      - it-articles/*
+                      - security-articles/*
+              - Sid: ReadItArticles
+                Effect: Allow
+                Action: s3:GetObject
+                Resource:
+                  - !Sub "${ItArticlesBucket.Arn}/it-articles/*"
+                  - !Sub "${ItArticlesBucket.Arn}/security-articles/*"
 
   CodeBuildProject:
     Type: AWS::CodeBuild::Project
@@ -476,6 +531,8 @@ Resources:
             Value: !Ref DeployPath
           - Name: DEPLOY_BRANCH
             Value: !Ref DeployBranch
+          - Name: IT_ARTICLES_BUCKET
+            Value: !Ref ItArticlesBucket
       LogsConfig:
         CloudWatchLogs:
           Status: ENABLED
@@ -490,6 +547,224 @@ Resources:
               Pattern: !If [HasDeployBranch, !Sub "^refs/heads/${DeployBranch}$", "^refs/heads/"]
             - Type: FILE_PATH
               Pattern: ^portfolio-site/
+
+  # ===== IT 記事の定期作成（EventBridge Scheduler → CodeBuild → Perplexity） =====
+  # 記事の md の保存先（正本）。ビルドのたびに src/content/it-articles/ に取り込む
+  ItArticlesBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      # 誤って上書き・削除した記事を戻せるようにする
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldVersions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 90
+
+  ItArticlesBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ItArticlesBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !GetAtt ItArticlesBucket.Arn
+              - !Sub "${ItArticlesBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  ItArticlesLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/codebuild/${AWS::StackName}-it-articles"
+      RetentionInDays: 30
+
+  # 記事の作成とデプロイ。配信用バケットのオブジェクトは削除できない（apps/ をビルドしないため、差分デプロイは削除しない）
+  ItArticlesRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+            # このアカウントの IT 記事用プロジェクトからだけ引き受けられるようにする（confused deputy 対策）
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub "arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:project/${AWS::StackName}-it-articles"
+      Policies:
+        - PolicyName: portfolio-site-it-articles
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: WriteBuildLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "${ItArticlesLogGroup.Arn}"
+              - Sid: ReadApiKey
+                Effect: Allow
+                Action: ssm:GetParameters
+                Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${PerplexityApiKeyParameterName}"
+              - Sid: ListItArticles
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt ItArticlesBucket.Arn
+                Condition:
+                  StringLike:
+                    s3:prefix:
+                      - it-articles/*
+                      - security-articles/*
+              - Sid: ReadWriteItArticles
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource:
+                  - !Sub "${ItArticlesBucket.Arn}/it-articles/*"
+                  - !Sub "${ItArticlesBucket.Arn}/security-articles/*"
+              # 差分デプロイ（deploy_diff.py）: 一覧と ETag の取得・アップロードだけ。DeployPath を指定したらそのパス以下に限る
+              - Sid: ListSiteBucket
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt SiteBucket.Arn
+                Condition: !If
+                  - HasDeployPath
+                  - StringLike:
+                      s3:prefix:
+                        - !Sub "${DeployPath}/*"
+                  - !Ref "AWS::NoValue"
+              - Sid: UploadSiteObjects
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !If
+                  - HasDeployPath
+                  - !Sub "${SiteBucket.Arn}/${DeployPath}/*"
+                  - !Sub "${SiteBucket.Arn}/*"
+              - !If
+                - UseCloudFront
+                - Sid: InvalidateCache
+                  Effect: Allow
+                  Action: cloudfront:CreateInvalidation
+                  Resource: !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}"
+                - !Ref "AWS::NoValue"
+
+  ItArticlesProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${AWS::StackName}-it-articles"
+      Description: IT 記事・セキュリティ記事の定期作成（Perplexity で作成 → サイト全体をビルド → 記事を S3 に保存 → MD5 の差分だけデプロイ）
+      ServiceRole: !GetAtt ItArticlesRole.Arn
+      TimeoutInMinutes: 30
+      # 定期実行が重なって同じ題材の記事を二重に作らないようにする
+      ConcurrentBuildLimit: 1
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Source:
+        # GitHub の認証情報は事前に CodeBuild へ登録しておく（テンプレートには含めない）
+        Type: GITHUB
+        Location: !Ref GitHubRepoUrl
+        BuildSpec: portfolio-site/buildspec.it-articles.yml
+        ReportBuildStatus: false
+      # DeployBranch のコードでビルドする（未指定ならリポジトリのデフォルトブランチ）
+      SourceVersion: !If [HasDeployBranch, !Ref DeployBranch, !Ref "AWS::NoValue"]
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:5.0
+        EnvironmentVariables:
+          - Name: SITE_BUCKET
+            Value: !Ref SiteBucket
+          - Name: DISTRIBUTION_ID
+            Value: !If [UseCloudFront, !Ref Distribution, ""]
+          - Name: DEPLOY_PATH
+            Value: !Ref DeployPath
+          - Name: IT_ARTICLES_BUCKET
+            Value: !Ref ItArticlesBucket
+          - Name: IT_ARTICLES_PER_RUN
+            Value: !Ref ItArticlesPerRun
+          - Name: SECURITY_ARTICLES_PER_RUN
+            Value: !Ref SecurityArticlesPerRun
+          - Name: PERPLEXITY_MODEL
+            Value: !Ref PerplexityModel
+          # API キーは SSM から実行時に読み込む（値はテンプレート・ログに出ない）
+          - Name: PERPLEXITY_API_KEY
+            Type: PARAMETER_STORE
+            Value: !Ref PerplexityApiKeyParameterName
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Ref ItArticlesLogGroup
+
+  ItArticlesSchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      Policies:
+        - PolicyName: start-it-articles-build
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: StartItArticlesBuild
+                Effect: Allow
+                Action: codebuild:StartBuild
+                Resource: !GetAtt ItArticlesProject.Arn
+
+  ItArticlesSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub "${AWS::StackName}-it-articles"
+      Description: IT 記事の定期作成（CodeBuild の StartBuild）
+      ScheduleExpression: !Ref ItArticlesScheduleExpression
+      ScheduleExpressionTimezone: Asia/Tokyo
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      # DeployBranch が空だと push のデプロイは任意のブランチを公開し、定期実行はデフォルトブランチを公開して食い違うため、常に OFF にする
+      State: !If [HasDeployBranch, !Ref ItArticlesScheduleState, DISABLED]
+      Target:
+        Arn: arn:aws:scheduler:::aws-sdk:codebuild:startBuild
+        RoleArn: !GetAtt ItArticlesSchedulerRole.Arn
+        Input: !Sub '{"ProjectName": "${ItArticlesProject}"}'
+        RetryPolicy:
+          MaximumRetryAttempts: 0
 
   # ===== 料金 =====
   # 料金の上限は無いため、予算を超えそうになったらメールで気づけるようにする
@@ -536,6 +811,12 @@ Outputs:
   DeployUri:
     Description: ビルド成果物のアップロード先
     Value: !If [HasDeployPath, !Sub "s3://${SiteBucket}/${DeployPath}/", !Sub "s3://${SiteBucket}/"]
+  ItArticlesBucketName:
+    Description: IT 記事（md）の保存先の S3 バケット（記事は it-articles/ 以下）
+    Value: !Ref ItArticlesBucket
+  ItArticlesProjectName:
+    Description: IT 記事の定期作成の CodeBuild プロジェクト（手動で実行するときは aws codebuild start-build --project-name <この値>）
+    Value: !Ref ItArticlesProject
   DistributionId:
     Condition: UseCloudFront
     Description: CloudFront ディストリビューション ID

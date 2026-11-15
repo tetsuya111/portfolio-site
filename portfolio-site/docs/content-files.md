@@ -13,6 +13,8 @@
 | 自己紹介・経歴 | `src/content/profile/profile.md` | 1件固定 | ○ | — | ○ 編集（全文を置き換え） |
 | ポートフォリオ | `src/content/portfolios/<スラッグ>.md` | 何件でも | ○ | ○ `npm run portfolio:new` | ×（サイト上からは追加できない） |
 | 記事 | `src/content/articles/<スラッグ>.md` | 何件でも | ○ | — | ○ 新規作成（フォーム入力／md アップロード） |
+| IT 記事（自動作成） | `src/content/it-articles/<YYYY-MM-DD-スラッグ>.md` | 何件でも | ×（正本は S3） | 定期実行で自動作成（[it-articles.md](it-articles.md)） | × |
+| セキュリティ記事（自動作成） | `src/content/security-articles/<YYYY-MM-DD-スラッグ>.md` | 何件でも | ×（正本は S3） | 定期実行で自動作成（[security-articles.md](security-articles.md)） | × |
 
 ## 共通のルール
 
