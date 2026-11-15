@@ -65,6 +65,17 @@ describe("build output", () => {
     expect(html("articles")).toMatch(/<a href="\/it-news\/"/);
   });
 
+  it("has the security news list page for auto-generated articles, linked from the article list", () => {
+    expect(html("security-news")).toMatch(/<h1[^>]*>セキュリティニュース<\/h1>/);
+    expect(html("security-news")).toContain("<title>セキュリティニュース | Portfolio</title>");
+    expect(html("articles")).toMatch(/<a href="\/security-news\/"/);
+  });
+
+  it("lists the security news generator as a portfolio", () => {
+    expect(html("portfolios")).toContain('href="/portfolios/security-news-auto-articles/"');
+    expect(html("portfolios/security-news-auto-articles")).toContain("セキュリティニュース自動作成");
+  });
+
   it("lists the IT news generator as a portfolio", () => {
     expect(html("portfolios")).toContain('href="/portfolios/it-news-auto-articles/"');
     expect(html("portfolios/it-news-auto-articles")).toContain("IT ニュース自動作成");
@@ -82,7 +93,7 @@ describe("build output", () => {
     // ビルドと同じ規則で期待値を決める。PUBLIC_THEME は astro build と同じく環境変数と .env ファイルの両方から読む
     const env = loadEnv("production", join(import.meta.dirname, ".."), "PUBLIC_");
     const theme = resolveTheme(env.PUBLIC_THEME, siteConfig.theme);
-    for (const p of [".", "about", "portfolios", "articles", "it-news"]) {
+    for (const p of [".", "about", "portfolios", "articles", "it-news", "security-news"]) {
       expect(html(p)).toContain(`<html lang="ja" data-theme="${theme}"`);
     }
   });

@@ -11,3 +11,5 @@ infra/parameters.dev.json
 
 # 自動作成の IT 記事（正本は S3。定期実行のビルドで取り込み・作成する。docs/it-articles.md）
 src/content/it-articles/*.md
+# 自動作成のセキュリティ記事（同上。docs/security-articles.md）
+src/content/security-articles/*.md

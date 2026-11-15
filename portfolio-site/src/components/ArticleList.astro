@@ -1,12 +1,12 @@
 ---
-// 記事の一覧（日付・タイトル・説明・タグ）。手で書いた記事（/articles/）と自動作成の記事（/it-news/）で共用する。
+// 記事の一覧（日付・タイトル・説明・タグ）。手で書いた記事（/articles/）と自動作成の記事（/it-news/・/security-news/）で共用する。
 import TagList from "./TagList.astro";
 import { formatDisplayDate } from "../lib/content-query";
 
 interface Props {
   articles: { id: string; data: { title: string; date: Date; tags: string[]; description?: string } }[];
   /** 記事ページの URL の基準（例 /articles/）。記事のリンクは <basePath><id>/ */
-  basePath: "/articles/" | "/it-news/";
+  basePath: "/articles/" | "/it-news/" | "/security-news/";
 }
 
 const { articles, basePath } = Astro.props;

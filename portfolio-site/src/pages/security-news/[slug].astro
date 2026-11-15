@@ -1,0 +1,18 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import ArticleBody from "../../components/ArticleBody.astro";
+import { publishedArticles } from "../../lib/content-query";
+
+export async function getStaticPaths() {
+  // 下書き（draft: true）はページを生成しない
+  const items = publishedArticles(await getCollection("securityArticles"));
+  return items.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+---
+
+<BaseLayout title={entry.data.title} description={entry.data.description}>
+  <ArticleBody entry={entry} backHref="/security-news/" backLabel="← セキュリティニュース一覧" />
+</BaseLayout>
