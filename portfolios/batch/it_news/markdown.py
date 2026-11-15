@@ -25,6 +25,8 @@ _CODE_SPAN = re.compile(r"(?<![`\\])(`+)(?!`)(.+?)(?<!`)\1(?!`)")
 _FENCE_OPEN = re.compile(r"^(`{3,}|~{3,})(.*)$")
 # 見出しの h1: ATX（# 見出し。引用 > の中を含む）と setext（次の行が ===）
 _ATX_H1 = re.compile(r"^((?: {0,3}>[ ]?)*)( {0,3})#(?=\s|$)")
+# ATX 見出し（引用 > の中を含む）。min_heading より浅い見出しを下げるのに使う
+_ATX = re.compile(r"^((?: {0,3}>[ ]?)*)( {0,3})(#{1,6})(?=\s|$)")
 _SETEXT_H1 = re.compile(r"^( {0,3})(=+)([ \t]*)$")
 _REFERENCE_URL = re.compile(r"^https?://[^\s<>\"\\\x00-\x1f\x7f]+$")
 _PLACEHOLDER = "\x00{}\x00"
@@ -65,12 +67,18 @@ def _sanitize_text(text: str) -> str:
     return "".join(out)
 
 
-def _sanitize_line(line: str) -> str:
-    """コードブロックの外の1行。ページの h1 と重ならないよう、本文の h1 は h2 にする。"""
+def _sanitize_line(line: str, min_heading: int = 2) -> str:
+    """コードブロックの外の1行。ページの h1 と重ならないよう、本文の h1 は h2 にする。
+
+    min_heading が 3 以上なら、それより浅い ATX 見出し（# / ## …）もその深さまで下げる（記事の節の見出しと並ばないようにする）。
+    """
     setext = _SETEXT_H1.match(line)
     if setext:
         return setext.group(1) + "-" * len(setext.group(2)) + setext.group(3)
-    line = _ATX_H1.sub(r"\1\2##", line, count=1)
+    if min_heading <= 2:
+        line = _ATX_H1.sub(r"\1\2##", line, count=1)
+    else:
+        line = _ATX.sub(lambda m: m.group(1) + m.group(2) + "#" * max(len(m.group(3)), min_heading), line, count=1)
     return _sanitize_text(line)
 
 
@@ -88,8 +96,11 @@ def _closes_fence(line: str, char: str, length: int) -> bool:
     return re.match(rf"^ {{0,3}}{re.escape(char)}{{{length},}}[ \t]*$", line) is not None
 
 
-def sanitize_markdown(md: str) -> str:
-    """生の HTML と、http(s)・# 以外へのリンクを無効にし、h1 を h2 に下げる。コードブロックの中は変えない。"""
+def sanitize_markdown(md: str, min_heading: int = 2) -> str:
+    """生の HTML と、http(s)・# 以外へのリンクを無効にし、h1 を h2（min_heading を指定したらその深さ）に下げる。
+
+    コードブロックの中は変えない。
+    """
     result: list[str] = []
     fence: tuple[str, int] | None = None
     for line in md.split("\n"):
@@ -103,7 +114,7 @@ def sanitize_markdown(md: str) -> str:
             fence = opened
             result.append(line)
             continue
-        result.append(_sanitize_line(line))
+        result.append(_sanitize_line(line, min_heading))
     if fence is not None:
         # 閉じていないコードブロックを閉じる。閉じないと、後ろにつなげる別の節（参考情報など）のコードの開始が
         # 閉じとして扱われ、無害化していない行（コードのつもりの行）が HTML として出てしまう

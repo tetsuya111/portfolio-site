@@ -139,8 +139,7 @@ describe("buildspec.it-articles.yml", () => {
     const site = build.findIndex((l) => l.includes("npm run test:build"));
     expect(sec).toBeGreaterThan(it);
     expect(sec).toBeLessThan(site);
-    // 本数が 0 なら作らない。作成に失敗しても IT 記事の公開は続ける
-    expect(build[sec]).toMatch(/if \[ "\$\{SECURITY_ARTICLES_PER_RUN:-3\}" -gt 0 \]; then/);
+    // 作成に失敗しても IT 記事の公開は続ける（本数 0 の扱いはバッチが SECURITY_ARTICLES_PER_RUN で判断する）
     expect(build[sec]).toMatch(/generate_security_articles\.py [^\n]*\|\| echo /);
     const post = c("post_build").join("\n");
     const save = post.indexOf('aws s3 sync src/content/security-articles/ "s3://$IT_ARTICLES_BUCKET/security-articles/" --exclude "*" --include "*.md"');

@@ -15,6 +15,8 @@ from it_news.markdown import (
 )
 
 GLOSSARY = "glossary"
+NOTES = "notes"
+EMPTY_NOTES = "特記事項はありません。"
 
 # (見出し, 記事のキー)。この順で h2 を並べ、最後に「参考リンク」を付ける
 SECTIONS = (
@@ -39,7 +41,8 @@ def build_security_markdown(
 ) -> str:
     """frontmatter つきのセキュリティ記事の Markdown を返す。
 
-    タイトル・日付が不正、いずれかの節が空、用語解説が 0 件、http(s) の参考リンクが 0 件なら ValueError。
+    タイトル・日付が不正、備考以外の節が空、用語解説が 0 件、http(s) の参考リンクが 0 件なら ValueError。
+    節の中の見出しは h3 以下に下げ、構成の見出し（h2）と並ばないようにする。
     """
     title = _one_line(article.get("title", ""))
     check_title_and_date(title, date)
@@ -60,10 +63,12 @@ def build_security_markdown(
             body = glossary_lines(glossary)
         else:
             text = str(article.get(key, "")).strip()
+            if not text and key == NOTES:
+                text = EMPTY_NOTES
             if not text:
                 raise ValueError(f"{heading}がありません")
             # 節ごとに無害化する（閉じていないコードブロックも節の中で閉じ、次の見出しを飲み込ませない）
-            body = [sanitize_markdown(text)]
+            body = [sanitize_markdown(text, min_heading=3)]
         lines += [f"## {heading}", "", *body, ""]
     lines += ["## 参考リンク", "", *reference_lines(refs)]
     return "\n".join(lines) + "\n"

@@ -25,13 +25,8 @@ phases:
     commands:
       # PERPLEXITY_API_KEY（SSM Parameter Store から）・PERPLEXITY_MODEL・IT_ARTICLES_PER_RUN はプロジェクトの環境変数
       - python ../portfolios/batch/generate_it_articles.py --out-dir src/content/it-articles
-      # セキュリティ記事（SECURITY_ARTICLES_PER_RUN が 0 なら作らない）。失敗しても IT 記事の公開は続ける
-      - |
-        if [ "${SECURITY_ARTICLES_PER_RUN:-3}" -gt 0 ]; then
-          python ../portfolios/batch/generate_security_articles.py --out-dir src/content/security-articles || echo "セキュリティ記事を作成できませんでした（IT 記事の公開は続けます）"
-        else
-          echo "SECURITY_ARTICLES_PER_RUN が 0 のため、セキュリティ記事の作成を省略します"
-        fi
+      # セキュリティ記事（SECURITY_ARTICLES_PER_RUN が 0 ならバッチが何もせずに終わる）。失敗しても IT 記事の公開は続ける
+      - python ../portfolios/batch/generate_security_articles.py --out-dir src/content/security-articles || echo "セキュリティ記事を作成できませんでした（IT 記事の公開は続けます）"
       # push のデプロイ（buildspec.yml）と同じく、テストと lint に通ったコードだけを公開する
       - npm test
       - npm run lint

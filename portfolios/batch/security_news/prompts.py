@@ -17,6 +17,8 @@ SYSTEM = (
 
 # 記事の節（JSON のキー）。見出しの順序は security_news.markdown.SECTIONS で決める
 TEXT_FIELDS = ("overview", "details", "mitigation", "history", "relatedTech", "notes")
+# 空なら記事を書き出さない節。備考（notes）は書くことがなければ空でよい（md では決まった文にする）
+REQUIRED_TEXT_FIELDS = tuple(k for k in TEXT_FIELDS if k != "notes")
 
 ARTICLE_SCHEMA = {
     "type": "object",
@@ -84,7 +86,7 @@ def article_request(topic: dict) -> tuple[list[dict], dict]:
 
 
 def validate_article(data: object) -> dict:
-    """記事の応答を検証する。タイトル・各節が空、または用語解説が 0 件なら ValueError。"""
+    """記事の応答を検証する。タイトル・備考以外の節が空、または用語解説が 0 件なら ValueError。"""
     if not isinstance(data, dict):
         raise ValueError("記事の応答の形が不正です")
     tags = data.get("tags")
@@ -101,7 +103,7 @@ def validate_article(data: object) -> dict:
             if isinstance(g, dict) and _str(g.get("term")) and _str(g.get("description"))
         ],
     }
-    for key in ("title", *TEXT_FIELDS):
+    for key in ("title", *REQUIRED_TEXT_FIELDS):
         if not article[key]:
             raise ValueError(f"記事の {key} が空です")
     if not article["glossary"]:

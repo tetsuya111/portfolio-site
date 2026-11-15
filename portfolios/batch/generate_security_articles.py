@@ -3,7 +3,7 @@
 使い方:
   PERPLEXITY_API_KEY=... python generate_security_articles.py --out-dir <書き出し先> [--existing-dir <dir>]... [--count N] [--tag TAG]...
 
-環境変数: PERPLEXITY_API_KEY（必須）、PERPLEXITY_MODEL（既定 sonar）、SECURITY_ARTICLES_PER_RUN（--count の既定。なければ 3）
+環境変数: PERPLEXITY_API_KEY（必須）、PERPLEXITY_MODEL（既定 sonar）、SECURITY_ARTICLES_PER_RUN（--count の既定。なければ 3。0 なら作らない）
 終了コード: 0 成功（題材がなく 0 本でも成功）／1 API キーなし・題材選定の失敗・1本も書けず失敗があった／2 引数の誤り
 """
 
@@ -22,8 +22,8 @@ DEFAULT_TAG = "セキュリティ"
 
 
 def resolve_count(arg: int | None, env: dict) -> int:
-    """--count、なければ SECURITY_ARTICLES_PER_RUN、なければ 3。1〜10 に丸める。"""
-    return cli.resolve_count(arg, env, count_env=COUNT_ENV, default=DEFAULT_COUNT)
+    """--count、なければ SECURITY_ARTICLES_PER_RUN、なければ 3。0〜10 に丸める（0 なら作らない）。"""
+    return cli.resolve_count(arg, env, count_env=COUNT_ENV, default=DEFAULT_COUNT, minimum=0)
 
 
 def main(argv: list[str], env: dict, post: Post = urllib_post) -> int:
@@ -36,6 +36,7 @@ def main(argv: list[str], env: dict, post: Post = urllib_post) -> int:
         default_tag=DEFAULT_TAG,
         count_env=COUNT_ENV,
         default_count=DEFAULT_COUNT,
+        min_count=0,
     )
 
 

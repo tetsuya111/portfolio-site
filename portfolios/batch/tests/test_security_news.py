@@ -94,6 +94,22 @@ class SecurityMarkdownTest(unittest.TestCase):
         self.assertNotIn("\n# 見出し", md)
         self.assertIn("## 見出し", md)
 
+    def test_demotes_h2_in_sections_so_the_structure_stays(self):
+        md = build(validate_article(sec_article(details="## 影響を受けるバージョン\n> ## 引用の見出し\n```\n# コードの中\n```")))
+        self.assertEqual(h2s(md), HEADINGS)
+        self.assertIn("### 影響を受けるバージョン", md)
+        self.assertIn("> ### 引用の見出し", md)
+        self.assertIn("\n# コードの中\n", md)  # コードブロックの中は変えない
+
+    def test_writes_a_default_note_when_notes_is_empty(self):
+        md = build(validate_article(sec_article(notes="")))
+        self.assertEqual(h2s(md), HEADINGS)
+        self.assertIn("## 備考\n\n特記事項はありません。\n", md)
+
+    def test_sections_match_the_schema(self):
+        from security_news.prompts import TEXT_FIELDS
+        self.assertEqual(sorted(k for _, k in SECTIONS), sorted([*TEXT_FIELDS, "glossary"]))
+
     def test_requires_references(self):
         with self.assertRaises(ValueError):
             build(validate_article(sec_article()), refs=[{"title": "x", "url": "javascript:alert(1)"}])
@@ -101,7 +117,7 @@ class SecurityMarkdownTest(unittest.TestCase):
 
 class ValidateSecurityArticleTest(unittest.TestCase):
     def test_requires_every_section_and_glossary(self):
-        for key in ("title", "overview", "details", "mitigation", "history", "relatedTech", "notes"):
+        for key in ("title", "overview", "details", "mitigation", "history", "relatedTech"):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 validate_article(sec_article(**{key: "  "}))
         with self.assertRaises(ValueError):
@@ -113,6 +129,9 @@ class ValidateSecurityArticleTest(unittest.TestCase):
         self.assertEqual(sorted(ARTICLE_SCHEMA["required"]), sorted(ARTICLE_SCHEMA["properties"]))
         for key in ("overview", "details", "mitigation", "history", "relatedTech", "glossary", "notes"):
             self.assertIn(key, ARTICLE_SCHEMA["required"])
+
+    def test_notes_may_be_empty(self):
+        self.assertEqual(validate_article(sec_article(notes=" "))["notes"], "")
 
 
 class SecurityPromptsTest(unittest.TestCase):
@@ -153,6 +172,15 @@ class SecurityCliTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d, redirect_stdout(io.StringIO()):
             self.assertEqual(generate_security_articles.main(["--out-dir", d], {}, post=post), 1)
         self.assertEqual(post.calls, [])
+
+    def test_count_0_writes_nothing_and_does_not_call_the_api(self):
+        post = FakePost()
+        for argv, env in ((["--count", "0"], {}), ([], {"SECURITY_ARTICLES_PER_RUN": "0"})):
+            with self.subTest(argv=argv), tempfile.TemporaryDirectory() as d, redirect_stdout(io.StringIO()):
+                self.assertEqual(generate_security_articles.main(["--out-dir", d, *argv], {"PERPLEXITY_API_KEY": "k", **env}, post=post), 0)
+                self.assertEqual(list(Path(d).glob("*.md")), [])
+        self.assertEqual(post.calls, [])
+        self.assertEqual(generate_security_articles.resolve_count(None, {"SECURITY_ARTICLES_PER_RUN": "-5"}), 0)
 
     def test_default_count_and_env(self):
         self.assertEqual(generate_security_articles.resolve_count(None, {}), 3)
