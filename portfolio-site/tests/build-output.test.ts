@@ -1,9 +1,12 @@
 // astro build 後の dist/ を検証する（npm run test:build で実行）
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadEnv } from "vite";
 import { describe, expect, it } from "vitest";
 import { parseMarkdown } from "../src/lib/markdown-file";
+import { sortPortfolios } from "../src/lib/content-query";
+import { portfolioSchema } from "../src/lib/schemas";
+import { resolveConsultation } from "../src/lib/consultation";
 import { resolveTheme } from "../src/lib/theme";
 import { siteConfig } from "../src/site.config";
 
@@ -15,12 +18,47 @@ describe("build output", () => {
     expect(existsSync(dist)).toBe(true);
   });
 
-  it("shows portfolio tiles with title, tags and url button on the top page", () => {
+  it("shows the consultation buttons, services and skills on the top page", () => {
     const top = html(".");
-    expect(top).toContain("このポートフォリオサイト");
-    expect(top).toContain("Astro");
-    expect(top).toMatch(/href="\/"[^>]*target="_blank"|target="_blank"[^>]*href="\/"/);
-    expect(top).toContain('href="/portfolios/sample-portfolio-site/"');
+    expect(top).toMatch(/<h2[^>]*>ご相談はこちら<\/h2>/);
+    expect(top).toMatch(/<h2[^>]*>サービス<\/h2>/);
+    expect(top).toMatch(/<h2[^>]*>スキル<\/h2>/);
+    expect(top).toContain("※このサービスは一例です。相談していただければなんでも対応します。");
+    // フォームは宛先が有効なときだけ出す。ビルドと同じく環境変数と .env ファイルの両方から読む
+    const env = loadEnv("production", join(import.meta.dirname, ".."), "PUBLIC_");
+    const c = resolveConsultation(
+      { contactEmail: env.PUBLIC_CONTACT_EMAIL, taskBoxUrl: env.PUBLIC_TASK_BOX_URL },
+      siteConfig,
+    );
+    expect(top.includes("<dialog")).toBe(c.contactEmail !== null);
+    // Astro は属性値の & を &amp; にして出力する
+    if (c.taskBox) expect(top).toContain(`href="${c.taskBox.href.replaceAll("&", "&amp;")}"`);
+  });
+
+  it("shows portfolio tiles with title, tags and url button on the top page", () => {
+    // トップページは新しい順に6件だけを出すため、もっとも新しいポートフォリオで確かめる
+    const dir = join(import.meta.dirname, "..", "src", "content", "portfolios");
+    const [newest] = sortPortfolios(
+      readdirSync(dir)
+        .filter((f) => f.endsWith(".md"))
+        .map((f) => ({
+          id: f.replace(/\.md$/, "").toLowerCase(),
+          data: portfolioSchema.parse(parseMarkdown(readFileSync(join(dir, f), "utf8")).data),
+        })),
+    );
+    if (!newest) throw new Error("ポートフォリオの md がありません");
+    const top = html(".");
+    expect(top).toContain(newest.data.title);
+    expect(top).toContain(`href="/portfolios/${newest.id}/"`);
+    if (newest.data.tags[0]) expect(top).toContain(newest.data.tags[0]);
+    if (newest.data.url) {
+      // URL ボタン（別タブで開く）が出ている
+      expect(top).toMatch(
+        new RegExp(
+          `<a href="${newest.data.url.replaceAll("&", "&amp;").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*target="_blank"[^>]*>\\s*ポートフォリオのURL ↗`,
+        ),
+      );
+    }
   });
 
   it("lists portfolios as tiles on the portfolio index page", () => {

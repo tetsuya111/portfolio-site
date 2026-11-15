@@ -1,0 +1,51 @@
+---
+// トップページの「スキル」のタイル。分類・名前・解説と、その技術で作れるもの・使われている有名なサイトやソフトウェアを出す
+interface Props {
+  /** md のスラッグ。見出しと一覧を結ぶ id に使う */
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  examples: string[];
+  famous: string[];
+}
+
+const { id, name, category, description, examples, famous } = Astro.props;
+const label = "text-xs font-bold tracking-wide text-muted";
+---
+
+<article class="flex flex-col gap-3 rounded-card border border-line bg-surface p-5 shadow-sm">
+  <p class="self-start rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-semibold text-on-accent-soft">
+    {category}
+  </p>
+  <h3 class="font-heading text-xl leading-snug font-bold">{name}</h3>
+  <p class="text-sm leading-relaxed">{description}</p>
+  {
+    examples.length > 0 && (
+      <div>
+        <p id={`skill-${id}-examples`} class={label}>
+          作れるもの
+        </p>
+        <ul aria-labelledby={`skill-${id}-examples`} class="mt-1 list-disc space-y-0.5 pl-5 text-sm">
+          {examples.map((e) => (
+            <li>{e}</li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+  {
+    famous.length > 0 && (
+      <div class="mt-auto border-t border-line pt-3">
+        <p id={`skill-${id}-famous`} class={label}>
+          使われている例
+        </p>
+        <ul aria-labelledby={`skill-${id}-famous`} class="mt-1.5 flex flex-wrap gap-1.5">
+          {famous.map((f) => (
+            <li class="rounded-full border border-line px-2.5 py-0.5 text-xs">{f}</li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+</article>

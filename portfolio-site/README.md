@@ -43,8 +43,25 @@ npm run dev        # http://localhost:4321/ （管理画面は http://localhost:
 | 自己紹介・経歴 | `src/content/profile/profile.md` を編集、または `npm run dev` 中に管理画面 `/admin/profile/` |
 | ポートフォリオ | `npm run portfolio:new -- --slug my-app --title "My App" --tags "Astro,AWS"`、または md を直接置く（サイト上からは追加できない） |
 | 記事 | `src/content/articles/` に md を置く、または `npm run dev` 中に管理画面 `/admin/articles/new/` |
+| サービス・スキル（トップページ） | `src/content/services/`・`src/content/skills/` の md を編集・追加 |
 
 各ファイルの項目・書式・スラッグのルール・管理画面の制限は [docs/content-files.md](docs/content-files.md) にまとめています。
+
+## トップページの相談ボタン
+
+トップページ冒頭の「ご相談はこちら」の2つのボタンは、ビルド時の環境変数で動きが決まります。
+
+| 環境変数 | 内容 | 未設定・不正なとき |
+|---|---|---|
+| `PUBLIC_CONTACT_EMAIL` | 「フォームで相談する」の宛先メールアドレス。フォームの送信で、入力内容を書き込んだ mailto: リンクを開く（サイトには何も送らない） | フォームのボタンを出さない |
+| `PUBLIC_TASK_BOX_URL` | 「タスク百葉箱で相談する」の遷移先（http(s) の URL か `/` で始まるサイト内のパス。外部 URL は別タブで開く） | `src/site.config.ts` の `taskBoxMockUrl`（既定はデモの `/apps/task-box-it-develop/`）。それも空ならボタンを「準備中」にして遷移しない |
+
+```bash
+PUBLIC_CONTACT_EMAIL=you@example.com PUBLIC_TASK_BOX_URL=https://task-box.example.com/ npm run build
+```
+
+- メールアドレスは公開ページの HTML にそのまま入ります。公開してよい問い合わせ用のアドレスを使ってください。
+- AWS の CodeBuild（`infra/template.yaml`）にはこれらを渡す設定がまだありません。本番で使うには、デプロイ用の CodeBuild プロジェクトの環境変数に設定してください（コンソールで足した値はスタックの更新で消えるため、テンプレートへの追加は別途対応）。
 
 ## デザインテーマの切り替え
 

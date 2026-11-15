@@ -1,6 +1,6 @@
 // ポートフォリオ一覧・タイル・詳細ページ
 import { expect, test } from "../fixtures";
-import { loadPortfolios } from "../content";
+import { limitTags, loadPortfolios } from "../content";
 
 const portfolios = loadPortfolios();
 
@@ -29,7 +29,10 @@ test.describe("一覧ページ /portfolios/", () => {
       const tile = page.locator("article").filter({ has: page.getByRole("heading", { name: p.data.title }) });
       await expect(tile.getByRole("link", { name: p.data.title, exact: true })).toHaveAttribute("href", `/portfolios/${p.id}/`);
       const tags = tile.getByRole("list", { name: "タグ" }).getByRole("listitem");
-      await expect(tags).toHaveText(p.data.tags);
+      // タイルではタグを先頭5件に絞り、残りは「+N」で示す
+      const { shown, rest } = limitTags(p.data.tags);
+      await expect(tags).toHaveText(rest > 0 ? [...shown, new RegExp(`^\\+${rest}`)] : shown);
+      if (p.data.description) await expect(tile.getByText(p.data.description, { exact: true })).toBeVisible();
     });
   }
 
