@@ -1,4 +1,4 @@
-"""題材選定 → 重複除外 → 記事執筆 → md の書き出し。"""
+"""題材選定 → 重複除外 → 記事執筆 → md の書き出し。記事の種類（ArticleKind）でプロンプトと md の形を切り替える。"""
 
 from __future__ import annotations
 
@@ -7,12 +7,38 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 
-from .files import choose_file_name, load_existing, normalize_url
+from .files import FALLBACK_SLUG, choose_file_name, load_existing, normalize_url
 from .markdown import build_article_markdown
 from .perplexity import PerplexityError, Post, call_perplexity
 from .prompts import article_request, topics_request, validate_article, validate_topics
 
 JST = timezone(timedelta(hours=9))
+
+
+@dataclass(frozen=True)
+class ArticleKind:
+    """記事の種類ごとに変わる部分。題材の検証（validate_topics）と重複除外・書き出しは共通。
+
+    - topics_request(recent_titles) / article_request(topic) -> (messages, JSON スキーマ)
+    - validate_article(data) -> 記事の dict（不正なら ValueError）
+    - build_markdown(*, article, references, date, source_url, generator, tags) -> md（不正なら ValueError）
+    """
+
+    topics_request: Callable[[list[str]], tuple[list[dict], dict]]
+    article_request: Callable[[dict], tuple[list[dict], dict]]
+    validate_article: Callable[[object], dict]
+    build_markdown: Callable[..., str]
+    topics_recency: str = "day"
+    article_recency: str = "week"
+    fallback_slug: str = FALLBACK_SLUG
+
+
+IT_NEWS = ArticleKind(
+    topics_request=topics_request,
+    article_request=article_request,
+    validate_article=validate_article,
+    build_markdown=build_article_markdown,
+)
 
 
 @dataclass
@@ -38,6 +64,7 @@ def run_generation(
     tags: list[str],
     now: datetime,
     log: Callable[[str], None] = print,
+    kind: ArticleKind = IT_NEWS,
 ) -> Result:
     """最大 count 本の記事を out_dir に書き出す。記事ごとの失敗は記録して次へ進む（題材選定の失敗は例外）。"""
     result = Result()
@@ -46,8 +73,10 @@ def run_generation(
     seen = set(existing.source_urls)
     date = jst_date(now)
 
-    messages, schema = topics_request(existing.recent_titles)
-    data, search_refs = call_perplexity(post=post, api_key=api_key, model=model, messages=messages, schema=schema, recency="day")
+    messages, schema = kind.topics_request(existing.recent_titles)
+    data, search_refs = call_perplexity(
+        post=post, api_key=api_key, model=model, messages=messages, schema=schema, recency=kind.topics_recency
+    )
     # 題材が 0 件のとき、検索で何も見つからなかったのか（recency が狭い）、見つかったが選ばれなかったのか（プロンプト）を見分ける
     log(f"題材の検索で参照したページ: {len(search_refs)} 件")
     topics = sorted(validate_topics(data, log=log), key=lambda t: t["importance"], reverse=True)
@@ -68,12 +97,12 @@ def run_generation(
         if len(result.written) >= count:
             break
         try:
-            messages, schema = article_request(t)
+            messages, schema = kind.article_request(t)
             data, references = call_perplexity(
-                post=post, api_key=api_key, model=model, messages=messages, schema=schema, recency="week"
+                post=post, api_key=api_key, model=model, messages=messages, schema=schema, recency=kind.article_recency
             )
-            article = validate_article(data)
-            md = build_article_markdown(
+            article = kind.validate_article(data)
+            md = kind.build_markdown(
                 article=article,
                 references=references,
                 date=date,
@@ -85,7 +114,7 @@ def run_generation(
             result.failed.append(t["title"])
             log(f"記事を作れませんでした「{t['title']}」: {e}")
             continue
-        name = choose_file_name(date, article["slug"], taken)
+        name = choose_file_name(date, article["slug"], taken, kind.fallback_slug)
         taken.add(name)
         path = out_dir / f"{name}.md"
         path.write_text(md, encoding="utf-8", newline="\n")

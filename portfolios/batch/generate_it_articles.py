@@ -9,64 +9,34 @@
 
 from __future__ import annotations
 
-import argparse
 import os
 import sys
-from datetime import datetime, timezone
-from pathlib import Path
 
-from it_news.generate import run_generation
-from it_news.perplexity import PerplexityError, Post, urllib_post
+from it_news import cli
+from it_news.generate import IT_NEWS
+from it_news.perplexity import Post, urllib_post
 
 DEFAULT_COUNT = 5
-MIN_COUNT, MAX_COUNT = 1, 10
+COUNT_ENV = "IT_ARTICLES_PER_RUN"
 DEFAULT_TAG = "IT ニュース"
 
 
 def resolve_count(arg: int | None, env: dict) -> int:
     """--count、なければ IT_ARTICLES_PER_RUN、なければ 5。1〜10 に丸める。"""
-    value = arg
-    if value is None:
-        try:
-            value = int(env.get("IT_ARTICLES_PER_RUN", DEFAULT_COUNT))
-        except ValueError:
-            value = DEFAULT_COUNT
-    return max(MIN_COUNT, min(MAX_COUNT, value))
-
-
-def parse_args(argv: list[str]) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="IT ニュースの記事を Perplexity で自動作成する")
-    p.add_argument("--out-dir", required=True, type=Path, help="記事の書き出し先（既存の記事は重複判定にも使う）")
-    p.add_argument("--existing-dir", action="append", default=[], type=Path, help="重複判定に加えるフォルダ（複数可）")
-    p.add_argument("--count", type=int, help=f"作る記事の数（{MIN_COUNT}〜{MAX_COUNT}）")
-    p.add_argument("--tag", action="append", help=f"全記事に付けるタグ（複数可。既定「{DEFAULT_TAG}」）")
-    return p.parse_args(argv)
+    return cli.resolve_count(arg, env, count_env=COUNT_ENV, default=DEFAULT_COUNT)
 
 
 def main(argv: list[str], env: dict, post: Post = urllib_post) -> int:
-    args = parse_args(argv)
-    api_key = env.get("PERPLEXITY_API_KEY", "").strip()
-    if not api_key:
-        print("PERPLEXITY_API_KEY が設定されていません")
-        return 1
-    model = env.get("PERPLEXITY_MODEL", "").strip() or "sonar"
-    count = resolve_count(args.count, env)
-    try:
-        result = run_generation(
-            post=post,
-            api_key=api_key,
-            model=model,
-            count=count,
-            out_dir=args.out_dir,
-            existing_dirs=args.existing_dir,
-            tags=args.tag or [DEFAULT_TAG],
-            now=datetime.now(timezone.utc),
-        )
-    except (PerplexityError, ValueError) as e:
-        print(f"題材を選べませんでした: {e}")
-        return 1
-    print(f"作成 {len(result.written)} 本・失敗 {len(result.failed)} 本・出典の重複で除外 {result.skipped} 件")
-    return 1 if result.failed and not result.written else 0
+    return cli.run_cli(
+        argv,
+        env,
+        post,
+        kind=IT_NEWS,
+        description="IT ニュースの記事を Perplexity で自動作成する",
+        default_tag=DEFAULT_TAG,
+        count_env=COUNT_ENV,
+        default_count=DEFAULT_COUNT,
+    )
 
 
 if __name__ == "__main__":
