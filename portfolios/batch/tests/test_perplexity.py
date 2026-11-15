@@ -69,6 +69,13 @@ class PromptsTest(unittest.TestCase):
         self.assertIn("既出のタイトル", messages[-1]["content"])
         self.assertEqual(schema["type"], "object")
 
+    def test_prompts_require_japanese_output(self):
+        # プロンプトは英語（検索クエリが英語になり一次情報に当たりやすい）、出力は日本語
+        topic = {"title": "Astro 7", "summary": "s", "sourceUrl": "https://e.com", "importance": 8, "reason": "r"}
+        for messages, _ in (topics_request([]), article_request(topic)):
+            self.assertIn("Japanese", messages[0]["content"])
+            self.assertIn("Japanese", messages[-1]["content"])
+
     def test_validate_topics_drops_invalid(self):
         topics = validate_topics({"topics": [
             {"title": "A", "summary": "s", "sourceUrl": "https://e.com/a", "importance": 8, "reason": "r"},
@@ -78,6 +85,26 @@ class PromptsTest(unittest.TestCase):
         ]})
         self.assertEqual([t["title"] for t in topics], ["A", "D"])
         self.assertEqual(topics[1]["importance"], 10)
+
+    def test_validate_topics_logs_received_count_and_drop_reasons(self):
+        lines = []
+        validate_topics({"topics": [
+            {"title": "A", "sourceUrl": "https://e.com/a", "importance": 8},
+            {"title": "B", "sourceUrl": "www.e.com/b", "importance": 9},
+            {"title": "", "sourceUrl": "https://e.com/c", "importance": 5},
+            "not-a-dict",
+        ]}, log=lines.append)
+        text = "\n".join(lines)
+        self.assertIn("4 件", text)
+        self.assertIn("www.e.com/b", text)  # 出典が http(s) でない
+        self.assertIn("タイトルが空", text)
+        self.assertIn("オブジェクトではない", text)
+        self.assertNotIn("e.com/a", text)  # 採用した題材は理由を出さない
+
+    def test_validate_topics_logs_empty_array(self):
+        lines = []
+        self.assertEqual(validate_topics({"topics": []}, log=lines.append), [])
+        self.assertIn("0 件", "\n".join(lines))
 
     def test_validate_topics_rejects_wrong_shape(self):
         with self.assertRaises(ValueError):

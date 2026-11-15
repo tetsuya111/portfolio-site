@@ -47,8 +47,10 @@ def run_generation(
     date = jst_date(now)
 
     messages, schema = topics_request(existing.recent_titles)
-    data, _ = call_perplexity(post=post, api_key=api_key, model=model, messages=messages, schema=schema, recency="day")
-    topics = sorted(validate_topics(data), key=lambda t: t["importance"], reverse=True)
+    data, search_refs = call_perplexity(post=post, api_key=api_key, model=model, messages=messages, schema=schema, recency="day")
+    # 題材が 0 件のとき、検索で何も見つからなかったのか（recency が狭い）、見つかったが選ばれなかったのか（プロンプト）を見分ける
+    log(f"題材の検索で参照したページ: {len(search_refs)} 件")
+    topics = sorted(validate_topics(data, log=log), key=lambda t: t["importance"], reverse=True)
 
     candidates = []
     for t in topics:

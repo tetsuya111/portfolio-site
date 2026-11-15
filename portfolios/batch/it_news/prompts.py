@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Callable
+
 MAX_TOPICS = 15
 
+# プロンプトは英語にする（検索クエリが英語になり、英語の一次情報に当たりやすくなる）。出力は日本語に指定する
 SYSTEM = (
-    "あなたは IT 分野の技術記者です。事実は検索結果に基づいて書き、推測や未確認の情報を事実として書かないでください。"
-    "日本語で書いてください。"
+    "You are a technology journalist covering the IT industry. Base every fact on the search results, "
+    "and never present speculation or unverified information as fact. "
+    "Write all output text in Japanese."
 )
 
 TOPICS_SCHEMA = {
@@ -53,12 +57,15 @@ ARTICLE_SCHEMA = {
 
 
 def topics_request(recent_titles: list[str]) -> tuple[list[dict], dict]:
-    covered = "\n".join(f"- {t}" for t in recent_titles) or "（なし）"
+    covered = "\n".join(f"- {t}" for t in recent_titles) or "(none)"
     user = (
-        f"直近 24〜48 時間に公開された IT・ソフトウェア開発分野のニュースから、重要なものを最大 {MAX_TOPICS} 件挙げてください。\n"
-        "importance は 1〜10 の整数で、開発者・IT 業界への影響の大きさ（利用者の多さ、セキュリティ上の深刻さ、標準や主要製品の変化）で比べてください。\n"
-        "sourceUrl はそのニュースの一次情報（公式発表・公式ブログ・信頼できる報道）の URL にしてください。\n"
-        "次の記事で取り上げ済みの話題は除いてください。\n"
+        f"List up to {MAX_TOPICS} important news items in IT and software development published in the last 24-48 hours.\n"
+        "- importance: an integer from 1 to 10, ranked by impact on developers and the IT industry "
+        "(number of affected users, security severity, changes to standards or major products).\n"
+        "- sourceUrl: the URL of the primary source for the news "
+        "(official announcement, official blog, or reputable news outlet).\n"
+        "- title, summary, reason: write these in Japanese.\n"
+        "Exclude topics already covered by the following articles (titles are in Japanese).\n"
         f"{covered}"
     )
     return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}], TOPICS_SCHEMA
@@ -66,16 +73,18 @@ def topics_request(recent_titles: list[str]) -> tuple[list[dict], dict]:
 
 def article_request(topic: dict) -> tuple[list[dict], dict]:
     user = (
-        "次の IT ニュースについて、技術記事を書いてください。\n"
-        f"題材: {topic['title']}\n概要: {topic['summary']}\n出典: {topic['sourceUrl']}\n\n"
-        "- title: 記事のタイトル（60 文字以内）\n"
-        "- slug: 内容を表す英小文字・数字・ハイフンの短い文字列（例 astro-7-release）\n"
-        "- description: 1〜2 文の要約\n"
-        "- tags: 関連する技術・製品名を 1〜5 個\n"
-        "- body: 本文の Markdown（800〜1500 字。見出しは ## から始める。何が起きたか・技術的な要点・開発者への影響を書く。"
-        "検索結果に基づく文には [1] のように出典の番号を付ける。HTML タグは使わない）\n"
-        "- background: 参考情報の Markdown（背景・これまでの経緯・関連する技術や動向）\n"
-        "- glossary: 本文に出てくる専門用語 2〜6 個と、初学者向けの短い説明\n"
+        "Write a technical article about the following IT news. "
+        "Write every field in Japanese, except slug and the names of technologies and products.\n"
+        f"Topic: {topic['title']}\nSummary: {topic['summary']}\nSource: {topic['sourceUrl']}\n\n"
+        "- title: the article title (at most 60 Japanese characters)\n"
+        "- slug: a short string of lowercase English letters, digits and hyphens describing the content (e.g. astro-7-release)\n"
+        "- description: a summary in one or two sentences\n"
+        "- tags: 1 to 5 related technology or product names\n"
+        "- body: the article body in Markdown (800-1,500 Japanese characters; headings start at ##; "
+        "cover what happened, the key technical points and the impact on developers; "
+        "add a citation number such as [1] to each sentence based on the search results; do not use HTML tags)\n"
+        "- background: reference information in Markdown (background, history, related technologies and trends)\n"
+        "- glossary: 2 to 6 technical terms used in the body, each with a short explanation for beginners\n"
     )
     return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}], ARTICLE_SCHEMA
 
@@ -84,16 +93,31 @@ def _str(v: object) -> str:
     return v.strip() if isinstance(v, str) else ""
 
 
-def validate_topics(data: object) -> list[dict]:
-    """形が正しい題材だけを返す（http(s) の出典・空でないタイトル。importance は 1〜10 に丸める）。"""
+def _short(v: object, limit: int = 80) -> str:
+    """ログ用に値を短く表す（長い応答でログが埋まらないようにする）。"""
+    s = repr(v)
+    return s if len(s) <= limit else s[: limit - 1] + "…"
+
+
+def validate_topics(data: object, log: Callable[[str], None] = lambda _: None) -> list[dict]:
+    """形が正しい題材だけを返す（http(s) の出典・空でないタイトル。importance は 1〜10 に丸める）。
+
+    受け取った件数と、除いた題材ごとの理由を log に出す（題材が 0 件になったときの原因を追えるようにする）。
+    """
     if not isinstance(data, dict) or not isinstance(data.get("topics"), list):
         raise ValueError("題材の応答の形が不正です（topics の配列がありません）")
+    log(f"Perplexity から受け取った題材: {len(data['topics'])} 件")
     topics = []
-    for t in data["topics"]:
+    for i, t in enumerate(data["topics"], 1):
         if not isinstance(t, dict):
+            log(f"  除外 {i}: 題材がオブジェクトではない（{_short(t)}）")
             continue
         title, url = _str(t.get("title")), _str(t.get("sourceUrl"))
-        if not title or not url.startswith(("https://", "http://")):
+        if not title:
+            log(f"  除外 {i}: タイトルが空（sourceUrl={_short(t.get('sourceUrl'))}）")
+            continue
+        if not url.startswith(("https://", "http://")):
+            log(f"  除外 {i}: 出典が http(s) の URL でない（title={_short(title)}, sourceUrl={_short(t.get('sourceUrl'))}）")
             continue
         try:
             importance = int(t.get("importance", 0))
