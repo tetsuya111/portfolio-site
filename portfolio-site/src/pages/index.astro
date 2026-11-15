@@ -3,6 +3,7 @@ import { getCollection, getEntry } from "astro:content";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import PortfolioTile from "../components/PortfolioTile.astro";
 import SectionHeading from "../components/SectionHeading.astro";
+import PortfolioMockNote from "../components/PortfolioMockNote.astro";
 import Eyebrow from "../components/Eyebrow.astro";
 import { siteConfig } from "../site.config";
 import { formatDisplayDate, publishedArticles, sortPortfolios } from "../lib/content-query";
@@ -25,7 +26,8 @@ const latestArticles = publishedArticles(await getCollection("articles")).slice(
   </section>
 
   <section class="mb-16">
-    <SectionHeading eyebrow="Works" title="ポートフォリオ" class="mb-6" />
+    <SectionHeading eyebrow="Works" title="ポートフォリオ" class="mb-2" />
+    <PortfolioMockNote class="mb-6" />
     {
       portfolios.length === 0 ? (
         <p class="text-muted">まだありません。</p>

@@ -1,0 +1,8 @@
+{
+  "name": "batch",
+  "private": true,
+  "description": "汎用バッチ（IT ニュース記事の自動作成・S3 への差分デプロイ）。Python 標準ライブラリのみ（差分デプロイだけ boto3）",
+  "scripts": {
+    "test": "python -m unittest discover -s tests -t ."
+  }
+}

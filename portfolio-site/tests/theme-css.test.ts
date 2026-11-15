@@ -20,6 +20,7 @@ const TOKENS = [
   "on-accent",
   "accent-soft",
   "on-accent-soft",
+  "danger",
   "link",
   "focus",
   "hero-from",
@@ -68,6 +69,9 @@ const TEXT_PAIRS: [string, string][] = [
   ["link", "surface"],
   ["on-accent", "accent"],
   ["on-accent-soft", "accent-soft"],
+  // 注意書き（ポートフォリオ一覧の「※」など）
+  ["danger", "base"],
+  ["danger", "surface"],
   ["fg", "hero-from"],
   ["fg", "hero-to"],
   ["muted", "hero-from"],

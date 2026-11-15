@@ -78,6 +78,7 @@ portfolio-site/
 | `profile/profile.md` | `profile` | 自己紹介・経歴（1件だけ） |
 | `portfolios/<スラッグ>.md` | `portfolios` | ポートフォリオ1件 |
 | `articles/<スラッグ>.md` | `articles` | 記事1件 |
+| `it-articles/<YYYY-MM-DD-スラッグ>.md` | `itArticles` | 自動作成の IT 記事1件（スキーマは `articles` と同じ。正本は S3 で git には入らない。[it-articles.md](it-articles.md)） |
 
 - ファイル名（拡張子を除く）がスラッグになり、URL に使われる（例: `articles/hello-world.md` → `/articles/hello-world/`）。
 - frontmatter の項目は `src/lib/schemas.ts` で定義している。項目・書式・追加方法は [content-files.md](content-files.md) を参照。
@@ -93,6 +94,8 @@ portfolio-site/
 | `pages/portfolios/[slug].astro` | `/portfolios/<スラッグ>/` | ポートフォリオの詳細（タイトル・タグ・URL・本文） |
 | `pages/articles/index.astro` | `/articles/` | 記事一覧（新しい順、下書きを除く） |
 | `pages/articles/[slug].astro` | `/articles/<スラッグ>/` | 記事の詳細（下書きはページを生成しない） |
+| `pages/it-news/index.astro` | `/it-news/` | 自動作成の IT 記事の一覧（手で書いた記事とは並べない） |
+| `pages/it-news/[slug].astro` | `/it-news/<スラッグ>/` | 自動作成の IT 記事の詳細 |
 | `pages/404.astro` | `/404.html` | 見つからないページ（CloudFront の 403/404 でも表示） |
 
 | 部品 | 内容 |
@@ -103,6 +106,8 @@ portfolio-site/
 | `components/SiteHeader.astro` | サイト名とナビゲーション（ホーム・自己紹介・ポートフォリオ・記事） |
 | `components/PortfolioTile.astro` | ポートフォリオのタイル。タイトルのリンクをタイル全体に広げ（stretched link）、URL ボタンは入れ子にせず手前に重ねる |
 | `components/TagList.astro` | タグの一覧（タグがなければ何も出さない） |
+| `components/ArticleList.astro` | 記事の一覧（`/articles/` と `/it-news/` で共用。リンク先の基準パスを受け取る） |
+| `components/ArticleBody.astro` | 記事ページの本体（戻りリンク・見出し・日付・タグ・本文。`/articles/` と `/it-news/` で共用） |
 
 ## src/lib（共有の処理）
 
@@ -154,8 +159,9 @@ flowchart TD
 | ファイル | 内容 |
 |---|---|
 | `buildspec.test.yml` | `main`（本番スタックの `DeployBranch`）向けのプルリクエストで実行。`npm ci` → `npm test` → `npm run lint` → `npm run test:build` |
-| `buildspec.yml` | `main` への push で実行。上と同じ検証のあと、成功したら S3 に同期して CloudFront のキャッシュを無効化 |
-| `infra/template.yaml` | S3・CloudFront・ACM・Route 53・CodeBuild（テスト用とデプロイ用）を作る CloudFormation テンプレート |
+| `buildspec.yml` | `main` への push で実行。記事バケットから IT 記事を取り込み、上と同じ検証のあと、成功したら S3 に同期して CloudFront のキャッシュを無効化 |
+| `buildspec.it-articles.yml` | IT 記事の定期作成（EventBridge Scheduler が起動）。過去の記事の取り込み → `portfolios/batch/` で作成 → ビルド → 記事の保存と MD5 の差分デプロイ（[it-articles.md](it-articles.md)） |
+| `infra/template.yaml` | S3・CloudFront・ACM・Route 53・CodeBuild（テスト用・デプロイ用・IT 記事用）・EventBridge Scheduler を作る CloudFormation テンプレート |
 
 詳細は [../infra/README.md](../infra/README.md)。
 

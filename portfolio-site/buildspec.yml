@@ -13,6 +13,14 @@ phases:
       # 依存のインストールスクリプト（postinstall など）は実行しない。デプロイ用の権限があるビルドで、
       # 乗っ取られた依存のスクリプトが動かないようにするため（esbuild のバイナリは optionalDependencies で入る）
       - npm ci --ignore-scripts
+  pre_build:
+    commands:
+      # 定期実行（buildspec.it-articles.yml）で作り S3 に保存した IT 記事を取り込んでからビルドする。
+      # 取り込まないと、post_build の s3 sync --delete で公開中の記事のページが消える
+      - |
+        if [ -n "$IT_ARTICLES_BUCKET" ]; then
+          aws s3 sync "s3://$IT_ARTICLES_BUCKET/it-articles/" src/content/it-articles/ --exclude "*" --include "*.md"
+        fi
   build:
     commands:
       - npm test
