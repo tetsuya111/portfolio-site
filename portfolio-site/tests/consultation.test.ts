@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildMailto, resolveConsultation } from "../src/lib/consultation";
+import { resolveConsultation } from "../src/lib/consultation";
+import { buildMailto } from "../src/lib/mailto";
 
 const MOCK = { taskBoxMockUrl: "/apps/task-box-it-develop/" };
 

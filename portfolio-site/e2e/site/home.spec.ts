@@ -77,9 +77,12 @@ test.describe("相談ボタン", () => {
     await dialog.getByLabel("お名前").fill("山田 太郎");
     await dialog.getByLabel("返信先メールアドレス").fill("taro@example.com");
     await dialog.getByLabel("ご相談内容").fill("ツールを作ってほしい & 相談したい");
-    // ヘッドレスのブラウザでは mailto: を開いても何も起きないため、作ったリンクをダイアログの属性で確かめる
+    // ヘッドレスのブラウザでは mailto: を開いても何も起きないため、送信後に出る「こちらから開く」のリンクで確かめる
     await dialog.getByRole("button", { name: "メールソフトで送信する" }).click();
-    const mailto = await page.locator("dialog").getAttribute("data-last-mailto");
+    const reopen = dialog.getByRole("link", { name: "こちらから開く" });
+    await expect(reopen).toBeVisible();
+    await expect(dialog.getByText("contact@example.com 宛てに直接お送りください", { exact: false })).toBeVisible();
+    const mailto = await reopen.getAttribute("href");
     expect(mailto).toMatch(/^mailto:contact@example\.com\?subject=/);
     expect(decodeURIComponent(mailto ?? "")).toContain("ツールを作ってほしい & 相談したい");
     expect(decodeURIComponent(mailto ?? "")).toContain("返信先メールアドレス: taro@example.com");
@@ -89,7 +92,7 @@ test.describe("相談ボタン", () => {
     await page.getByRole("button", { name: "フォームで相談する" }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByRole("button", { name: "メールソフトで送信する" }).click();
-    await expect(page.locator("dialog")).not.toHaveAttribute("data-last-mailto", /.*/);
+    await expect(dialog.getByRole("link", { name: "こちらから開く" })).toBeHidden();
     await expect(dialog).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();

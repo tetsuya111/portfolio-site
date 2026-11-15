@@ -74,8 +74,11 @@ const field = "mt-1 w-full rounded-lg border border-line bg-page px-3 py-2 text-
         </label>
         <label class="text-sm font-semibold">
           ご相談内容
-          <textarea name="message" required rows="5" class={field} />
+          <textarea name="message" required rows="5" maxlength="400" aria-describedby="consult-message-note" class={field} />
         </label>
+        <p id="consult-message-note" class="-mt-2 text-xs text-muted">
+          400文字まで。長い内容や資料は、開いたメールに追記してください。
+        </p>
         <div class="flex flex-wrap gap-3">
           <button type="submit" class="btn-accent px-5 py-2.5 text-sm">
             メールソフトで送信する
@@ -88,6 +91,11 @@ const field = "mt-1 w-full rounded-lg border border-line bg-page px-3 py-2 text-
             閉じる
           </button>
         </div>
+        {/* 送信後に出す案内。メールソフトが開かなかったときに、もう一度開くリンクと宛先を示す */}
+        <p data-consult-sent hidden role="status" class="text-sm">
+          メールソフトが開かない場合は、<a data-consult-mailto class="font-semibold text-link underline">こちらから開く</a>
+          か、{contactEmail} 宛てに直接お送りください。
+        </p>
       </form>
     </dialog>
   )
@@ -112,8 +120,10 @@ const field = "mt-1 w-full rounded-lg border border-line bg-page px-3 py-2 text-
         email: value("email"),
         message: value("message"),
       });
-      // 作ったリンクを残す（E2E テストでの確認用。ヘッドレスのブラウザでは mailto: を開いても何も起きない）
-      dialog.dataset.lastMailto = url;
+      // メールソフトが開かない環境のために、同じリンクと宛先の案内を出す
+      const sent = dialog.querySelector<HTMLElement>("[data-consult-sent]");
+      dialog.querySelector<HTMLAnchorElement>("[data-consult-mailto]")?.setAttribute("href", url);
+      if (sent) sent.hidden = false;
       window.location.href = url;
     });
   }

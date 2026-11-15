@@ -52,16 +52,23 @@ const grid = "grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3";
       )
     }
     <ConsultCta consultation={consultation} />
-    <a href="/about/" class="mt-6 inline-block text-sm font-semibold text-link hover:underline">経歴・自己紹介を見る →</a>
+    <a href="/about/" class={moreLink}>経歴・自己紹介を見る →</a>
   </section>
 
-  <section class="mb-16">
-    <SectionHeading eyebrow="Services" title="サービス" class="mb-6" />
-    <div class={grid}>
-      {services.map((s) => <ServiceTile title={s.data.title} description={s.data.description} />)}
-    </div>
-    <p class="mt-4 text-sm text-muted">※このサービスは一例です。相談していただければなんでも対応します。</p>
-  </section>
+  {
+    // サービス・スキルの md がないときはセクションごと出さない
+    services.length > 0 && (
+      <section class="mb-16">
+        <SectionHeading eyebrow="Services" title="サービス" class="mb-6" />
+        <div class={grid}>
+          {services.map((s) => (
+            <ServiceTile title={s.data.title} description={s.data.description} />
+          ))}
+        </div>
+        <p class="mt-4 text-sm text-muted">※このサービスは一例です。相談していただければなんでも対応します。</p>
+      </section>
+    )
+  }
 
   <section class="mb-16">
     <SectionHeading eyebrow="Works" title="ポートフォリオ" class="mb-2" />
@@ -86,22 +93,24 @@ const grid = "grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3";
     <a href="/portfolios/" class={moreLink}>ポートフォリオ一覧へ →</a>
   </section>
 
-  <section class="mb-16">
-    <SectionHeading eyebrow="Skills" title="スキル" class="mb-6" />
-    <div class={grid}>
-      {
-        skills.map((s) => (
-          <SkillTile
-            name={s.data.name}
-            category={s.data.category}
-            description={s.data.description}
-            examples={s.data.examples}
-            famous={s.data.famous}
-          />
-        ))
-      }
-    </div>
-  </section>
+  {
+    skills.length > 0 && (
+      <section class="mb-16">
+        <SectionHeading eyebrow="Skills" title="スキル" class="mb-6" />
+        <div class={grid}>
+          {skills.map((s) => (
+            <SkillTile
+              name={s.data.name}
+              category={s.data.category}
+              description={s.data.description}
+              examples={s.data.examples}
+              famous={s.data.famous}
+            />
+          ))}
+        </div>
+      </section>
+    )
+  }
 
   <section class="mb-16">
     <SectionHeading eyebrow="Articles" title="最新の記事" class="mb-6" />

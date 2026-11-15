@@ -35,6 +35,3 @@ export function resolveConsultation(env: ConsultationEnv, config: { taskBoxMockU
     taskBox: href ? { href, external: /^https?:/i.test(href) } : null,
   };
 }
-
-// ブラウザ側（フォームの送信処理）でも使うため、zod を含まない別ファイルに置く
-export { buildMailto } from "./mailto";
