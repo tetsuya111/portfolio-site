@@ -5,17 +5,25 @@ import SectionHeading from "../../components/SectionHeading.astro";
 import ArticleList from "../../components/ArticleList.astro";
 import { publishedArticles } from "../../lib/content-query";
 
-// 手で書いた記事だけ。自動作成の記事（itArticles）は /it-news/ に分けて表示する
+// 手で書いた記事だけ。自動作成の記事（itArticles・securityArticles）は /it-news/・/security-news/ に分けて表示する
 const articles = publishedArticles(await getCollection("articles"));
 ---
 
 <BaseLayout title="記事">
   <SectionHeading as="h1" eyebrow="Articles" title="記事" class="mb-4" />
-  <a
-    href="/it-news/"
-    class="mb-8 inline-block rounded-card border border-line bg-surface px-4 py-2 text-sm font-semibold text-link shadow-sm hover:underline"
-  >
-    IT ニュース（AI が自動で作成した記事）の一覧 →
-  </a>
+  <div class="mb-8 flex flex-wrap gap-3">
+    <a
+      href="/it-news/"
+      class="inline-block rounded-card border border-line bg-surface px-4 py-2 text-sm font-semibold text-link shadow-sm hover:underline"
+    >
+      IT ニュース（AI が自動で作成した記事）の一覧 →
+    </a>
+    <a
+      href="/security-news/"
+      class="inline-block rounded-card border border-line bg-surface px-4 py-2 text-sm font-semibold text-link shadow-sm hover:underline"
+    >
+      セキュリティニュース（AI が自動で作成した記事）の一覧 →
+    </a>
+  </div>
   <ArticleList articles={articles} basePath="/articles/" />
 </BaseLayout>

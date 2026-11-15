@@ -98,6 +98,14 @@ Parameters:
     MinValue: 1
     MaxValue: 10
     Description: 1回の定期作成で作る IT 記事の数（出典が既存の記事と重なる題材は除くため、これより少なくなることがある）
+  SecurityArticlesPerRun:
+    Type: Number
+    Default: 3
+    MinValue: 0
+    MaxValue: 10
+    Description: >-
+      1回の定期作成（<スタック名>-it-articles）で、IT 記事に続けて作るセキュリティ記事の数。0 で作らない
+      （出典が既存の記事と重なる題材は除くため、これより少なくなることがある）
   PerplexityModel:
     Type: String
     Default: sonar
@@ -475,7 +483,7 @@ Resources:
                   Action: cloudfront:CreateInvalidation
                   Resource: !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}"
                 - !Ref "AWS::NoValue"
-              # 定期実行で作った IT 記事を取り込んでからビルドする（buildspec.yml の pre_build）。読み取りだけ
+              # 定期実行で作った IT 記事・セキュリティ記事を取り込んでからビルドする（buildspec.yml の pre_build）。読み取りだけ
               - Sid: ListItArticles
                 Effect: Allow
                 Action: s3:ListBucket
@@ -484,10 +492,13 @@ Resources:
                   StringLike:
                     s3:prefix:
                       - it-articles/*
+                      - security-articles/*
               - Sid: ReadItArticles
                 Effect: Allow
                 Action: s3:GetObject
-                Resource: !Sub "${ItArticlesBucket.Arn}/it-articles/*"
+                Resource:
+                  - !Sub "${ItArticlesBucket.Arn}/it-articles/*"
+                  - !Sub "${ItArticlesBucket.Arn}/security-articles/*"
 
   CodeBuildProject:
     Type: AWS::CodeBuild::Project
@@ -630,12 +641,15 @@ Resources:
                   StringLike:
                     s3:prefix:
                       - it-articles/*
+                      - security-articles/*
               - Sid: ReadWriteItArticles
                 Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub "${ItArticlesBucket.Arn}/it-articles/*"
+                Resource:
+                  - !Sub "${ItArticlesBucket.Arn}/it-articles/*"
+                  - !Sub "${ItArticlesBucket.Arn}/security-articles/*"
               # 差分デプロイ（deploy_diff.py）: 一覧と ETag の取得・アップロードだけ。DeployPath を指定したらそのパス以下に限る
               - Sid: ListSiteBucket
                 Effect: Allow
@@ -668,7 +682,7 @@ Resources:
     Type: AWS::CodeBuild::Project
     Properties:
       Name: !Sub "${AWS::StackName}-it-articles"
-      Description: IT 記事の定期作成（Perplexity で作成 → サイト全体をビルド → 記事を S3 に保存 → MD5 の差分だけデプロイ）
+      Description: IT 記事・セキュリティ記事の定期作成（Perplexity で作成 → サイト全体をビルド → 記事を S3 に保存 → MD5 の差分だけデプロイ）
       ServiceRole: !GetAtt ItArticlesRole.Arn
       TimeoutInMinutes: 30
       # 定期実行が重なって同じ題材の記事を二重に作らないようにする
@@ -698,6 +712,8 @@ Resources:
             Value: !Ref ItArticlesBucket
           - Name: IT_ARTICLES_PER_RUN
             Value: !Ref ItArticlesPerRun
+          - Name: SECURITY_ARTICLES_PER_RUN
+            Value: !Ref SecurityArticlesPerRun
           - Name: PERPLEXITY_MODEL
             Value: !Ref PerplexityModel
           # API キーは SSM から実行時に読み込む（値はテンプレート・ログに出ない）

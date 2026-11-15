@@ -1,0 +1,22 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import SectionHeading from "../../components/SectionHeading.astro";
+import ArticleList from "../../components/ArticleList.astro";
+import { publishedArticles } from "../../lib/content-query";
+
+// 自動作成のセキュリティ記事（src/content/security-articles）だけ。手で書いた記事・IT ニュースとは並べない
+const articles = publishedArticles(await getCollection("securityArticles"));
+---
+
+<BaseLayout
+  title="セキュリティニュース"
+  description="AI（Perplexity）が最近公表された脆弱性・セキュリティ情報から自動で作成した記事の一覧です。"
+>
+  <SectionHeading as="h1" eyebrow="Security News" title="セキュリティニュース" class="mb-4" />
+  <p class="mb-8 text-muted">
+    AI（Perplexity）が最近公表された脆弱性・セキュリティ情報から重要なものを選び、対応方法・経緯・用語解説つきで自動で作成した記事です。対応の前に、必ず各記事の参考リンク（ベンダーのアドバイザリなど）で内容を確認してください。
+  </p>
+  <ArticleList articles={articles} basePath="/security-news/" />
+  <a href="/articles/" class="mt-8 inline-block text-sm font-semibold text-link hover:underline">← 記事一覧</a>
+</BaseLayout>

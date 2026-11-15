@@ -30,6 +30,7 @@ describe("infra/template.yaml", () => {
       "MonthlyBudgetUsd",
       "PerplexityApiKeyParameterName",
       "PerplexityModel",
+      "SecurityArticlesPerRun",
       "SiteBucketName",
     ]);
     // 未指定（空）なら任意のブランチへの push でデプロイする
@@ -251,6 +252,29 @@ describe("infra/template.yaml", () => {
       for (const ng of ["no-slash", "/a b", ""]) expect(re.test(ng), ng).toBe(false);
     });
 
+    it("declares the number of security articles per run (3 by default, 0 turns it off)", () => {
+      const p = t.Parameters.SecurityArticlesPerRun;
+      expect(p.Type).toBe("Number");
+      expect(p.Default).toBe(3);
+      expect(p.MinValue).toBe(0);
+      expect(p.MaxValue).toBe(10);
+      const env = project.Environment.EnvironmentVariables.find((v: any) => v.Name === "SECURITY_ARTICLES_PER_RUN");
+      expect(env).toEqual({ Name: "SECURITY_ARTICLES_PER_RUN", Value: { Ref: "SecurityArticlesPerRun" } });
+    });
+
+    it("limits both roles to the it-articles/ and security-articles/ prefixes of the article bucket", () => {
+      for (const roleId of ["CodeBuildRole", "ItArticlesRole"]) {
+        const s = stmts(roleId).filter((x: any) => JSON.stringify(x.Resource).includes("ItArticlesBucket"));
+        const list = s.find((x: any) => x.Action === "s3:ListBucket");
+        expect(list.Condition.StringLike["s3:prefix"], roleId).toEqual(["it-articles/*", "security-articles/*"]);
+        const objects = s.find((x: any) => x.Action !== "s3:ListBucket");
+        expect(objects.Resource, roleId).toEqual([
+          { "Fn::Sub": "${ItArticlesBucket.Arn}/it-articles/*" },
+          { "Fn::Sub": "${ItArticlesBucket.Arn}/security-articles/*" },
+        ]);
+      }
+    });
+
     it("keeps the article bucket private, encrypted, versioned and retained", () => {
       const b = R.ItArticlesBucket;
       expect(b.DeletionPolicy).toBe("Retain");
@@ -282,6 +306,7 @@ describe("infra/template.yaml", () => {
         "IT_ARTICLES_PER_RUN",
         "PERPLEXITY_API_KEY",
         "PERPLEXITY_MODEL",
+        "SECURITY_ARTICLES_PER_RUN",
         "SITE_BUCKET",
       ]);
     });

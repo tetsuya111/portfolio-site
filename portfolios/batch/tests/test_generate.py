@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import generate_it_articles
-from it_news.generate import jst_date, run_generation
+from it_news.generate import IT_NEWS, ArticleKind, jst_date, run_generation
 from tests.fakes import FakePost, response
 
 NOW = datetime(2026, 11, 14, 1, 0, tzinfo=timezone.utc)
@@ -102,6 +102,35 @@ class RunGenerationTest(unittest.TestCase):
             post = FakePost(response({"topics": [topic("A", "https://e.com/a", 9)]}), response(article("a"), search_results=REFS))
             result = self.run_with(post, d, existing=[other])
             self.assertEqual(Path(result.written[0]).name, "2026-11-14-a-2.md")
+
+    def test_uses_the_given_kind(self):
+        built = []
+
+        def build(**kw):
+            built.append(kw)
+            return "---\ntitle: x\n---\n"
+
+        kind = ArticleKind(
+            topics_request=lambda titles: ([{"role": "user", "content": "TOPICS"}], {}),
+            article_request=lambda t: ([{"role": "user", "content": "ARTICLE " + t["title"]}], {}),
+            validate_article=lambda data: {**data, "slug": "日本語"},
+            build_markdown=build,
+            topics_recency="week",
+            article_recency="month",
+            fallback_slug="security-news",
+        )
+        post = FakePost(response({"topics": [topic("A", "https://e.com/a", 9)]}), response(article("a"), search_results=REFS))
+        with tempfile.TemporaryDirectory() as d:
+            result = run_generation(post=post, api_key="k", model="sonar", count=1, out_dir=Path(d), existing_dirs=[],
+                                    tags=["セキュリティ"], now=NOW, log=lambda m: None, kind=kind)
+            self.assertEqual([Path(p).name for p in result.written], ["2026-11-14-security-news.md"])
+        self.assertEqual([c["body"]["search_recency_filter"] for c in post.calls], ["week", "month"])
+        self.assertEqual(post.calls[0]["body"]["messages"][-1]["content"], "TOPICS")
+        self.assertEqual(built[0]["tags"], ["セキュリティ"])
+        self.assertEqual(built[0]["source_url"], "https://e.com/a")
+
+    def test_it_news_is_the_default_kind(self):
+        self.assertEqual((IT_NEWS.topics_recency, IT_NEWS.article_recency, IT_NEWS.fallback_slug), ("day", "week", "it-news"))
 
     def test_jst_date(self):
         self.assertEqual(jst_date(datetime(2026, 11, 14, 16, 0, tzinfo=timezone.utc)), "2026-11-15")

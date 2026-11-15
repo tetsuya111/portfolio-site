@@ -6,7 +6,7 @@ import TagList from "./TagList.astro";
 import { formatDisplayDate } from "../lib/content-query";
 
 interface Props {
-  entry: CollectionEntry<"articles"> | CollectionEntry<"itArticles">;
+  entry: CollectionEntry<"articles"> | CollectionEntry<"itArticles"> | CollectionEntry<"securityArticles">;
   backHref: string;
   backLabel: string;
 }
