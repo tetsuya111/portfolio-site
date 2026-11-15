@@ -70,7 +70,7 @@ PERPLEXITY_API_KEY=pplx-... python generate_security_articles.py --out-dir <書�
 |---|---|
 | `--count` の既定 | `SECURITY_ARTICLES_PER_RUN`、なければ 3（0〜10 に丸める。0 なら API を呼ばずに終了コード 0 で終わる） |
 | `--tag` の既定 | `セキュリティ` |
-| 題材 | 直近 7 日に公表・更新された脆弱性・セキュリティインシデント（検索の新しさ: 題材 `week`・記事 `month`） |
+| 題材 | 直近 24〜48 時間に公表・更新された脆弱性・セキュリティインシデント（検索の新しさ: 題材 `day`・記事 `month`） |
 | 本文の構成 | `## 概要`／`## 脆弱性の詳細`／`## 具体的な対応方法`／`## IT業界における経緯`／`## 関連技術`／`## IT用語の解説`／`## 備考`／`## 参考リンク`（この順。備考以外の節が空の応答は失敗として数える。備考が空なら「特記事項はありません。」にする。節の中の見出しは `###` 以下に下げる） |
 
 プロンプト・検証は [security_news/prompts.py](security_news/prompts.py)、Markdown の組み立ては [security_news/markdown.py](security_news/markdown.py)。

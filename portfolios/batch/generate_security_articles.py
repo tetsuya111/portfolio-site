@@ -17,13 +17,14 @@ from it_news.perplexity import Post, urllib_post
 from security_news import SECURITY_NEWS
 
 DEFAULT_COUNT = 3
+MIN_COUNT = 0  # 0 なら作らない
 COUNT_ENV = "SECURITY_ARTICLES_PER_RUN"
 DEFAULT_TAG = "セキュリティ"
 
 
 def resolve_count(arg: int | None, env: dict) -> int:
     """--count、なければ SECURITY_ARTICLES_PER_RUN、なければ 3。0〜10 に丸める（0 なら作らない）。"""
-    return cli.resolve_count(arg, env, count_env=COUNT_ENV, default=DEFAULT_COUNT, minimum=0)
+    return cli.resolve_count(arg, env, count_env=COUNT_ENV, default=DEFAULT_COUNT, minimum=MIN_COUNT)
 
 
 def main(argv: list[str], env: dict, post: Post = urllib_post) -> int:
@@ -36,7 +37,7 @@ def main(argv: list[str], env: dict, post: Post = urllib_post) -> int:
         default_tag=DEFAULT_TAG,
         count_env=COUNT_ENV,
         default_count=DEFAULT_COUNT,
-        min_count=0,
+        min_count=MIN_COUNT,
     )
 
 

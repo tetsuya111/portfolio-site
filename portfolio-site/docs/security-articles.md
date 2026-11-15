@@ -13,7 +13,7 @@ AI（Perplexity）が最近公表された脆弱性・セキュリティ情報�
 | バッチ | `portfolios/batch/generate_security_articles.py` | `generate_it_articles.py` |
 | 1回の本数 | `SecurityArticlesPerRun`（既定 3、0〜10。0 で作らない） | `ItArticlesPerRun`（既定 5） |
 | 既定のタグ | `セキュリティ` | `IT ニュース` |
-| 題材 | 直近 7 日に公表・更新された脆弱性・セキュリティインシデント | 直近の IT ニュース |
+| 題材 | 直近 24〜48 時間に公表・更新された脆弱性・セキュリティインシデント | 直近の IT ニュース |
 | 記事の構成 | 概要／脆弱性の詳細／具体的な対応方法／IT業界における経緯／関連技術／IT用語の解説／備考／参考リンク | 本文／参考情報／用語解説／参考リンク |
 
 - 定期実行の間隔・ON/OFF・モデル・API キーは IT ニュースと共通（`ItArticlesScheduleExpression`・`ItArticlesScheduleState`・`PerplexityModel`・`PerplexityApiKeyParameterName`）。

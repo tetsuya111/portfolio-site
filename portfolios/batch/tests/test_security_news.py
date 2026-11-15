@@ -101,6 +101,21 @@ class SecurityMarkdownTest(unittest.TestCase):
         self.assertIn("> ### 引用の見出し", md)
         self.assertIn("\n# コードの中\n", md)  # コードブロックの中は変えない
 
+    def test_demotes_headings_in_list_items_and_setext_headings(self):
+        md = build(validate_article(sec_article(mitigation="1. ## 更新する\n- # 確認する\n\n影響範囲\n===\n\n対象\n---\n")))
+        self.assertEqual(h2s(md), HEADINGS)
+        self.assertIn("1. ### 更新する", md)
+        self.assertIn("- ### 確認する", md)
+        # setext の下線は区切り線（***）にして、見出しにしない
+        self.assertIn("影響範囲\n***", md)
+        self.assertIn("対象\n***", md)
+        body = md.split("## 具体的な対応方法", 1)[1]  # frontmatter の --- は除く
+        self.assertNotRegex(body, r"\n(=+|-+)\n")
+
+    def test_it_news_keeps_setext_h2(self):
+        from it_news.markdown import sanitize_markdown
+        self.assertEqual(sanitize_markdown("a\n===\nb\n---"), "a\n---\nb\n---")
+
     def test_writes_a_default_note_when_notes_is_empty(self):
         md = build(validate_article(sec_article(notes="")))
         self.assertEqual(h2s(md), HEADINGS)
@@ -151,7 +166,7 @@ class SecurityPromptsTest(unittest.TestCase):
 
 
 class SecurityGenerationTest(unittest.TestCase):
-    def test_writes_security_articles_with_week_and_month_recency(self):
+    def test_writes_security_articles_with_day_and_month_recency(self):
         with tempfile.TemporaryDirectory() as d:
             Path(d, "2026-11-01-old.md").write_text('---\ntitle: "古い"\ndate: "2026-11-01"\nsourceUrl: "https://e.com/old"\n---\n', encoding="utf-8")
             post = FakePost(
@@ -163,7 +178,7 @@ class SecurityGenerationTest(unittest.TestCase):
             self.assertEqual([Path(p).name for p in result.written], ["2026-11-14-security-news.md"])
             self.assertEqual(result.skipped, 1)
             self.assertEqual(h2s(Path(result.written[0]).read_text(encoding="utf-8")), HEADINGS)
-        self.assertEqual([c["body"]["search_recency_filter"] for c in post.calls], ["week", "month"])
+        self.assertEqual([c["body"]["search_recency_filter"] for c in post.calls], ["day", "month"])
 
 
 class SecurityCliTest(unittest.TestCase):

@@ -26,7 +26,7 @@ SECTIONS = (
     ("IT業界における経緯", "history"),
     ("関連技術", "relatedTech"),
     ("IT用語の解説", GLOSSARY),
-    ("備考", "notes"),
+    ("備考", NOTES),
 )
 
 

@@ -45,7 +45,7 @@ def topics_request(recent_titles: list[str]) -> tuple[list[dict], dict]:
     covered = "\n".join(f"- {t}" for t in recent_titles) or "(none)"
     user = (
         f"List up to {MAX_TOPICS} important security vulnerabilities or security incidents "
-        "disclosed or updated in the last 7 days.\n"
+        "disclosed or updated in the last 24-48 hours.\n"
         "- Prefer vulnerabilities in widely used software, services, libraries, operating systems and devices.\n"
         "- importance: an integer from 1 to 10, ranked by severity (CVSS), whether it is actively exploited "
         "(for example listed in the CISA KEV catalog), and the number of affected users or systems.\n"

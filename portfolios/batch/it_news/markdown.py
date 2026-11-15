@@ -25,9 +25,11 @@ _CODE_SPAN = re.compile(r"(?<![`\\])(`+)(?!`)(.+?)(?<!`)\1(?!`)")
 _FENCE_OPEN = re.compile(r"^(`{3,}|~{3,})(.*)$")
 # 見出しの h1: ATX（# 見出し。引用 > の中を含む）と setext（次の行が ===）
 _ATX_H1 = re.compile(r"^((?: {0,3}>[ ]?)*)( {0,3})#(?=\s|$)")
-# ATX 見出し（引用 > の中を含む）。min_heading より浅い見出しを下げるのに使う
-_ATX = re.compile(r"^((?: {0,3}>[ ]?)*)( {0,3})(#{1,6})(?=\s|$)")
+# ATX 見出し（引用 > とリスト項目 - / 1. の中を含む）。min_heading より浅い見出しを下げるのに使う
+_ATX = re.compile(r"^((?: {0,3}(?:>[ ]?|[-+*][ ]+|\d{1,9}[.)][ ]+))*)( {0,3})(#{1,6})(?=\s|$)")
 _SETEXT_H1 = re.compile(r"^( {0,3})(=+)([ \t]*)$")
+# setext の下線（=== は h1、--- は h2 になりうる）。min_heading が 3 以上なら区切り線 *** にして見出しにしない
+_SETEXT_ANY = re.compile(r"^( {0,3})(=+|-+)[ \t]*$")
 _REFERENCE_URL = re.compile(r"^https?://[^\s<>\"\\\x00-\x1f\x7f]+$")
 _PLACEHOLDER = "\x00{}\x00"
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -70,8 +72,13 @@ def _sanitize_text(text: str) -> str:
 def _sanitize_line(line: str, min_heading: int = 2) -> str:
     """コードブロックの外の1行。ページの h1 と重ならないよう、本文の h1 は h2 にする。
 
-    min_heading が 3 以上なら、それより浅い ATX 見出し（# / ## …）もその深さまで下げる（記事の節の見出しと並ばないようにする）。
+    min_heading が 3 以上なら、それより浅い ATX 見出し（# / ## …）もその深さまで下げ、setext の下線は区切り線にする
+    （記事の節の見出しと並ばないようにする。setext では h3 を表せないため）。
     """
+    if min_heading > 2:
+        underline = _SETEXT_ANY.match(line)
+        if underline:
+            return underline.group(1) + "***"
     setext = _SETEXT_H1.match(line)
     if setext:
         return setext.group(1) + "-" * len(setext.group(2)) + setext.group(3)
