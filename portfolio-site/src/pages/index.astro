@@ -100,6 +100,7 @@ const grid = "grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3";
         <div class={grid}>
           {skills.map((s) => (
             <SkillTile
+              id={s.id}
               name={s.data.name}
               category={s.data.category}
               description={s.data.description}

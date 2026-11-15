@@ -51,7 +51,14 @@ describe("build output", () => {
     expect(top).toContain(newest.data.title);
     expect(top).toContain(`href="/portfolios/${newest.id}/"`);
     if (newest.data.tags[0]) expect(top).toContain(newest.data.tags[0]);
-    expect(top).toMatch(/target="_blank"/);
+    if (newest.data.url) {
+      // URL ボタン（別タブで開く）が出ている
+      expect(top).toMatch(
+        new RegExp(
+          `<a href="${newest.data.url.replaceAll("&", "&amp;").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*target="_blank"[^>]*>\\s*ポートフォリオのURL ↗`,
+        ),
+      );
+    }
   });
 
   it("lists portfolios as tiles on the portfolio index page", () => {

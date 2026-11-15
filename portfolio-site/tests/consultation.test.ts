@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveConsultation } from "../src/lib/consultation";
-import { buildMailto } from "../src/lib/mailto";
+import { buildMailto, MAILTO_LIMITS } from "../src/lib/mailto";
 
 const MOCK = { taskBoxMockUrl: "/apps/task-box-it-develop/" };
 
@@ -43,10 +43,20 @@ describe("buildMailto", () => {
     const url = buildMailto("to@example.com", { name: "山田 & 太郎", email: "y@example.com", message: "1行目\n#2行目" });
     const m = /^mailto:to@example\.com\?subject=([^&]*)&body=([^&]*)$/.exec(url);
     expect(m).not.toBeNull();
-    expect(decodeURIComponent(m?.[1] ?? "")).toBe("【ご相談】山田 & 太郎 さまより");
+    expect(decodeURIComponent(m?.[1] ?? "")).toBe("【ご相談】ポートフォリオサイトから");
     const body = decodeURIComponent(m?.[2] ?? "");
     expect(body).toContain("お名前: 山田 & 太郎");
     expect(body).toContain("返信先メールアドレス: y@example.com");
     expect(body).toContain("1行目\r\n#2行目");
+  });
+
+  it("stays within 2,000 characters even when every field is filled to its limit with Japanese text", () => {
+    // Windows のメールソフトなどは約 2,048 文字を超える mailto: を開けない
+    const url = buildMailto("contact@example.com", {
+      name: "あ".repeat(MAILTO_LIMITS.name),
+      email: `${"a".repeat(MAILTO_LIMITS.email - 12)}@example.com`,
+      message: "あ".repeat(MAILTO_LIMITS.message),
+    });
+    expect(url.length).toBeLessThanOrEqual(2000);
   });
 });

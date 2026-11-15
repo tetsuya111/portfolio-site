@@ -88,6 +88,20 @@ test.describe("相談ボタン", () => {
     expect(decodeURIComponent(mailto ?? "")).toContain("返信先メールアドレス: taro@example.com");
   });
 
+  test("閉じて開き直すと、前回の入力と送信後の案内が消えている", async ({ page }) => {
+    await page.getByRole("button", { name: "フォームで相談する" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("お名前").fill("山田 太郎");
+    await dialog.getByLabel("返信先メールアドレス").fill("taro@example.com");
+    await dialog.getByLabel("ご相談内容").fill("相談");
+    await dialog.getByRole("button", { name: "メールソフトで送信する" }).click();
+    await expect(dialog.getByRole("link", { name: "こちらから開く" })).toBeVisible();
+    await dialog.getByRole("button", { name: "閉じる" }).click();
+    await page.getByRole("button", { name: "フォームで相談する" }).click();
+    await expect(dialog.getByLabel("お名前")).toHaveValue("");
+    await expect(dialog.getByText("メールソフトが開かない場合は")).toBeHidden();
+  });
+
   test("必須項目が空なら送信せず、Esc でダイアログを閉じる", async ({ page }) => {
     await page.getByRole("button", { name: "フォームで相談する" }).click();
     const dialog = page.getByRole("dialog");

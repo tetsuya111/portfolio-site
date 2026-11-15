@@ -8,7 +8,7 @@ interface Props {
 }
 
 const { tags, max } = Astro.props;
-const { shown, rest } = max === undefined ? { shown: tags, rest: 0 } : limitTags(tags, max);
+const { shown, rest } = limitTags(tags, max ?? Infinity);
 ---
 
 {

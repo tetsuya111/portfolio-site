@@ -3,6 +3,7 @@
 // 宛先・遷移先はビルド時に決まる（src/lib/consultation.ts）。サイトは静的配信のため、
 // フォームは入力内容から mailto: リンクを作って訪問者のメールソフトを開くだけで、サイト側には何も送らない。
 import type { Consultation } from "../lib/consultation";
+import { MAILTO_LIMITS } from "../lib/mailto";
 
 interface Props {
   consultation: Consultation;
@@ -66,18 +67,32 @@ const field = "mt-1 w-full rounded-lg border border-line bg-page px-3 py-2 text-
       <form class="mt-4 flex flex-col gap-4">
         <label class="text-sm font-semibold">
           お名前
-          <input name="name" required autocomplete="name" class={field} />
+          <input name="name" required maxlength={MAILTO_LIMITS.name} autocomplete="name" class={field} />
         </label>
         <label class="text-sm font-semibold">
           返信先メールアドレス
-          <input name="email" type="email" required autocomplete="email" class={field} />
+          <input
+            name="email"
+            type="email"
+            required
+            maxlength={MAILTO_LIMITS.email}
+            autocomplete="email"
+            class={field}
+          />
         </label>
         <label class="text-sm font-semibold">
           ご相談内容
-          <textarea name="message" required rows="5" maxlength="400" aria-describedby="consult-message-note" class={field} />
+          <textarea
+            name="message"
+            required
+            rows="4"
+            maxlength={MAILTO_LIMITS.message}
+            aria-describedby="consult-message-note"
+            class={field}
+          />
         </label>
         <p id="consult-message-note" class="-mt-2 text-xs text-muted">
-          400文字まで。長い内容や資料は、開いたメールに追記してください。
+          {MAILTO_LIMITS.message}文字まで（メールソフトに渡せる長さの上限のため）。詳しい内容や資料は、開いたメールに追記してください。
         </p>
         <div class="flex flex-wrap gap-3">
           <button type="submit" class="btn-accent px-5 py-2.5 text-sm">
@@ -108,7 +123,15 @@ const field = "mt-1 w-full rounded-lg border border-line bg-page px-3 py-2 text-
   const openButton = document.querySelector<HTMLButtonElement>("[data-consult-open]");
   const form = dialog?.querySelector("form");
   if (dialog && openButton && form) {
-    openButton.addEventListener("click", () => dialog.showModal());
+    const sent = dialog.querySelector<HTMLElement>("[data-consult-sent]");
+    const reopen = dialog.querySelector<HTMLAnchorElement>("[data-consult-mailto]");
+    // 開くたびに前回の入力と送信後の案内を消す
+    openButton.addEventListener("click", () => {
+      form.reset();
+      if (sent) sent.hidden = true;
+      reopen?.removeAttribute("href");
+      dialog.showModal();
+    });
     dialog.querySelector("[data-consult-close]")?.addEventListener("click", () => dialog.close());
     // 必須項目が空のときはブラウザの検証で submit 自体が起きない
     form.addEventListener("submit", (e) => {
@@ -121,8 +144,7 @@ const field = "mt-1 w-full rounded-lg border border-line bg-page px-3 py-2 text-
         message: value("message"),
       });
       // メールソフトが開かない環境のために、同じリンクと宛先の案内を出す
-      const sent = dialog.querySelector<HTMLElement>("[data-consult-sent]");
-      dialog.querySelector<HTMLAnchorElement>("[data-consult-mailto]")?.setAttribute("href", url);
+      reopen?.setAttribute("href", url);
       if (sent) sent.hidden = false;
       window.location.href = url;
     });

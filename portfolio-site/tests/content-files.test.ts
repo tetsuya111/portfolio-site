@@ -31,9 +31,8 @@ describe("content files", () => {
     }
   });
 
-  it("gives every portfolio a description", () => {
-    for (const i of frontmatters("portfolios")) {
-      expect(portfolioSchema.parse(i.data).description, i.file).toBeTruthy();
-    }
+  it("has valid portfolios", () => {
+    // description は任意（ポートフォリオ追加コマンドでは書かれない）。あればタイルに出す
+    for (const i of frontmatters("portfolios")) expect(portfolioSchema.safeParse(i.data).success, i.file).toBe(true);
   });
 });
