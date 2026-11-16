@@ -12,7 +12,7 @@ export interface CareerItem {
 }
 
 export interface ProfileBody {
-  /** 自己紹介の段落 */
+  /** 自己紹介の段落（段落内の改行は \n のまま。HTML では空白として表示される） */
   intro: string[];
   career: CareerItem[];
   /** スキルの箇条書き1行ごとの、「 / 」で区切った技術 */
@@ -21,14 +21,37 @@ export interface ProfileBody {
   certifications: string[][];
 }
 
-/** 描画すると Markdown の装飾・HTML・エスケープになりうる文字。そのまま文字として出すと内容が変わるため扱わない */
-const DECORATION = /[[\]*`<>_|#&\\~]/;
+/**
+ * 描画すると Markdown の装飾・HTML・エスケープ・自動リンク・記号の置き換え（smartypants の引用符・ダッシュ・三点リーダー）
+ * になりうるもの。そのまま文字として出すと Markdown の表示と変わるため扱わない
+ */
+const DECORATION = /[[\]*`<>_|#&\\~"']|--|\.\.\.|:\/\/|www\./;
 
 /** 段落として読めない行（Markdown の箇条書き・区切り線・見出しの下線・字下げのコードなど） */
-const NON_PARAGRAPH = /^(?:\s|[-+]\s|\d+[.)]\s|[-=]{3,}\s*$)/;
+const NON_PARAGRAPH = /^(?:\s|[-+]\s|\d+[.)]\s|[-=]+\s*$)/;
+
+/** 受け付ける見出し。この順でしか受け付けない（ページもこの順で描くため）。資格はスキルの節の中の ### */
+const SECTION_ORDER = ["自己紹介", "経歴", "スキル", "資格#h3"];
 
 const LIST_ITEM = /^- (\S.*)$/;
 const CAREER_ITEM = /^([^:：]{1,30}?)\s*[:：]\s*(\S.*)$/;
+
+/** 「、」で区切る。入れ子の（）の中の「、」では区切らない */
+function splitTopLevel(text: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let current = "";
+  for (const ch of text) {
+    if (ch === "（") depth++;
+    else if (ch === "）") depth = Math.max(0, depth - 1);
+    if (ch === "、" && depth === 0) {
+      parts.push(current);
+      current = "";
+    } else current += ch;
+  }
+  parts.push(current);
+  return parts.map((d) => d.trim()).filter((d) => d.length > 0);
+}
 
 /** 内容を、末尾の（）より前と（）の中に分ける。末尾が（）でなければ詳細なし */
 function splitDetails(content: string): { title: string; details: string[] } {
@@ -39,12 +62,7 @@ function splitDetails(content: string): { title: string; details: string[] } {
     else if (content[i] === "（" && --depth === 0) {
       const title = content.slice(0, i).trim();
       if (!title) break;
-      const details = content
-        .slice(i + 1, -1)
-        .split("、")
-        .map((d) => d.trim())
-        .filter((d) => d.length > 0);
-      return { title, details };
+      return { title, details: splitTopLevel(content.slice(i + 1, -1)) };
     }
   }
   return { title: content, details: [] };
@@ -73,7 +91,7 @@ function paragraphs(lines: string[]): string[] | null {
   let current: string[] = [];
   for (const line of [...lines, ""]) {
     if (line.trim() === "") {
-      if (current.length > 0) result.push(current.join(""));
+      if (current.length > 0) result.push(current.join("\n"));
       current = [];
       continue;
     }
@@ -90,14 +108,15 @@ export function parseProfileBody(body: string): ProfileBody | null {
   const sections = new Map<string, string[]>();
   let current: string[] | null = null;
   for (const line of body.split(/\r?\n/)) {
-    const h2 = /^## (.+)$/.exec(line);
-    const h3 = /^### (.+)$/.exec(line);
-    if (h2 || h3) {
-      const name = ((h2 ?? h3) as RegExpExecArray)[1]?.trim() as string;
-      const key = h2 ? name : `${name}#h3`;
-      if (!["自己紹介", "経歴", "スキル", "資格#h3"].includes(key) || sections.has(key)) return null;
-      // 資格はスキルの節の中にだけ置ける
-      if (key === "資格#h3" && !sections.has("スキル")) return null;
+    const h = /^(##|###) (.+)$/.exec(line);
+    if (h) {
+      const name = (h[2] as string).trim();
+      const key = h[1] === "##" ? name : `${name}#h3`;
+      // 未知の見出し・重複・順序違い（資格がスキルの直後でないものを含む）は扱わない
+      const last = [...sections.keys()].pop();
+      if (!SECTION_ORDER.includes(key)) return null;
+      if (last !== undefined && SECTION_ORDER.indexOf(key) <= SECTION_ORDER.indexOf(last)) return null;
+      if (key === "資格#h3" && last !== "スキル") return null;
       current = [];
       sections.set(key, current);
       continue;
@@ -105,10 +124,7 @@ export function parseProfileBody(body: string): ProfileBody | null {
     if (current) current.push(line);
     else if (line.trim() !== "") return null;
   }
-  // スキルの後に別の ## が来たら、資格はスキルの節の中ではない
-  const keys = [...sections.keys()];
-  const certIndex = keys.indexOf("資格#h3");
-  if (certIndex !== -1 && keys[certIndex - 1] !== "スキル") return null;
+  if (sections.size === 0) return null;
 
   const intro = paragraphs(sections.get("自己紹介") ?? []);
   const careerLines = listItems(sections.get("経歴") ?? []);
@@ -116,15 +132,20 @@ export function parseProfileBody(body: string): ProfileBody | null {
   const certLines = listItems(sections.get("資格#h3") ?? []);
   if (!intro || !careerLines || !skillLines || !certLines) return null;
 
+  // 見出しだけで中身のない節は、新しいデザインでは見出しが消えるため Markdown のまま表示する
+  const counts: Record<string, number> = {
+    自己紹介: intro.length,
+    経歴: careerLines.length,
+    スキル: skillLines.length,
+    "資格#h3": certLines.length,
+  };
+  if ([...sections.keys()].some((k) => counts[k] === 0)) return null;
+
   const career: CareerItem[] = [];
   for (const line of careerLines) {
     const m = CAREER_ITEM.exec(line);
     if (!m) return null;
     career.push({ period: (m[1] as string).trim(), ...splitDetails((m[2] as string).trim()) });
   }
-  const skills = skillLines.map(splitSlash);
-  const certifications = certLines.map(splitSlash);
-
-  if (intro.length + career.length + skills.length + certifications.length === 0) return null;
-  return { intro, career, skills, certifications };
+  return { intro, career, skills: skillLines.map(splitSlash), certifications: certLines.map(splitSlash) };
 }

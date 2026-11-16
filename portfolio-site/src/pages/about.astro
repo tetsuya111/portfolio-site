@@ -8,8 +8,9 @@ import { parseProfileBody } from "../lib/profile-body";
 
 const profile = await getEntry("profile", "profile");
 if (!profile) throw new Error("src/content/profile/profile.md がありません");
-const { Content } = await render(profile);
 const body = parseProfileBody(profile.body ?? "");
+// Markdown の描画は、決まった書式で読めなかったときだけ使う
+const Content = body ? null : (await render(profile)).Content;
 
 // 色分けの順番。Tailwind がクラス名を拾えるよう、組み立てずに完全な名前で書く
 const TONES = [
@@ -145,7 +146,7 @@ const card = "rounded-card border border-line bg-surface shadow-sm";
       </>
     ) : (
       <div class="prose prose-themed mt-10 max-w-none">
-        <Content />
+        {Content && <Content />}
       </div>
     )
   }

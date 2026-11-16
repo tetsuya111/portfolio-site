@@ -33,7 +33,8 @@ const sample = [
 describe("parseProfileBody", () => {
   it("reads the intro, career, skills and certifications", () => {
     expect(parseProfileBody(sample)).toEqual({
-      intro: ["一段落目。続きの行。", "二段落目。"],
+      // 段落内の改行は Markdown と同じく残す（HTML では空白として表示される）
+      intro: ["一段落目。\n続きの行。", "二段落目。"],
       career: [
         { period: "2022年〜2023年", title: "インフラ構築", details: ["Bind による DNS", "Zabbix 監視"] },
         { period: "2026年〜", title: "営業支援ツール（ブラウザ拡張機能）の開発", details: ["Python・Go", "AWS"] },
@@ -49,6 +50,11 @@ describe("parseProfileBody", () => {
 
   it("accepts CRLF line endings", () => {
     expect(parseProfileBody(sample.replaceAll("\n", "\r\n"))).toEqual(parseProfileBody(sample));
+  });
+
+  it("splits details only on 、 outside nested parentheses", () => {
+    const body = "## 経歴\n\n- 2025年: 開発（React（Next.js、Remix）、TypeScript）\n";
+    expect(parseProfileBody(body)?.career[0]?.details).toEqual(["React（Next.js、Remix）", "TypeScript"]);
   });
 
   it("allows sections to be missing", () => {
@@ -74,6 +80,16 @@ describe("parseProfileBody", () => {
     ["a nested list", sample.replace("- Python / Go", "- Python / Go\n  - Django")],
     ["an empty body", ""],
     ["only empty sections", "## 自己紹介\n\n## 経歴\n"],
+    ["an empty section", "## 自己紹介\n\n本文。\n\n## 経歴\n\n## スキル\n\n- Python\n"],
+    ["sections out of order", "## スキル\n\n- Python\n\n## 経歴\n\n- 2022年: 開発\n"],
+    ["a short setext underline", sample.replace("二段落目。", "見出し\n=")],
+    ["a short setext underline with -", sample.replace("二段落目。", "見出し\n--")],
+    ["a bare url", sample.replace("二段落目。", "ブログ: https://example.com")],
+    ["a www url", sample.replace("二段落目。", "www.example.com")],
+    ["ascii quotes", sample.replace("二段落目。", 'Python "API"')],
+    ["an apostrophe", sample.replace("二段落目。", "It's")],
+    ["a double hyphen", sample.replace("二段落目。", "a -- b")],
+    ["an ellipsis", sample.replace("二段落目。", "続く...")],
   ])("returns null for %s", (_, body) => {
     expect(parseProfileBody(body)).toBeNull();
   });
