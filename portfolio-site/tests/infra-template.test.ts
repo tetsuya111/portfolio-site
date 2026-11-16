@@ -14,6 +14,7 @@ const one = (type: string) => {
 describe("infra/template.yaml", () => {
   it("declares the parameters", () => {
     expect(Object.keys(t.Parameters).sort()).toEqual([
+      "BackendDomainName",
       "BudgetAlertEmail",
       "DeployBranch",
       "DeployPath",
@@ -79,8 +80,7 @@ describe("infra/template.yaml", () => {
 
   it("serves over HTTPS only via OAC with a directory-index function", () => {
     one("AWS::CloudFront::OriginAccessControl");
-    const fn = one("AWS::CloudFront::Function");
-    expect(fn.Properties.FunctionCode).toContain("index.html");
+    expect(R.DirectoryIndexFunction.Properties.FunctionCode).toContain("index.html");
     const d = one("AWS::CloudFront::Distribution").Properties.DistributionConfig;
     expect(d.Aliases).toEqual([{ Ref: "DomainName" }]);
     expect(d.DefaultCacheBehavior.ViewerProtocolPolicy).toBe("redirect-to-https");
@@ -88,7 +88,90 @@ describe("infra/template.yaml", () => {
     expect(d.ViewerCertificate.SslSupportMethod).toBe("sni-only");
     expect(d.Origins[0].OriginAccessControlId).toBeDefined();
     expect(d.DefaultCacheBehavior.FunctionAssociations[0].EventType).toBe("viewer-request");
-    expect(d.CustomErrorResponses.map((e: any) => e.ResponsePagePath)).toEqual(["/404.html", "/404.html"]);
+    // 404 だけを 404 ページにする（403 はバックエンドの CSRF の拒否などをそのまま返すため置き換えない）
+    const paged = d.CustomErrorResponses.filter((e: any) => e.ResponsePagePath);
+    expect(paged).toEqual([{ ErrorCode: 404, ResponseCode: 404, ResponsePagePath: "/404.html", ErrorCachingMinTTL: 60 }]);
+  });
+
+  it("does not cache backend errors and does not replace them with the 404 page", () => {
+    const d = one("AWS::CloudFront::Distribution").Properties.DistributionConfig;
+    const unpaged = d.CustomErrorResponses.filter((e: any) => !e.ResponsePagePath);
+    expect(unpaged.map((e: any) => e.ErrorCode)).toEqual([400, 403, 500, 502, 503, 504]);
+    for (const e of unpaged) {
+      expect(e.ErrorCachingMinTTL).toBe(0);
+      expect(e.ResponseCode).toBeUndefined();
+    }
+  });
+
+  it("lets CloudFront list the bucket so missing keys are 404, not 403", () => {
+    const stmts = R.SiteBucketPolicy.Properties.PolicyDocument.Statement;
+    const conditional = stmts.filter((s: any) => s["Fn::If"]).map((s: any) => s["Fn::If"]);
+    const list = conditional.find((c: any) => c[1].Action === "s3:ListBucket");
+    expect(list[0]).toBe("UseCloudFront");
+    expect(list[2]).toEqual({ Ref: "AWS::NoValue" });
+    expect(list[1].Principal).toEqual({ Service: "cloudfront.amazonaws.com" });
+    expect(list[1].Resource).toEqual({ "Fn::GetAtt": ["SiteBucket", "Arn"] });
+    const read = conditional.find((c: any) => c[1].Action === "s3:GetObject");
+    expect(list[1].Condition).toEqual(read[1].Condition);
+  });
+
+  describe("backend origin (BackendDomainName)", () => {
+    const d = R.Distribution.Properties.DistributionConfig;
+    const PREFIX = "/apps/spotify-billboard-playlist";
+
+    it("is off by default and only with CloudFront", () => {
+      expect(t.Parameters.BackendDomainName.Default).toBe("");
+      const re = new RegExp(t.Parameters.BackendDomainName.AllowedPattern);
+      for (const ok of ["", "vps.example.com"]) expect(re.test(ok), ok).toBe(true);
+      for (const ng of ["https://vps.example.com", "vps.example.com/x", "VPS.example.com", "localhost"]) {
+        expect(re.test(ng), ng).toBe(false);
+      }
+      expect(t.Conditions.UseBackend).toEqual({
+        "Fn::And": [{ Condition: "UseCloudFront" }, { "Fn::Not": [{ "Fn::Equals": [{ Ref: "BackendDomainName" }, ""] }] }],
+      });
+      expect(R.BackendPathFunction.Condition).toBe("UseBackend");
+    });
+
+    it("adds the VPS as an https-only origin with a 60 second read timeout", () => {
+      const origin = d.Origins.find((o: any) => o["Fn::If"])["Fn::If"];
+      expect(origin[0]).toBe("UseBackend");
+      expect(origin[2]).toEqual({ Ref: "AWS::NoValue" });
+      expect(origin[1].Id).toBe("BackendOrigin");
+      expect(origin[1].DomainName).toEqual({ Ref: "BackendDomainName" });
+      expect(origin[1].CustomOriginConfig).toMatchObject({
+        HTTPSPort: 443,
+        OriginProtocolPolicy: "https-only",
+        OriginSSLProtocols: ["TLSv1.2"],
+        OriginReadTimeout: 60,
+      });
+    });
+
+    it("forwards the api and auth paths without caching, with cookies and all methods", () => {
+      const [cond, behaviors, none] = d.CacheBehaviors["Fn::If"];
+      expect(cond).toBe("UseBackend");
+      expect(none).toEqual({ Ref: "AWS::NoValue" });
+      expect(behaviors.map((b: any) => b.PathPattern)).toEqual([`${PREFIX}/api/*`, `${PREFIX}/auth/*`]);
+      for (const b of behaviors) {
+        expect(b.TargetOriginId).toBe("BackendOrigin");
+        expect(b.ViewerProtocolPolicy).toBe("https-only");
+        expect([...b.AllowedMethods].sort()).toEqual(["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]);
+        // マネージドポリシー: CachingDisabled / AllViewerExceptHostHeader / SecurityHeadersPolicy
+        expect(b.CachePolicyId).toBe("4135ea2d-6df8-44a3-9df3-4b5a84be39ad");
+        expect(b.OriginRequestPolicyId).toBe("b689b0a8-53d0-40ab-baf2-68738e2966ac");
+        expect(b.ResponseHeadersPolicyId).toBe(d.DefaultCacheBehavior.ResponseHeadersPolicyId);
+        expect(b.FunctionAssociations).toEqual([
+          { EventType: "viewer-request", FunctionARN: { "Fn::GetAtt": ["BackendPathFunction", "FunctionMetadata.FunctionARN"] } },
+        ]);
+      }
+    });
+
+    it("strips /apps from the path so the VPS nginx sees /<slug>/...", () => {
+      const handler = new Function(`${R.BackendPathFunction.Properties.FunctionCode}; return handler;`)();
+      const run = (uri: string) => handler({ request: { uri } }).uri;
+      expect(run(`${PREFIX}/api/me`)).toBe("/spotify-billboard-playlist/api/me");
+      expect(run(`${PREFIX}/auth/callback`)).toBe("/spotify-billboard-playlist/auth/callback");
+      expect(run("/other/apps/x")).toBe("/other/apps/x");
+    });
   });
 
   it("points the domain at CloudFront for IPv4 and IPv6", () => {
