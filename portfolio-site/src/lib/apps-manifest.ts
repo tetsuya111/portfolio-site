@@ -158,20 +158,39 @@ export function buildApps(apps: AppEntry[], { appsDir, distDir, run, mockRuntime
 /** ポートフォリオのフロントエンドが、モックの応答で動くか（mock）、実際のバックエンドを呼ぶか（api） */
 export type AppBackendMode = "mock" | "api";
 
-/** apps.json の内容から、スラッグごとの動作（モック／実 API）を返す。不正なら空（ボタンを今の表示にする） */
+/**
+ * apps.json の内容から、スラッグごとの動作を返す。mock: true はモック、env（バックエンドの URL）があれば実 API。
+ * どちらでもない（バックエンドのない静的なフロントエンドなど）は含めない。不正なら空（ボタンを今の表示にする）
+ */
 export function appBackendModes(data: unknown): Map<string, AppBackendMode> {
   try {
-    return new Map(validateManifest(data).map((a) => [a.slug, a.mock ? "mock" : "api"] as const));
+    const modes = new Map<string, AppBackendMode>();
+    for (const a of validateManifest(data)) {
+      if (a.mock) modes.set(a.slug, "mock");
+      else if (Object.keys(a.env).length > 0) modes.set(a.slug, "api");
+    }
+    return modes;
   } catch {
     return new Map();
   }
 }
 
-/** apps/apps.json（既定は portfolio-site で実行したときの場所）を読んで appBackendModes を返す。読めなければ空 */
+const modesCache = new Map<string, Map<string, AppBackendMode>>();
+
+/**
+ * apps/apps.json を読んで appBackendModes を返す（ボタンごとに読み直さないよう、パスごとに1回だけ読む）。読めなければ空。
+ * 既定のパスは実行時のカレントディレクトリから決める（astro build・npm run build は portfolio-site で実行する。
+ * ビルド後のコードは dist 側に移るため、import.meta.url からは apps/ を辿れない）
+ */
 export function readAppBackendModes(path = join(process.cwd(), "apps", "apps.json")): Map<string, AppBackendMode> {
-  try {
-    return appBackendModes(JSON.parse(readFileSync(path, "utf8")));
-  } catch {
-    return new Map();
+  let modes = modesCache.get(path);
+  if (modes === undefined) {
+    try {
+      modes = appBackendModes(JSON.parse(readFileSync(path, "utf8")));
+    } catch {
+      modes = new Map();
+    }
+    modesCache.set(path, modes);
   }
+  return modes;
 }

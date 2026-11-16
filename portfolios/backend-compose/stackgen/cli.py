@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -14,11 +15,11 @@ from importer.detect import detect_backend, detect_frontend
 from stackgen import StackError
 from stackgen.config import load_config
 from stackgen.dockerfile import detect_port, write_docker_files
-from stackgen.frontend_env import backend_url, update_apps_json
+from stackgen.frontend_env import backend_url, load_apps_json, update_apps_json
 from stackgen.stack import Service, load_services, upsert_service, write_stack
 
-# portfolios/ 直下にあるがポートフォリオではないディレクトリ
-_NOT_PORTFOLIO = {"backend-compose", "batch"}
+# 再登録でソースを入れ直すときに残すファイル（編集した Dockerfile・VPS で置いた秘密情報）
+_KEEP_ON_REFRESH = {"Dockerfile", ".dockerignore", ".env"}
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -37,13 +38,21 @@ def _resolve_project(path: Path, repo_root: Path) -> tuple[str, Path]:
     if project.parent != repo_root / "portfolios" or not project.is_dir():
         raise StackError("portfolios/<スラッグ> のディレクトリを指定してください")
     slug = project.name
-    if slug in _NOT_PORTFOLIO:
-        raise StackError(f"portfolios/{slug} はポートフォリオではありません")
-    try:
+    try:  # backend-compose など、ポートフォリオでないディレクトリは予約スラッグとして拒否される
         validate_slug(slug)
     except PortfolioError as e:
         raise StackError(str(e)) from e
     return slug, project
+
+
+def _clear_for_refresh(dest: Path) -> None:
+    for child in dest.iterdir():
+        if child.name in _KEEP_ON_REFRESH:
+            continue
+        if child.is_dir() and not child.is_symlink():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
 
 
 def run(args: argparse.Namespace, repo_root: Path, config_path: Path, stack_dir: Path) -> dict:
@@ -53,16 +62,20 @@ def run(args: argparse.Namespace, repo_root: Path, config_path: Path, stack_dir:
     backend = detect_backend(project, frontend)
     if backend is None:
         raise StackError(f"portfolios/{slug} にバックエンド（backend/・server/・api/・ルートの Python / node）が見つかりません")
-    load_services(stack_dir)  # services.json が不正なら、コピーする前に止める
+    # 不正なファイルがあれば、何かを書く前に止める（途中まで書いた状態を残さない）
+    load_services(stack_dir)
+    load_apps_json(repo_root)
 
     warnings: list[str] = []
     dest = stack_dir / "services" / slug
     if dest.exists():
-        warnings.append(f"{_rel(dest, repo_root)} が既にあるため、バックエンドをコピーしませんでした")
-    else:
-        # ルートにバックエンドがある場合に、配下のフロントエンドまでコピーしない
-        exclude = [frontend.dir] if frontend is not None and backend.dir in frontend.dir.parents else []
-        copy_tree(backend.dir, dest, root=project, exclude=exclude)
+        # 取り込み元のバックエンドを直したときに古いソースが VPS に上がらないよう、入れ直す
+        _clear_for_refresh(dest)
+        warnings.append(f"{_rel(dest, repo_root)} が既にあるため、ソースを入れ直しました"
+                        f"（{'・'.join(sorted(_KEEP_ON_REFRESH))} は残しました）")
+    # ルートにバックエンドがある場合に、配下のフロントエンドまでコピーしない
+    exclude = [frontend.dir] if frontend is not None and backend.dir in frontend.dir.parents else []
+    copy_tree(backend.dir, dest, root=project, exclude=exclude)
     dockerfile, w = write_docker_files(dest, backend.kind)
     warnings += w
     port = detect_port(dockerfile.read_text(encoding="utf-8", errors="replace"), backend.kind)

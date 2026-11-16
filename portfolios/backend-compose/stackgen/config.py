@@ -30,7 +30,7 @@ def load_config(path: Path) -> Config:
     if not isinstance(data, dict):
         raise StackError(f'{path.name} は {{"domain": ..., "https": ...}} の形にしてください')
     domain = data.get("domain")
-    if not isinstance(domain, str) or not _HOST.match(domain.lower()):
+    if not isinstance(domain, str) or not _HOST.fullmatch(domain.lower()):
         raise StackError(f"{path.name} の domain にはホスト名（例 api.your-domain.com）を書いてください")
     domain = domain.lower()
     if _EXAMPLE.search(domain):

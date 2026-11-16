@@ -5,15 +5,22 @@ import { describe, expect, it } from "vitest";
 import { appBackendModes, readAppBackendModes } from "../src/lib/apps-manifest";
 
 const app = (over: Record<string, unknown> = {}) => ({ slug: "a", outputDir: "dist", buildArgs: [], ...over });
+const env = { VITE_API_URL: "https://api.portfolio.link/x" };
 
 describe("appBackendModes", () => {
-  it("maps mock: true to mock and others to api", () => {
-    const modes = appBackendModes({ apps: [app({ mock: true }), app({ slug: "b", mock: false }), app({ slug: "c" })] });
+  it("maps mock: true to mock and apps with env to api", () => {
+    const modes = appBackendModes({
+      apps: [app({ mock: true, env }), app({ slug: "b", mock: false, env }), app({ slug: "c", env })],
+    });
     expect([...modes]).toEqual([
       ["a", "mock"],
       ["b", "api"],
       ["c", "api"],
     ]);
+  });
+
+  it("leaves out apps without a backend (no mock, no env)", () => {
+    expect(appBackendModes({ apps: [app({ mock: false }), app({ slug: "b" })] }).size).toBe(0);
   });
 
   it("returns an empty map for invalid data (the page build must not stop)", () => {
@@ -23,14 +30,18 @@ describe("appBackendModes", () => {
 });
 
 describe("readAppBackendModes", () => {
-  it("reads apps.json and tolerates a missing or broken file", () => {
+  it("reads apps.json once and tolerates a missing or broken file", () => {
     const dir = mkdtempSync(join(tmpdir(), "modes-"));
     try {
+      expect(readAppBackendModes(join(dir, "missing.json")).size).toBe(0);
+      const broken = join(dir, "broken.json");
+      writeFileSync(broken, "{");
+      expect(readAppBackendModes(broken).size).toBe(0);
       const file = join(dir, "apps.json");
-      expect(readAppBackendModes(file).size).toBe(0);
-      writeFileSync(file, "{");
-      expect(readAppBackendModes(file).size).toBe(0);
       writeFileSync(file, JSON.stringify({ apps: [app({ mock: true })] }));
+      expect(readAppBackendModes(file).get("a")).toBe("mock");
+      // 2回目以降は読み直さない（ボタンごとにファイルを読まない）
+      writeFileSync(file, JSON.stringify({ apps: [] }));
       expect(readAppBackendModes(file).get("a")).toBe("mock");
     } finally {
       rmSync(dir, { recursive: true, force: true });

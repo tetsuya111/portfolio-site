@@ -56,13 +56,25 @@ class CliTest(TempDirMixin, unittest.TestCase):
         self.assertTrue((service / "app.py").is_file())
         self.assertFalse((service / "frontend").exists())
 
-    def test_rerun_skips_copy(self):
+    def test_rerun_refreshes_source_and_keeps_dockerfile_and_env(self):
         write(self.project / "backend" / "requirements.txt", "")
         write(self.project / "backend" / "main.py", "app = FastAPI()\n")
+        write(self.project / "backend" / "old.py", "")
         self.assertEqual(self.run_main(self.project)[0], 0)
+        service = self.stack / "services" / "my-app"
+        write(service / "Dockerfile", 'FROM x\nEXPOSE 9000\nCMD ["x"]\n')
+        write(service / ".env", "SECRET=x\n")
+        write(self.project / "backend" / "main.py", "app = FastAPI()  # v2\n")
+        (self.project / "backend" / "old.py").unlink()
         code, out, _ = self.run_main(self.project)
         self.assertEqual(code, 0)
-        self.assertTrue(any("コピーしませんでした" in w for w in json.loads(out)["warnings"]))
+        result = json.loads(out)
+        self.assertTrue(any("入れ直しました" in w for w in result["warnings"]))
+        self.assertIn("v2", (service / "main.py").read_text(encoding="utf-8"))
+        self.assertFalse((service / "old.py").exists())
+        self.assertIn("EXPOSE 9000", (service / "Dockerfile").read_text(encoding="utf-8"))
+        self.assertTrue((service / ".env").is_file())
+        self.assertEqual(result["port"], 9000)
         services = json.loads((self.stack / "services.json").read_text(encoding="utf-8"))["services"]
         self.assertEqual(len(services), 1)
 
@@ -78,4 +90,12 @@ class CliTest(TempDirMixin, unittest.TestCase):
         write(self.project / "backend" / "requirements.txt", "")
         write_json(self.config, {"domain": "api.example.com"})
         self.assertEqual(self.run_main(self.project)[0], 1)
+        self.assertFalse(self.stack.exists())
+
+    def test_broken_apps_json_writes_nothing(self):
+        write(self.project / "backend" / "requirements.txt", "")
+        write(self.repo / "portfolio-site" / "apps" / "apps.json", "{")
+        code, _, err = self.run_main(self.project)
+        self.assertEqual(code, 1)
+        self.assertIn("apps.json", err)
         self.assertFalse(self.stack.exists())

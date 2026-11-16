@@ -19,6 +19,12 @@ _PUBLIC_NAME = re.compile(r"\b(?:VITE_|PUBLIC_|NEXT_PUBLIC_)[A-Z0-9_]+\b")
 _URL_WORDS = (re.compile(r"API|BACKEND|SERVER"), re.compile(r"URL|ORIGIN|BASE|ENDPOINT|HOST"))
 ENV_VALUE = re.compile(r"^https://[A-Za-z0-9.\-_~/:%]+$")
 _BUILD_DIRS = {"dist", "out", "build", ".next", ".astro"}
+# URL 全体を入れる名前を優先する（HOST・ORIGIN はホストだけ・パスなしを期待する名前のことがある）
+_URL_PRIORITY = ("URL", "BASE", "ENDPOINT", "ORIGIN", "HOST")
+
+
+def _priority(name: str) -> tuple[int, str]:
+    return next(i for i, w in enumerate(_URL_PRIORITY) if w in name), name
 
 
 def backend_url(cfg: Config, slug: str) -> str:
@@ -26,14 +32,31 @@ def backend_url(cfg: Config, slug: str) -> str:
 
 
 def find_env_names(app_dir: Path) -> list[str]:
-    """フロントエンドのソースと .env.example から、バックエンドの URL を入れる公開用の環境変数名を名前順で返す。"""
+    """フロントエンドのソースと .env.example から、バックエンドの URL を入れる公開用の環境変数名を返す。
+
+    URL・BASE・ENDPOINT・ORIGIN・HOST の順（同じなら名前順）に並べる。
+    """
     names: set[str] = set()
     for rel in iter_files(app_dir, skip_dirs=_BUILD_DIRS):
         if rel.suffix not in SOURCE_SUFFIXES and rel.name != ".env.example":
             continue
         text = (app_dir / rel).read_text(encoding="utf-8", errors="replace")
         names.update(n for n in _PUBLIC_NAME.findall(text) if all(w.search(n) for w in _URL_WORDS))
-    return sorted(names)
+    return sorted(names, key=_priority)
+
+
+def load_apps_json(repo_root: Path) -> dict | None:
+    """portfolio-site/apps/apps.json を読む（なければ None）。不正なら StackError（呼び出し側は書き込む前に確かめる）。"""
+    manifest = repo_root / "portfolio-site" / "apps" / "apps.json"
+    if not manifest.is_file():
+        return None
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except ValueError as e:
+        raise StackError(f"apps.json を JSON として読めません: {e}") from e
+    if not isinstance(data, dict) or not isinstance(data.get("apps"), list):
+        raise StackError('apps.json の形式が不正です（{"apps": [...]} が必要です）')
+    return data
 
 
 def update_apps_json(repo_root: Path, slug: str, url: str) -> tuple[dict | None, list[str]]:
@@ -43,20 +66,14 @@ def update_apps_json(repo_root: Path, slug: str, url: str) -> tuple[dict | None,
     """
     apps = repo_root / "portfolio-site" / "apps"
     manifest = apps / "apps.json"
-    if not manifest.is_file():
+    data = load_apps_json(repo_root)
+    if data is None:
         return None, []
-    try:
-        data = json.loads(manifest.read_text(encoding="utf-8"))
-    except ValueError as e:
-        raise StackError(f"apps.json を JSON として読めません: {e}") from e
-    entries = data.get("apps") if isinstance(data, dict) else None
-    if not isinstance(entries, list):
-        raise StackError('apps.json の形式が不正です（{"apps": [...]} が必要です）')
-    entry = next((e for e in entries if isinstance(e, dict) and e.get("slug") == slug), None)
+    entry = next((e for e in data["apps"] if isinstance(e, dict) and e.get("slug") == slug), None)
     if entry is None:
         return None, []
 
-    if not ENV_VALUE.match(url):
+    if not ENV_VALUE.fullmatch(url):
         return None, [f"バックエンドの URL {url} が https ではないため、フロントエンドはモックのままにしました"
                       "（サイトは HTTPS のため http の API は呼べません）。config.json の https を true にしてください"]
     names = find_env_names(apps / slug)

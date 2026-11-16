@@ -48,7 +48,10 @@ class RenderNginxTest(unittest.TestCase):
         text = render_nginx([Service("a", 8000)], HTTPS)
         self.assertIn("server_name api.portfolio.link;", text)
         self.assertIn("location /a/ {", text)
-        self.assertIn("proxy_pass http://a:8000/;", text)
+        self.assertIn("resolver 127.0.0.11", text)
+        self.assertIn("set $upstream_a http://a:8000;", text)
+        self.assertIn("rewrite ^/a/(.*)$ /$1 break;", text)
+        self.assertIn("proxy_pass $upstream_a;", text)
         self.assertIn("return 301 https://$host$request_uri;", text)
         self.assertIn("ssl_certificate /etc/nginx/certs/fullchain.pem;", text)
         self.assertIn("ssl_certificate_key /etc/nginx/certs/privkey.pem;", text)
@@ -57,7 +60,10 @@ class RenderNginxTest(unittest.TestCase):
         text = render_nginx([Service("a", 8000)], HTTP)
         self.assertNotIn("443", text)
         self.assertNotIn("return 301", text)
-        self.assertIn("proxy_pass http://a:8000/;", text)
+        self.assertIn("proxy_pass $upstream_a;", text)
+
+    def test_hyphenated_slug_variable(self):
+        self.assertIn("set $upstream_my_app http://my-app:3000;", render_nginx([Service("my-app", 3000)], HTTP))
 
 
 class WriteStackTest(TempDirMixin, unittest.TestCase):
@@ -76,7 +82,8 @@ class LoadServicesTest(TempDirMixin, unittest.TestCase):
         from stackgen import StackError
         from stackgen.stack import load_services
         from tests.helpers import write_json
-        for data in ({"services": [{"slug": "a;b", "port": 1}]}, {"services": [{"slug": "a", "port": "80"}]}, {}):
+        for data in ({"services": [{"slug": "a;b", "port": 1}]}, {"services": [{"slug": "a\n", "port": 1}]},
+{"services": [{"slug": "a", "port": "80"}]}, {}):
             with self.subTest(data=data):
                 write_json(self.tmp / "services.json", data)
                 with self.assertRaises(StackError):

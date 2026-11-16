@@ -20,6 +20,7 @@ class LoadConfigTest(TempDirMixin, unittest.TestCase):
             "bad json": "{",
             "space": {"domain": "a b"},
             "url": {"domain": "https://x.com"},
+            "trailing newline": {"domain": "api.foo.com\n"},
             "single label": {"domain": "localhost"},
             "example": {"domain": "api.example.com"},
             "https string": {"domain": "api.portfolio.link", "https": "true"},

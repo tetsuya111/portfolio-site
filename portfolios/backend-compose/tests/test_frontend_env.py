@@ -19,7 +19,11 @@ class FindEnvNamesTest(TempDirMixin, unittest.TestCase):
         write(self.tmp / "src" / "page.vue", "process.env.NEXT_PUBLIC_SERVER_HOST")
         write(self.tmp / "node_modules" / "x" / "i.js", "VITE_API_ENDPOINT")
         write(self.tmp / "README.md", "PUBLIC_API_ORIGIN")
-        self.assertEqual(find_env_names(self.tmp), ["NEXT_PUBLIC_SERVER_HOST", "VITE_API_URL", "VITE_BACKEND_BASE"])
+        self.assertEqual(find_env_names(self.tmp), ["VITE_API_URL", "VITE_BACKEND_BASE", "NEXT_PUBLIC_SERVER_HOST"])
+
+    def test_full_url_names_come_first(self):
+        write(self.tmp / "a.ts", "VITE_API_HOST VITE_API_ORIGIN VITE_API_URL")
+        self.assertEqual(find_env_names(self.tmp), ["VITE_API_URL", "VITE_API_ORIGIN", "VITE_API_HOST"])
 
 
 class UpdateAppsJsonTest(TempDirMixin, unittest.TestCase):
@@ -48,8 +52,8 @@ class UpdateAppsJsonTest(TempDirMixin, unittest.TestCase):
     def test_other_candidates_are_warned(self):
         write(self.apps / "a" / "src" / "x.ts", "VITE_API_URL VITE_API_BASE")
         env, warnings = update_apps_json(self.tmp, "a", self.URL)
-        self.assertEqual(env, {"VITE_API_BASE": self.URL})
-        self.assertTrue(any("VITE_API_URL" in w for w in warnings))
+        self.assertEqual(env, {"VITE_API_URL": self.URL})
+        self.assertTrue(any("VITE_API_BASE" in w for w in warnings))
 
     def test_no_name_keeps_mock(self):
         write(self.apps / "a" / "src" / "x.ts", "fetch('/api')")

@@ -47,7 +47,7 @@ def load_services(stack_dir: Path) -> list[Service]:
         raise StackError(f'services.json の形式が不正です（{{"services": [{{"slug", "port"}}]}} が必要です）: {e}') from e
     for s in services:
         # 値は compose・nginx の設定にそのまま書くため、使える文字を限定する
-        if not isinstance(s.slug, str) or not _SLUG.match(s.slug):
+        if not isinstance(s.slug, str) or not _SLUG.fullmatch(s.slug):
             raise StackError(f"services.json の slug「{s.slug}」が不正です")
         if not isinstance(s.port, int) or isinstance(s.port, bool) or not 1 <= s.port <= 65535:
             raise StackError(f"services.json の {s.slug} の port が不正です")
@@ -107,11 +107,16 @@ _PROXY_HEADERS = """\
 
 
 def _locations(services: list[Service]) -> str:
-    blocks = []
+    # 転送先を変数にし、Docker の DNS（127.0.0.11）で要求のたびに名前を引く。固定のホスト名だと、
+    # コンテナを作り直して IP が変わると 502 になり、起動していないバックエンドがあると nginx 自体が起動しない
+    blocks = ["    resolver 127.0.0.11 valid=10s ipv6=off;\n"]
     for s in services:
-        # 末尾の / で前置き /<スラッグ> を外して転送する（/<スラッグ>/api/x → /api/x）
+        var = f"$upstream_{s.slug.replace('-', '_')}"
+        # 前置き /<スラッグ> を外して転送する（/<スラッグ>/api/x?q=1 → /api/x?q=1）
         blocks.append(f"    location /{s.slug}/ {{\n"
-                      f"        proxy_pass http://{s.slug}:{s.port}/;\n"
+                      f"        set {var} http://{s.slug}:{s.port};\n"
+                      f"        rewrite ^/{s.slug}/(.*)$ /$1 break;\n"
+                      f"        proxy_pass {var};\n"
                       + _PROXY_HEADERS.format(slug=s.slug)
                       + "    }\n")
     blocks.append("    location / {\n        return 404;\n    }\n")

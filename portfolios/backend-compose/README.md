@@ -25,7 +25,7 @@ python portfolios/backend-compose/add_backend.py portfolios/<スラッグ>
 
 | 順 | 内容 | 作成・変更するもの |
 |---|---|---|
-| 1 | バックエンド（portfolio-importer と同じ検出規則）を、importer と同じ除外規則（`.env`・鍵・DB など）でコピーする。既にあればコピーしない | `stack/services/<スラッグ>/` |
+| 1 | バックエンド（portfolio-importer と同じ検出規則）を、importer と同じ除外規則（`.env`・鍵・DB など）でコピーする。既にあれば、`Dockerfile`・`.dockerignore`・`.env` を残してソースを入れ直す（取り込み元の修正を反映するため） | `stack/services/<スラッグ>/` |
 | 2 | Dockerfile がなければ生成する（FastAPI → uvicorn、Django・Flask → gunicorn、node → `npm start`）。起動コマンドを判定できなければ TODO を書いて警告する。待ち受けポートは `EXPOSE` から決める（なければ Python 8000・node 3000） | `Dockerfile`・`.dockerignore` |
 | 3 | 登録一覧を更新し、compose と nginx の設定を作り直す。ルーティングはパス方式で、`https://<domain>/<スラッグ>/...` を `<スラッグ>` コンテナの `/...` へ転送する。バックエンドのポートはホストに公開しない | `stack/services.json`・`stack/docker-compose.yml`・`stack/nginx/default.conf`・`stack/.gitignore` |
 | 4 | フロントエンドを配信している（`portfolio-site/apps/apps.json` に登録済み）なら、ソースと `.env.example` から URL 用の環境変数名（`VITE_API_URL` など）を探し、`env` にバックエンドの URL を書いて `mock` を false（実 API）にする。見つからない・http・既に別の値がある場合は変更せず警告する | `portfolio-site/apps/apps.json`（[env の書式](../../portfolio-site/docs/apps.md#appsjson-の書式)） |
