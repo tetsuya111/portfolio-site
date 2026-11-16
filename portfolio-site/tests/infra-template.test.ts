@@ -124,7 +124,8 @@ describe("infra/template.yaml", () => {
       expect(t.Parameters.BackendDomainName.Default).toBe("");
       const re = new RegExp(t.Parameters.BackendDomainName.AllowedPattern);
       for (const ok of ["", "vps.example.com"]) expect(re.test(ok), ok).toBe(true);
-      for (const ng of ["https://vps.example.com", "vps.example.com/x", "VPS.example.com", "localhost"]) {
+      // CloudFront のカスタムオリジンには IP アドレスを指定できない
+      for (const ng of ["https://vps.example.com", "vps.example.com/x", "VPS.example.com", "localhost", "203.0.113.10"]) {
         expect(re.test(ng), ng).toBe(false);
       }
       expect(t.Conditions.UseBackend).toEqual({

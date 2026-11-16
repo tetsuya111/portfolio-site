@@ -38,8 +38,9 @@ Parameters:
     Description: >-
       バックエンドを動かす VPS のドメイン名（例 vps.example.com。https で待ち受けていること）。
       指定すると、サイトの /apps/spotify-billboard-playlist/api/* と /auth/* をキャッシュせずに https://<この名前>/spotify-billboard-playlist/... へ転送する
-      （ブラウザからはサイトと同一オリジンに見せ、Cookie と CSRF の確認をそのまま使うため）。未指定（空）なら転送しない。EnableCloudFront=false なら使わない
-    AllowedPattern: "^$|^(?!-)[a-z0-9-]+(\\.[a-z0-9-]+)+$"
+      （ブラウザからはサイトと同一オリジンに見せ、Cookie と CSRF の確認をそのまま使うため）。未指定（空）なら転送しない。EnableCloudFront=false なら使わない。
+      IP アドレスは不可（CloudFront のカスタムオリジンに指定できないため）
+    AllowedPattern: "^$|^(?![0-9.]+$)(?!-)[a-z0-9-]+(\\.[a-z0-9-]+)+$"
   DeployPath:
     Type: String
     Default: ""

@@ -119,7 +119,7 @@ npm run build   # next build
    ```
 
    - `FRONTEND_URL` はサイトのドメインにフロントエンドのパスを付けた URL（末尾の `/` なし）。`Origin` の確認はこのオリジン（`https://portfolio.example.com`）で行い、Cookie はこのパスの下（state は `/apps/spotify-billboard-playlist/auth`、セッションは `/apps/spotify-billboard-playlist/`）に発行する。ログイン後はこの URL + `/` に戻る。
-   - `SPOTIFY_REDIRECT_URI` は `FRONTEND_URL` + `/auth/callback`。VPS のドメインではなくサイトのドメインにする（state の Cookie が届かないため、`FRONTEND_URL` と違うホストや `<パス>/auth/` の外にするとバックエンドが起動しない）。
+   - `SPOTIFY_REDIRECT_URI` は `FRONTEND_URL` + `/auth/callback`。VPS のドメインではなくサイトのドメインにする（state の Cookie が届かないため、`FRONTEND_URL` と違うスキーム・ホストや `<パス>/auth/` の外にするとバックエンドが起動しない）。
    - `COOKIE_SECURE` は指定しない（https なので Secure が付く）。
    - 変えたら `docker compose up -d spotify-billboard-playlist` で作り直す。
 2. **Spotify Developer Dashboard**: アプリの **Redirect URIs** に手順1の `SPOTIFY_REDIRECT_URI` を追加する。開発モードのアプリは **User Management** に登録したユーザーしかログインできないため、試してもらうアカウントを登録する（登録していないアカウントは Spotify の画面でエラーになる）。

@@ -126,6 +126,14 @@ def test_redirect_uri_outside_state_cookie_rejected(monkeypatch, redirect):
         load_settings()
 
 
+def test_redirect_uri_with_other_scheme_rejected(monkeypatch):
+    # https の FRONTEND_URL では state の Cookie に Secure が付き、http のコールバックには届かない
+    monkeypatch.setenv("FRONTEND_URL", "https://localhost:3000")
+    monkeypatch.setenv("SPOTIFY_REDIRECT_URI", "http://localhost:3000/auth/callback")
+    with pytest.raises(ConfigError):
+        load_settings()
+
+
 def test_redirect_uri_mismatch_within_cookie_scope_warns(monkeypatch, caplog):
     # Cookie はポートを区別しないため届くが、想定と違う構成なので警告だけ出す
     monkeypatch.setenv("FRONTEND_URL", "http://127.0.0.1:3000")

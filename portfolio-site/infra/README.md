@@ -73,7 +73,7 @@ cp infra/parameters.example.json infra/parameters.json  # 値を書き換える
 | `EnableWaf` | | `false` | `true` で CloudFront に WAF（レート制限）を付ける。Web ACL とルールの月額固定費（数 USD）がかかる。`EnableCloudFront=false` なら作らない |
 | `EnableCloudFront` | | `true` | `false` なら CloudFront・ACM 証明書・Route 53 レコード・ディレクトリ補完の Function・WAF を作らず、S3 へのアップロードだけを行う（ブラウザでは確認できない。キャッシュ無効化もしない）。このときだけ `DomainName`・`HostedZoneId` を空にできる |
 | `SiteBucketName` | | `""`（空） | サイトのファイルを置くバケットの名前。空なら自動で付ける。作成済みのスタックで変えるとバケットが作り直される（旧バケットは残る） |
-| `BackendDomainName` | | `""`（空） | バックエンドを動かす VPS のドメイン名（例 `vps.example.com`。https で待ち受けていること）。指定すると、サイトの `/apps/spotify-billboard-playlist/api/*`・`/auth/*` をその VPS の `/spotify-billboard-playlist/...` へ転送する（ブラウザからはサイトと同一オリジンに見せる）。空なら転送しない。`EnableCloudFront=false` なら使わない |
+| `BackendDomainName` | | `""`（空） | バックエンドを動かす VPS のドメイン名（例 `vps.example.com`。https で待ち受けていること。IP アドレスは不可）。指定すると、サイトの `/apps/spotify-billboard-playlist/api/*`・`/auth/*` をその VPS の `/spotify-billboard-playlist/...` へ転送する（ブラウザからはサイトと同一オリジンに見せる）。空なら転送しない。`EnableCloudFront=false` なら使わない |
 | `DeployPath` | | `""`（空） | バケット内のアップロード先のパス（例 `preview`）。CloudFront はこのパスをドメイン直下として配信する（`OriginPath`）。先頭・末尾に `/` を付けない。空ならバケット直下。デプロイ用ロールの S3 権限もこのパス以下に限る |
 | `EnablePrTests` | | `true` | `false` ならプルリクエストのテスト用 CodeBuild（`<スタック名>-test`）とそのロール・ロググループを作らない（dev スタック用） |
 | `ItArticlesScheduleExpression` | | `rate(1 day)` | IT 記事の定期作成の間隔（`rate(...)` か `cron(...)`、タイムゾーンは Asia/Tokyo） |

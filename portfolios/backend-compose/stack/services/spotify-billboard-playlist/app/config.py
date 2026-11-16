@@ -54,17 +54,24 @@ def _public_path(frontend_url: str) -> str:
 
 
 def _check_redirect_uri(frontend_url: str, public_path: str, redirect_uri: str) -> None:
-    """state の Cookie（FRONTEND_URL のホストの <パス>/auth）がコールバックに届くかを確かめる。"""
+    """state の Cookie（FRONTEND_URL のホストの <パス>/auth）がコールバックに届くかを確かめる。
+
+    https では Cookie に Secure が付き http のコールバックには届かないため、スキームも揃える。
+    """
     frontend, redirect = urlsplit(frontend_url), urlsplit(redirect_uri)
     state_path = public_path + "/auth/"
-    if redirect.hostname != frontend.hostname or not redirect.path.startswith(state_path):
+    if (
+        redirect.scheme.lower() != frontend.scheme.lower()
+        or redirect.hostname != frontend.hostname
+        or not redirect.path.startswith(state_path)
+    ):
         raise ConfigError(
-            "SPOTIFY_REDIRECT_URI は FRONTEND_URL と同じホストの "
+            "SPOTIFY_REDIRECT_URI は FRONTEND_URL と同じスキーム・ホストの "
             f"{state_path} の下にしてください（state の Cookie が届かないため）: {redirect_uri}"
         )
     expected = frontend_url + "/auth/callback"
     if redirect_uri != expected:
-        # Cookie はスキーム・ポートを区別しないため届くが、想定の構成と違う
+        # Cookie はポートを区別しないため届くが、想定の構成と違う
         logger.warning(
             "SPOTIFY_REDIRECT_URI (%s) が FRONTEND_URL + /auth/callback (%s) と違います",
             redirect_uri,
