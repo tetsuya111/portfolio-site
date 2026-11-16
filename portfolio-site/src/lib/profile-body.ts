@@ -23,13 +23,14 @@ export interface ProfileBody {
 
 /**
  * 描画すると Markdown の装飾・HTML・エスケープ・自動リンク・記号の置き換え（smartypants の引用符・ダッシュ・三点リーダー）
- * になりうるもの（@ はメールアドレスの自動リンク、行末の2つ以上の空白は強制改行）。
- * そのまま文字として出すと Markdown の表示と変わるため扱わない
+ * になりうるもの（行頭の # は見出し、& は文字参照のときだけ、@ はメールアドレスの形のときだけ。行末の2つ以上の空白は強制改行）。
+ * そのまま文字として出すと Markdown の表示と変わるため扱わない。C#・R&D のような文中の # & はそのまま文字になるので受け付ける
  */
-const DECORATION = /[[\]*`<>_|#&\\~"'@]|--|\.\.\.|:\/\/|www\.| {2,}$/m;
+const DECORATION =
+  /[[\]*`<>_|\\~"']|^#|&(?:#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);|[^\s@]+@[^\s@]+\.[^\s@]+|--|\.\.\.|:\/\/|www\.| {2,}$/im;
 
 /** 段落として読めない行（Markdown の箇条書き・区切り線・見出しの下線・字下げのコードなど） */
-const NON_PARAGRAPH = /^(?:\s|[-+]\s|\d+[.)]\s|[-=]+\s*$)/;
+const NON_PARAGRAPH = /^(?:\s|(?:[-+]|\d+[.)])(?:\s|$)|[-=]+\s*$)/;
 
 /** 受け付ける見出し。この順でしか受け付けない（ページもこの順で描くため）。資格はスキルの節の中の ### */
 const SECTION_ORDER = ["自己紹介", "経歴", "スキル", "資格#h3"];
@@ -56,13 +57,13 @@ function splitTopLevel(text: string): string[] {
   return parts.map((d) => d.trim()).filter((d) => d.length > 0);
 }
 
-/** 内容を、末尾の（）より前と（）の中に分ける。末尾が（）でなければ詳細なし */
+/** 内容を、末尾の（）・()より前とその中に分ける。末尾が括弧でなければ詳細なし */
 function splitDetails(content: string): { title: string; details: string[] } {
-  if (!content.endsWith("）")) return { title: content, details: [] };
+  if (!content.endsWith("）") && !content.endsWith(")")) return { title: content, details: [] };
   let depth = 0;
   for (let i = content.length - 1; i >= 0; i--) {
-    if (content[i] === "）") depth++;
-    else if (content[i] === "（" && --depth === 0) {
+    if (content[i] === "）" || content[i] === ")") depth++;
+    else if ((content[i] === "（" || content[i] === "(") && --depth === 0) {
       const title = content.slice(0, i).trim();
       if (!title) break;
       return { title, details: splitTopLevel(content.slice(i + 1, -1)) };

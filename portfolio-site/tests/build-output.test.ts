@@ -135,7 +135,7 @@ describe("build output", () => {
     expect(timeline.match(/data-period/g)?.length).toBe(body.career.length);
     for (const c of body.career) {
       expect(timeline).toContain(esc(c.period));
-      expect(timeline).toContain(esc(c.title));
+      expect(timeline).toContain(`>${esc(c.title)}</h3>`);
       for (const d of c.details) expect(timeline).toContain(`>${esc(d)}</li>`);
     }
     // タグは、それぞれの一覧の中の項目（# ・✓ の飾りの後）として出ていることを確かめる

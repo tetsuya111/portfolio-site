@@ -59,6 +59,16 @@ describe("parseProfileBody", () => {
     expect(parseProfileBody(half)?.career[0]?.details).toEqual(["React (Next.js、Remix)", "TypeScript"]);
   });
 
+  it("accepts literal #, & and @ that Markdown does not turn into anything", () => {
+    const body = "## スキル\n\n- C# / F# / R&D / @mention\n";
+    expect(parseProfileBody(body)?.skills).toEqual([["C#", "F#", "R&D", "@mention"]]);
+  });
+
+  it("splits a trailing half-width (…) into details", () => {
+    const body = "## 経歴\n\n- 2024年: Web開発 (React、Go)\n";
+    expect(parseProfileBody(body)?.career[0]).toEqual({ period: "2024年", title: "Web開発", details: ["React", "Go"] });
+  });
+
   it("allows sections to be missing", () => {
     expect(parseProfileBody("## スキル\n\n- Python\n")).toEqual({
       intro: [],
@@ -96,6 +106,11 @@ describe("parseProfileBody", () => {
     ["a hard line break", sample.replace("一段落目。\n", "一段落目。  \n")],
     ["a nested ordered list marker", sample.replace("- Python / Go", "- 1. Python / Go")],
     ["a nested bullet marker", sample.replace("- Python / Go", "- - Python / Go")],
+    ["a line that is only a list marker", sample.replace("二段落目。", "+")],
+    ["a line that is only an ordered list marker", sample.replace("二段落目。", "2023.")],
+    ["a #### heading", sample.replace("二段落目。", "#### 小見出し")],
+    ["an html entity", sample.replace("二段落目。", "A&amp;B")],
+    ["a numeric html entity", sample.replace("二段落目。", "A&#169;B")],
   ])("returns null for %s", (_, body) => {
     expect(parseProfileBody(body)).toBeNull();
   });
