@@ -45,13 +45,20 @@ describe("build output", () => {
     expect(titles.length).toBeGreaterThan(0);
     const top = html(".");
     const heading = top.search(/<h2[^>]*>こんな方とお話ししたい<\/h2>/);
-    expect(heading).toBeGreaterThan(top.search(/<h2[^>]*>サービス<\/h2>/));
+    const services = top.search(/<h2[^>]*>サービス<\/h2>/);
+    expect(services).toBeGreaterThanOrEqual(0);
+    expect(heading).toBeGreaterThan(services);
     expect(heading).toBeLessThan(top.search(/<h2[^>]*>ポートフォリオ<\/h2>/));
     // タイトルが order の順に、見出しの後に並ぶ
     let pos = heading;
     for (const t of titles) {
-      // Astro はテキストの & < > をエスケープして出力する
-      const escaped = t.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+      // Astro はテキストの & < > " ' をエスケープして出力する
+      const escaped = t
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
       const next = top.indexOf(`>${escaped}</h3>`, pos);
       expect(next, t).toBeGreaterThan(pos);
       pos = next;
