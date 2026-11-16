@@ -143,7 +143,7 @@ record_movement(db, *, user, product_id, type, quantity, note) -> StockMovement
 | ACCESS_TOKEN_EXPIRE_MINUTES | 60 | |
 | CORS_ORIGINS | `http://localhost:3000` | カンマ区切り |
 
-フロントエンド: `NEXT_PUBLIC_API_BASE_URL`（既定 `http://localhost:8000`）、`NEXT_PUBLIC_BASE_PATH`（既定は空。配信時に `/apps/inventory-management`）。
+フロントエンド: `NEXT_PUBLIC_API_BASE_URL`（既定 `http://localhost:8000`）、`basePath` は `next.config.ts` に `/apps/inventory-management` を固定で設定する（portfolio-importer が直書きの値を検出するため）。
 
 ## 画面設計（REQ-DSH・PRD・INV・HIS・SUM・USR）
 

@@ -3,13 +3,12 @@ import { fileURLToPath } from "node:url";
 
 import type { NextConfig } from "next";
 
-// サブパス配信（例: /apps/inventory-management）に対応する。未設定ならルートで配信する。
-const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
-
 const nextConfig: NextConfig = {
   output: "export",
-  basePath,
-  assetPrefix: basePath || undefined,
+  // ポートフォリオサイトの /apps/inventory-management で配信する。
+  // portfolio-importer は basePath の直書きを検出するため、環境変数にせず固定値で書く。
+  basePath: "/apps/inventory-management",
+  assetPrefix: "/apps/inventory-management",
   trailingSlash: true,
   images: { unoptimized: true },
   // リポジトリのルートにも lockfile があるため、このディレクトリをルートとして扱う。

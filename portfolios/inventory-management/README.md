@@ -104,7 +104,8 @@ npm run build     # frontend を静的出力（frontend/out/）
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | アクセストークンの有効期限（分） |
 | `CORS_ORIGINS` | `http://localhost:3000` | 許可するフロントエンドのオリジン（カンマ区切り） |
 | `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8000` | フロントエンドから呼ぶ API の URL（ビルド時に埋め込み） |
-| `NEXT_PUBLIC_BASE_PATH` | （空） | サブパス配信するときのパス（例: `/apps/inventory-management`） |
+
+フロントエンドはポートフォリオサイトのサブパス `/apps/inventory-management` で配信するため、`next.config.ts` の `basePath` に固定で設定しています（開発時も `http://localhost:3000/apps/inventory-management/` で開きます）。
 
 ## API
 
