@@ -1,9 +1,10 @@
-// src/content/ の md（サービス・スキル・ポートフォリオ）がスキーマを満たし、トップページに必要な項目を持つことを確かめる
+// src/content/ の md（サービス・スキル・こんな方とお話ししたい・ポートフォリオ）がスキーマを満たし、トップページに必要な項目を持つことを確かめる
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseMarkdown } from "../src/lib/markdown-file";
-import { portfolioSchema, serviceSchema, skillSchema } from "../src/lib/schemas";
+import { audienceSchema, portfolioSchema, serviceSchema, skillSchema } from "../src/lib/schemas";
+import { sortByOrder } from "../src/lib/content-query";
 
 const root = join(import.meta.dirname, "..", "src", "content");
 
@@ -29,6 +30,19 @@ describe("content files", () => {
       expect(r.data?.examples.length, i.file).toBeGreaterThan(0);
       expect(r.data?.famous.length, i.file).toBeGreaterThan(0);
     }
+  });
+
+  it("has the audiences from the memo, in order", () => {
+    const items = frontmatters("audiences").map((i) => {
+      expect(audienceSchema.safeParse(i.data).success, i.file).toBe(true);
+      return { data: audienceSchema.parse(i.data) };
+    });
+    expect(sortByOrder(items).map((i) => i.data.title)).toEqual([
+      "会社に受注するのはハードルが高いと感じる方",
+      "個人事業主でITツールを作成してほしい方",
+      "要件の整理から開発まで丁寧にフォローしてほしい方",
+      "IT開発の基盤を整えたい方",
+    ]);
   });
 
   it("has valid portfolios", () => {
