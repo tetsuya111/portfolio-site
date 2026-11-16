@@ -6,6 +6,7 @@ tags:
   - "TypeScript"
   - "Python"
   - "FastAPI"
+url: "/apps/inventory-management/"
 date: 2026-11-17
 ---
 
