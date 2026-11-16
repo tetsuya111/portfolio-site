@@ -20,6 +20,8 @@ _UVICORN = re.compile(r"uvicorn\s+([A-Za-z_][\w.]*:[A-Za-z_]\w*)(\s+--factory)?"
 _FASTAPI_ASSIGN = re.compile(r"^([A-Za-z_]\w*)\s*=\s*FastAPI\(", re.MULTILINE)
 _FLASK_ASSIGN = re.compile(r"^([A-Za-z_]\w*)\s*=\s*Flask\(", re.MULTILINE)
 _HAS_CMD = re.compile(r"^\s*(CMD|ENTRYPOINT)\b", re.MULTILINE | re.IGNORECASE)
+# /data そのもの（/app/data・/database などは除く）
+_DATA_DIR = re.compile(r"(?<![\w./-])/data(?![\w.-])")
 _EXPOSE = re.compile(r"^\s*EXPOSE\s+(\d+)", re.MULTILINE | re.IGNORECASE)
 
 # Docker の .dockerignore は、**/ を付けないとビルドコンテキストの直下にしか一致しない。秘密情報・依存・キャッシュは
@@ -79,39 +81,45 @@ def _module(rel: Path) -> str:
     return ".".join(rel.with_suffix("").parts)
 
 
-def _python_command(d: Path) -> tuple[list[str] | None, bool, bool]:
-    """起動コマンドと、gunicorn を入れる必要があるか、Django（manage.py と wsgi.py）で起動するかを返す。"""
+def _is_django(d: Path) -> bool:
+    # manage.py があれば Django とみなす（起動が gunicorn でも uvicorn（ASGI）でも、DB の置き場所と migrate は同じ）
+    return (d / "manage.py").is_file()
+
+
+def _python_command(d: Path) -> tuple[list[str] | None, bool]:
+    """起動コマンドと、gunicorn を入れる必要があるかを返す。"""
     host = ["--host", "0.0.0.0", "--port", str(PYTHON_PORT)]
     bind = ["--bind", f"0.0.0.0:{PYTHON_PORT}"]
     fastapi = wsgi = flask = None
-    # manage.py があれば Django とみなす（起動が gunicorn でも uvicorn（ASGI）でも、DB の置き場所と migrate は同じ）
-    django = (d / "manage.py").is_file()
     for rel in _sources(d):
         text = (d / rel).read_text(encoding="utf-8", errors="replace")
         m = _UVICORN.search(text)
         if m:
             # 記載された起動方法を最優先する（見つかった時点で探索をやめる）
-            return ["uvicorn", m.group(1)] + (["--factory"] if m.group(2) else []) + host, False, django
+            return ["uvicorn", m.group(1)] + (["--factory"] if m.group(2) else []) + host, False
         if rel.suffix != ".py":
             continue
         if fastapi is None and (a := _FASTAPI_ASSIGN.search(text)):
             fastapi = ["uvicorn", f"{_module(rel)}:{a.group(1)}"] + host
-        if wsgi is None and rel.name == "wsgi.py" and django:
+        if wsgi is None and rel.name == "wsgi.py" and _is_django(d):
             wsgi = ["gunicorn", f"{_module(rel)}:application"] + bind
         if flask is None and (a := _FLASK_ASSIGN.search(text)):
             flask = ["gunicorn", f"{_module(rel)}:{a.group(1)}"] + bind
     for cmd in (fastapi, wsgi, flask):
         if cmd is not None:
-            return cmd, cmd[0] == "gunicorn", django
+            return cmd, cmd[0] == "gunicorn"
     if (d / "main.py").is_file():
-        return ["python", "main.py"], False, django
-    return None, False, django
+        return ["python", "main.py"], False
+    return None, False
 
 
-def _cmd_line(cmd: list[str] | None) -> str:
+def _cmd_line(cmd: list[str] | None, django: bool = False) -> str:
     if cmd is None:
+        # Django は空のボリュームで起動するため、テーブルを作る migrate も CMD に要る
+        example = ('# CMD ["sh", "-c", "python manage.py migrate --noinput && exec ..."]\n' if django
+                   else '# CMD ["..."]\n')
         return ("# TODO: 起動コマンドを判定できませんでした。CMD を追記してから docker compose を実行してください。\n"
-                '# CMD ["..."]\n')
+                + example)
     return f"CMD {json.dumps(cmd, ensure_ascii=False)}\n"
 
 
@@ -124,7 +132,8 @@ def _python_dockerfile(d: Path) -> tuple[str, bool]:
     if pyproject.is_file() and re.search(r"^\[project\]", pyproject.read_text(encoding="utf-8", errors="replace"),
                                          re.MULTILINE):
         steps.append("pip install --no-cache-dir .")
-    cmd, gunicorn, django = _python_command(d)
+    cmd, gunicorn = _python_command(d)
+    django = _is_django(d)
     # 起動に使うサーバーは依存に書かれていないことがあるため入れる（既に入っていれば何もしない）
     if gunicorn:
         steps.append("pip install --no-cache-dir gunicorn")
@@ -157,7 +166,7 @@ def _python_dockerfile(d: Path) -> tuple[str, bool]:
         +
         "USER appuser\n"
         f"EXPOSE {PYTHON_PORT}\n"
-        + _cmd_line(cmd)
+        + _cmd_line(cmd, django)
     )
     return text, cmd is not None
 
@@ -196,7 +205,7 @@ def write_docker_files(d: Path, kind: str) -> tuple[Path, list[str]]:
         warnings.append(f"{dockerfile.name} が既にあるため上書きしませんでした")
         existing = dockerfile.read_text(encoding="utf-8", errors="replace")
         has_cmd = bool(_HAS_CMD.search(existing))
-        if "/data" not in existing:
+        if not _DATA_DIR.search(existing):
             # compose は /data に DB 用の名前付きボリュームをマウントする。イメージに /data がないと root の持ち物で
             # 作られ、非 root で動くアプリは書き込めない
             warnings.append("Dockerfile が /data を作っていません。DB を永続化するなら、実行ユーザーの持ち物の /data を作り"

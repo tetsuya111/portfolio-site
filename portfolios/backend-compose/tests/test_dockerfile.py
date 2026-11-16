@@ -93,6 +93,21 @@ class WriteDockerFilesTest(TempDirMixin, unittest.TestCase):
         # /data を作らない Dockerfile では、ボリュームが root の持ち物になり非 root のアプリが書けない
         self.assertTrue(any("/data" in w for w in warnings), warnings)
 
+    def test_existing_dockerfile_with_other_data_paths_warns(self):
+        # /app/data・/database は /data ではない
+        write(self.tmp / "Dockerfile", "FROM scratch\nRUN mkdir -p /app/data /database\nCMD [\"x\"]\n")
+        _, warnings = self.dockerfile()
+        self.assertTrue(any("/data" in w for w in warnings), warnings)
+
+    def test_django_without_command_hints_migrate(self):
+        write(self.tmp / "requirements.txt", "django\n")
+        write(self.tmp / "manage.py", "")
+        text, _ = self.dockerfile()
+        # 空のボリュームで起動するため、CMD を書くときに migrate も要ることを示す
+        self.assertIn("TODO", text)
+        self.assertIn("python manage.py migrate --noinput", text)
+        self.assertIn("RUN ln -sf /data/db.sqlite3 /app/db.sqlite3\n", text)
+
     def test_existing_dockerfile_with_data_dir_has_no_data_warning(self):
         write(self.tmp / "Dockerfile", "FROM scratch\nRUN mkdir /data\nCMD [\"x\"]\n")
         _, warnings = self.dockerfile()
