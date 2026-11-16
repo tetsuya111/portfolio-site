@@ -2,8 +2,8 @@ import json
 import unittest
 
 from stackgen.config import Config
-from stackgen.stack import Service, render_compose, render_nginx, upsert_service, write_stack
-from tests.helpers import TempDirMixin
+from stackgen.stack import Service, render_compose, render_init_cert, render_nginx, upsert_service, write_stack
+from tests.helpers import TempDirMixin, write
 
 HTTPS = Config("api.portfolio.link", True)
 HTTP = Config("api.portfolio.link", False)
@@ -77,7 +77,7 @@ class WriteStackTest(TempDirMixin, unittest.TestCase):
         self.assertIn("build: ./services/a", (self.tmp / "docker-compose.yml").read_text(encoding="utf-8"))
         self.assertIn("location ~ ^/a(?:/|$)", (self.tmp / "nginx" / "default.conf").read_text(encoding="utf-8"))
         ignore = (self.tmp / ".gitignore").read_text(encoding="utf-8")
-        self.assertIn("certs/", ignore)
+        self.assertIn("letsencrypt/", ignore)
         self.assertIn("services/*/.env", ignore)
         self.assertNotIn(b"\r\n", (self.tmp / "docker-compose.yml").read_bytes())
 
@@ -135,3 +135,53 @@ class CertbotComposeTest(unittest.TestCase):
 
     def test_only_nginx_publishes_ports(self):
         self.assertEqual(self.text.count("ports:"), 1)
+
+
+class InitCertTest(TempDirMixin, unittest.TestCase):
+    def test_render(self):
+        text = render_init_cert(HTTPS)
+        self.assertTrue(text.startswith("#!/bin/sh\n"))
+        self.assertIn("set -eu", text)
+        self.assertIn("DOMAIN=api.portfolio.link\n", text)
+        self.assertIn('if [ ! -f "letsencrypt/live/$DOMAIN/fullchain.pem" ]; then', text)
+        self.assertIn('ACCOUNT="--email $1"', text)
+        self.assertIn('ACCOUNT="--register-unsafely-without-email"', text)
+        # 80 番を空けてから standalone で取得し、その後に全体を起動する
+        stop = text.index("docker compose stop nginx")
+        run = text.index("docker compose run --rm -p 80:80 --entrypoint certbot certbot")
+        up = text.index("docker compose up -d --build")
+        self.assertLess(stop, run)
+        self.assertLess(run, up)
+        self.assertIn('certonly --standalone -d "$DOMAIN" --agree-tos --non-interactive $ACCOUNT', text)
+
+    def test_written_for_https_with_lf(self):
+        write_stack(self.tmp, [], HTTPS)
+        data = (self.tmp / "init-cert.sh").read_bytes()
+        self.assertIn(b"DOMAIN=api.portfolio.link", data)
+        self.assertNotIn(b"\r\n", data)
+
+    def test_removed_for_http(self):
+        write_stack(self.tmp, [], HTTPS)
+        write_stack(self.tmp, [], HTTP)
+        self.assertFalse((self.tmp / "init-cert.sh").exists())
+        write_stack(self.tmp, [], HTTP)  # なくてもエラーにしない
+
+
+class GitignoreTest(TempDirMixin, unittest.TestCase):
+    def test_new_file_has_all_entries(self):
+        write_stack(self.tmp, [], HTTPS)
+        lines = (self.tmp / ".gitignore").read_text(encoding="utf-8").splitlines()
+        for entry in ("letsencrypt/", "certbot/", "services/*/.env"):
+            self.assertIn(entry, lines)
+
+    def test_appends_missing_entries_once(self):
+        write(self.tmp / ".gitignore", "# 古い設定\ncerts/\ncertbot/")
+        write_stack(self.tmp, [], HTTPS)
+        write_stack(self.tmp, [], HTTPS)
+        text = (self.tmp / ".gitignore").read_text(encoding="utf-8")
+        lines = text.splitlines()
+        self.assertIn("certs/", lines)
+        self.assertEqual(lines.count("certbot/"), 1)
+        self.assertEqual(lines.count("letsencrypt/"), 1)
+        self.assertEqual(lines.count("services/*/.env"), 1)
+        self.assertTrue(text.startswith("# 古い設定\ncerts/\ncertbot/\n"))

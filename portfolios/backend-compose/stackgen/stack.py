@@ -26,13 +26,15 @@ CERTBOT_ENTRYPOINT = ('["/bin/sh", "-c", "trap exit TERM; while :; do '
 RESERVED_SERVICES = {"nginx"}
 
 GITIGNORE = """\
-# TLS 証明書（VPS 上で配置する。fullchain.pem・privkey.pem）
-certs/
+# certbot が取得した TLS 証明書と秘密鍵（VPS 上で作られる）
+letsencrypt/
 # certbot の HTTP-01 チャレンジのファイル（VPS 上で作られる）
 certbot/
 # バックエンドの秘密情報（VPS 上で配置する）
 services/*/.env
 """
+# 既存の .gitignore に足りなければ追記する行（コメント以外）
+_GITIGNORE_ENTRIES = [line for line in GITIGNORE.splitlines() if line and not line.startswith("#")]
 
 
 @dataclass(frozen=True)
@@ -172,8 +174,54 @@ def render_nginx(services: list[Service], cfg: Config) -> str:
     )
 
 
+def render_init_cert(cfg: Config) -> str:
+    """初回の証明書の取得（certbot の standalone）から compose の起動までを行うスクリプト。
+
+    domain は config.py でホスト名に限っているため、sh にそのまま書いてよい。
+    """
+    return f"""\
+#!/bin/sh
+# backend-compose が生成したファイル。直接編集しないでください。
+# 証明書がなければ certbot の standalone（80 番）で取得し、nginx と全バックエンドを起動する。
+# 使い方: sh init-cert.sh [メールアドレス]（省略するとメールなしで Let's Encrypt に登録する）
+set -eu
+cd "$(dirname "$0")"
+DOMAIN={cfg.domain}
+if [ ! -f "letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+  if [ -n "${{1:-}}" ]; then ACCOUNT="--email $1"; else ACCOUNT="--register-unsafely-without-email"; fi
+  # standalone の certbot が 80 番で答えるため、動いている nginx を止める
+  docker compose stop nginx >/dev/null 2>&1 || true
+  # shellcheck disable=SC2086
+  docker compose run --rm -p 80:80 --entrypoint certbot certbot \\
+    certonly --standalone -d "$DOMAIN" --agree-tos --non-interactive $ACCOUNT
+else
+  echo "letsencrypt/live/$DOMAIN/ に証明書があるため、取得は行いません"
+fi
+docker compose up -d --build
+"""
+
+
 def write_stack(stack_dir: Path, services: list[Service], cfg: Config) -> None:
     _write(stack_dir / "docker-compose.yml", render_compose(services, cfg))
     _write(stack_dir / "nginx" / "default.conf", render_nginx(services, cfg))
-    if not (stack_dir / ".gitignore").exists():
-        _write(stack_dir / ".gitignore", GITIGNORE)
+    init_cert = stack_dir / "init-cert.sh"
+    if cfg.https:
+        _write(init_cert, render_init_cert(cfg))
+    elif init_cert.exists():
+        init_cert.unlink()
+    _update_gitignore(stack_dir / ".gitignore")
+
+
+def _update_gitignore(path: Path) -> None:
+    """なければ全体を書き、あれば足りない行だけを末尾に追記する（手で足した行は残す）。"""
+    if not path.exists():
+        _write(path, GITIGNORE)
+        return
+    text = path.read_text(encoding="utf-8")
+    existing = {line.strip() for line in text.splitlines()}
+    missing = [e for e in _GITIGNORE_ENTRIES if e not in existing]
+    if not missing:
+        return
+    if text and not text.endswith("\n"):
+        text += "\n"
+    _write(path, text + "".join(f"{e}\n" for e in missing))
