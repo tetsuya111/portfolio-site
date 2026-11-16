@@ -3,7 +3,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseMarkdown } from "../src/lib/markdown-file";
-import { articleSchema, portfolioSchema, profileSchema, serviceSchema, skillSchema } from "../src/lib/schemas";
+import { articleSchema, audienceSchema, portfolioSchema, profileSchema, serviceSchema, skillSchema } from "../src/lib/schemas";
 import { formatDisplayDate, limitTags, publishedArticles, sortByOrder, sortPortfolios } from "../src/lib/content-query";
 import { CONTENT_ROOT } from "./fixtures";
 
@@ -45,6 +45,11 @@ export function loadServices() {
 /** 表示順（order の昇順）に並べたスキル */
 export function loadSkills() {
   return sortByOrder(load("skills", (d) => skillSchema.parse(d)));
+}
+
+/** 表示順（order の昇順）に並べた「こんな方とお話ししたい」 */
+export function loadAudiences() {
+  return sortByOrder(load("audiences", (d) => audienceSchema.parse(d)));
 }
 
 /** 下書きの記事 */

@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { loadEnv } from "vite";
 import { describe, expect, it } from "vitest";
 import { parseMarkdown } from "../src/lib/markdown-file";
-import { sortPortfolios } from "../src/lib/content-query";
-import { portfolioSchema } from "../src/lib/schemas";
+import { sortByOrder, sortPortfolios } from "../src/lib/content-query";
+import { audienceSchema, portfolioSchema } from "../src/lib/schemas";
 import { resolveConsultation } from "../src/lib/consultation";
 import { resolveTheme } from "../src/lib/theme";
 import { siteConfig } from "../src/site.config";
@@ -33,6 +33,27 @@ describe("build output", () => {
     expect(top.includes("<dialog")).toBe(c.contactEmail !== null);
     // Astro は属性値の & を &amp; にして出力する
     if (c.taskBox) expect(top).toContain(`href="${c.taskBox.href.replaceAll("&", "&amp;")}"`);
+  });
+
+  it("shows the audiences as tiles right after the services on the top page", () => {
+    const dir = join(import.meta.dirname, "..", "src", "content", "audiences");
+    const titles = sortByOrder(
+      readdirSync(dir)
+        .filter((f) => f.endsWith(".md"))
+        .map((f) => ({ data: audienceSchema.parse(parseMarkdown(readFileSync(join(dir, f), "utf8")).data) })),
+    ).map((a) => a.data.title);
+    expect(titles.length).toBeGreaterThan(0);
+    const top = html(".");
+    const heading = top.search(/<h2[^>]*>こんな方とお話ししたい<\/h2>/);
+    expect(heading).toBeGreaterThan(top.search(/<h2[^>]*>サービス<\/h2>/));
+    expect(heading).toBeLessThan(top.search(/<h2[^>]*>ポートフォリオ<\/h2>/));
+    // タイトルが order の順に、見出しの後に並ぶ
+    let pos = heading;
+    for (const t of titles) {
+      const next = top.indexOf(`>${t}</h3>`, pos);
+      expect(next, t).toBeGreaterThan(pos);
+      pos = next;
+    }
   });
 
   it("shows portfolio tiles with title, tags and url button on the top page", () => {
