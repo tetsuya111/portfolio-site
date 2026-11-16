@@ -134,7 +134,9 @@ def _python_dockerfile(d: Path) -> tuple[str, bool]:
         "ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1\n"
         "WORKDIR /app\n"
         # 実行ユーザーがアプリのディレクトリ（SQLite などのデータ）に書き込めるよう、所有者を合わせる
-        "RUN useradd --create-home appuser\n"
+        # COPY --chown はコピーしたファイルだけの所有者を変え、WORKDIR で root が作った /app 自体は変えない。
+        # 起動時に /app/logs・/app/data を作るアプリ（取り込み時に除いたディレクトリ）のため、/app も渡す
+        "RUN useradd --create-home appuser && chown appuser:appuser /app\n"
         "COPY --chown=appuser:appuser . .\n"
         f"RUN {install}\n"
         "USER appuser\n"

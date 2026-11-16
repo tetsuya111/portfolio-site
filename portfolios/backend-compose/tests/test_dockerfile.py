@@ -28,6 +28,13 @@ class WriteDockerFilesTest(TempDirMixin, unittest.TestCase):
         self.assertIn('CMD ["uvicorn", "app.main:create", "--factory", "--host", "0.0.0.0", "--port", "8000"]', text)
         self.assertIn("pip install --no-cache-dir .", text)
 
+    def test_app_dir_is_owned_by_app_user(self):
+        # 起動時に /app/logs・/app/data を作るアプリのため、/app 自体も実行ユーザーの持ち物にする
+        write(self.tmp / "requirements.txt", "")
+        text, _ = self.dockerfile()
+        self.assertIn("RUN useradd --create-home appuser && chown appuser:appuser /app\n", text)
+        self.assertLess(text.index("chown appuser:appuser /app"), text.index("USER appuser"))
+
     def test_django_uses_gunicorn(self):
         write(self.tmp / "requirements.txt", "django\n")
         write(self.tmp / "manage.py", "")
