@@ -123,7 +123,15 @@ def render_compose(services: list[Service], cfg: Config) -> str:
             "    env_file:",
             f"      - path: ./services/{s.slug}/.env",
             "        required: false",
+            # SQLite などの DB を置く名前付きボリューム。コンテナを作り直しても残る（down -v では消える）。
+            # 名前付きボリュームは初回のマウントでイメージの /data の所有者を引き継ぐため、非 root でも書ける
+            "    volumes:",
+            f"      - {s.slug}-data:/data",
         ]
+    if services:
+        # 空の volumes: は null になり compose が受け付けないため、バックエンドがあるときだけ書く
+        lines.append("volumes:")
+        lines += [f"  {s.slug}-data:" for s in services]
     return "\n".join(lines) + "\n"
 
 

@@ -45,6 +45,16 @@ class RenderComposeTest(unittest.TestCase):
         text = render_compose([], HTTP)
         self.assertIn("nginx:", text)
         self.assertNotIn("depends_on", text)
+        # 空の volumes: は compose で null になるため、バックエンドがなければ出力しない
+        self.assertNotIn("\nvolumes:", text)
+
+    def test_backends_mount_named_volume_at_data(self):
+        text = render_compose([Service("a", 8000), Service("b-c", 3000)], HTTPS)
+        # DB をコンテナの外に置き、作り直しても残す
+        self.assertIn("  a:\n    build: ./services/a\n", text)
+        self.assertIn("    volumes:\n      - a-data:/data\n", text)
+        self.assertIn("    volumes:\n      - b-c-data:/data\n", text)
+        self.assertTrue(text.endswith("\nvolumes:\n  a-data:\n  b-c-data:\n"), text)
 
 
 class RenderNginxTest(unittest.TestCase):
