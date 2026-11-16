@@ -5,13 +5,19 @@
 set -eu
 cd "$(dirname "$0")"
 DOMAIN=free-junk-porn.site
-if [ ! -f "letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
-  if [ -n "${1:-}" ]; then ACCOUNT="--email $1"; else ACCOUNT="--register-unsafely-without-email"; fi
+# certbot は live/ を root だけが読める権限で作るため、ホストのユーザーではなくコンテナ（root）で確かめる
+if ! docker compose run --rm --no-deps --entrypoint test certbot -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem"; then
+  # メールアドレスは 1 つの引数として渡す
+  if [ -n "${1:-}" ]; then set -- --email "$1"; else set -- --register-unsafely-without-email; fi
   # standalone の certbot が 80 番で答えるため、動いている nginx を止める
   docker compose stop nginx >/dev/null 2>&1 || true
-  # shellcheck disable=SC2086
-  docker compose run --rm -p 80:80 --entrypoint certbot certbot \
-    certonly --standalone -d "$DOMAIN" --agree-tos --non-interactive $ACCOUNT
+  if ! docker compose run --rm -p 80:80 --entrypoint certbot certbot \
+      certonly --standalone -d "$DOMAIN" --agree-tos --non-interactive "$@"; then
+    echo "証明書を取得できませんでした。DNS が VPS を指しているか、80 番が外から届くかを確かめてください" >&2
+    # 止めた nginx を動いていた状態に戻す（証明書がなければ起動に失敗する）
+    docker compose start nginx >/dev/null 2>&1 || true
+    exit 1
+  fi
 else
   echo "letsencrypt/live/$DOMAIN/ に証明書があるため、取得は行いません"
 fi

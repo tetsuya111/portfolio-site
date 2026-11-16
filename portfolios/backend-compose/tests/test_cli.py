@@ -35,6 +35,39 @@ class CliTest(TempDirMixin, unittest.TestCase):
         self.assertTrue(any("--enable-api" in w for w in result["warnings"]))
         self.assertEqual((apps / "apps.json").read_text(encoding="utf-8"), before)
 
+    def run_args(self, *args):
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            code = main(list(args), repo_root=self.repo, config_path=self.config, stack_dir=self.stack)
+        return code, out.getvalue(), err.getvalue()
+
+    def test_regenerate_rewrites_stack_from_services_json(self):
+        write_json(self.stack / "services.json", {"services": [{"slug": "my-app", "port": 8000}]})
+        code, out, _ = self.run_args("--regenerate")
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out), {"services": ["my-app"], "https": True})
+        self.assertIn("build: ./services/my-app", (self.stack / "docker-compose.yml").read_text(encoding="utf-8"))
+        self.assertTrue((self.stack / "init-cert.sh").exists())
+        # ソースのコピーは行わない
+        self.assertFalse((self.stack / "services" / "my-app").exists())
+
+    def test_regenerate_rejects_project(self):
+        code, _, err = self.run_args(str(self.project), "--regenerate")
+        self.assertEqual(code, 1)
+        self.assertIn("--regenerate", err)
+
+    def test_requires_project_without_regenerate(self):
+        code, _, err = self.run_args()
+        self.assertEqual(code, 1)
+        self.assertIn("portfolios/<スラッグ>", err)
+
+    def test_rejects_certbot_name(self):
+        certbot = self.repo / "portfolios" / "certbot"
+        write(certbot / "backend" / "requirements.txt", "")
+        code, _, err = self.run_main(certbot)
+        self.assertEqual(code, 1)
+        self.assertIn("certbot", err)
+
     def test_rejects_reverse_proxy_name(self):
         nginx = self.repo / "portfolios" / "nginx"
         write(nginx / "backend" / "requirements.txt", "")

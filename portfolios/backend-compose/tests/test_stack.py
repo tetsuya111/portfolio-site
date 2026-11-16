@@ -89,6 +89,7 @@ class LoadServicesTest(TempDirMixin, unittest.TestCase):
         from tests.helpers import write_json
         for data in ({"services": [{"slug": "a;b", "port": 1}]}, {"services": [{"slug": "a\n", "port": 1}]},
 {"services": [{"slug": "a", "port": "80"}]}, {"services": [{"slug": "nginx", "port": 80}]},
+                     {"services": [{"slug": "certbot", "port": 80}]},
                      {"services": [{"slug": "docs", "port": 80}]}, {}):
             with self.subTest(data=data):
                 write_json(self.tmp / "services.json", data)
@@ -130,7 +131,9 @@ class CertbotComposeTest(unittest.TestCase):
 
     def test_nginx_reloads_periodically(self):
         nginx = self.text.split("  certbot:\n")[0]
-        self.assertIn("while :; do sleep 21600; nginx -s reload; done & exec nginx -g 'daemon off;'", nginx)
+        # 公式イメージの /docker-entrypoint.sh を通して起動する（初期化スクリプトを飛ばさない）
+        self.assertIn("while :; do sleep 21600; nginx -s reload; done & "
+                      "exec /docker-entrypoint.sh nginx -g 'daemon off;'", nginx)
         self.assertIn("./certbot:/var/www/certbot:ro", nginx)
 
     def test_only_nginx_publishes_ports(self):
@@ -143,16 +146,24 @@ class InitCertTest(TempDirMixin, unittest.TestCase):
         self.assertTrue(text.startswith("#!/bin/sh\n"))
         self.assertIn("set -eu", text)
         self.assertIn("DOMAIN=api.portfolio.link\n", text)
-        self.assertIn('if [ ! -f "letsencrypt/live/$DOMAIN/fullchain.pem" ]; then', text)
-        self.assertIn('ACCOUNT="--email $1"', text)
-        self.assertIn('ACCOUNT="--register-unsafely-without-email"', text)
+        # certbot は live/ を root の 0700 で作るため、ホストのユーザーではなくコンテナ（root）で確かめる
+        self.assertIn('if ! docker compose run --rm --no-deps --entrypoint test certbot '
+                      '-f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem"; then', text)
+        self.assertNotIn('[ ! -f "letsencrypt/', text)
+        # メールアドレスは 1 つの引数として渡す（単語分割で別の引数にしない）
+        self.assertIn('set -- --email "$1"', text)
+        self.assertIn("set -- --register-unsafely-without-email", text)
+        self.assertNotIn("$ACCOUNT", text)
+        self.assertNotIn("shellcheck disable", text)
+        # 取得に失敗しても nginx を止めたままにしない
+        self.assertIn("docker compose start nginx", text)
         # 80 番を空けてから standalone で取得し、その後に全体を起動する
         stop = text.index("docker compose stop nginx")
         run = text.index("docker compose run --rm -p 80:80 --entrypoint certbot certbot")
         up = text.index("docker compose up -d --build")
         self.assertLess(stop, run)
         self.assertLess(run, up)
-        self.assertIn('certonly --standalone -d "$DOMAIN" --agree-tos --non-interactive $ACCOUNT', text)
+        self.assertIn('certonly --standalone -d "$DOMAIN" --agree-tos --non-interactive "$@"', text)
 
     def test_written_for_https_with_lf(self):
         write_stack(self.tmp, [], HTTPS)

@@ -25,7 +25,10 @@ _KEEP_ON_REFRESH = {"Dockerfile", ".dockerignore", ".env"}
 def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="add_backend.py",
                                 description="取り込んだポートフォリオのバックエンドを docker compose のフォルダに登録する")
-    p.add_argument("project", help="portfolios/<スラッグ>（portfolio-importer で取り込んだプロジェクト）")
+    p.add_argument("project", nargs="?", help="portfolios/<スラッグ>（portfolio-importer で取り込んだプロジェクト）")
+    p.add_argument("--regenerate", action="store_true",
+                   help="バックエンドを登録せず、config.json と services.json から stack/ の設定だけを作り直す"
+                        "（config.json を変えたとき用。ソースのコピーは行わない）")
     p.add_argument("--enable-api", action="store_true",
                    help="フロントエンドを実 API に切り替える（apps.json に env を書き mock を false にする）。"
                         "VPS でバックエンドを起動してから付ける（先に切り替えると、次のデプロイでフロントエンドが壊れる）")
@@ -46,7 +49,7 @@ def _resolve_project(path: Path, repo_root: Path) -> tuple[str, Path]:
     except PortfolioError as e:
         raise StackError(str(e)) from e
     if slug in RESERVED_SERVICES:
-        raise StackError(f"スラッグ「{slug}」は compose のサービス名（リバースプロキシ）と重なるため登録できません")
+        raise StackError(f"スラッグ「{slug}」は compose のサービス名（リバースプロキシ・証明書の更新）と重なるため登録できません")
     return slug, project
 
 
@@ -83,7 +86,20 @@ def _copy_backend(src: Path, dest: Path, project: Path, exclude: list[Path]) -> 
     return True
 
 
+def regenerate(config_path: Path, stack_dir: Path) -> dict:
+    cfg = load_config(config_path)
+    services = load_services(stack_dir)
+    write_stack(stack_dir, services, cfg)
+    return {"services": [s.slug for s in services], "https": cfg.https}
+
+
 def run(args: argparse.Namespace, repo_root: Path, config_path: Path, stack_dir: Path) -> dict:
+    if args.regenerate:
+        if args.project is not None:
+            raise StackError("--regenerate にはプロジェクトを指定しないでください")
+        return regenerate(config_path, stack_dir)
+    if args.project is None:
+        raise StackError("portfolios/<スラッグ> のディレクトリを指定してください")
     cfg = load_config(config_path)  # 設定が不正なら何も書かない
     slug, project = _resolve_project(Path(args.project), repo_root)
     frontend = detect_frontend(project, slug)

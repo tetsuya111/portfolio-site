@@ -11,12 +11,7 @@
 | `domain` | バックエンドを公開するホスト名（例 `api.your-domain.com`）。VPS の IP を指す DNS レコードを用意しておく |
 | `https` | 省略時 `true`。nginx が 443 で待ち受け、80 は 443 へ転送する。証明書は certbot のサービスが取得・更新する（下の「VPS での手順」）。サイトは HTTPS のため、`false`（http）ではフロントエンドから呼べず、フロントエンドはモックのままになる |
 
-`config.json` を変えたら、次で `stack/` を作り直す（ソースのコピーは行わない）。
-
-```bash
-cd portfolios/backend-compose
-python -c "import sys; sys.path[:0]=['.','../portfolio-importer']; from pathlib import Path; from stackgen.config import load_config; from stackgen.stack import load_services, write_stack; s=Path('stack'); write_stack(s, load_services(s), load_config(Path('config.json')))"
-```
+`config.json` を変えたら、`python portfolios/backend-compose/add_backend.py --regenerate` で `stack/` を作り直す（下の「使い方」）。
 
 ## 使い方
 
@@ -28,7 +23,8 @@ python portfolios/backend-compose/add_backend.py portfolios/<スラッグ> [--en
 
 | 引数 | 内容 |
 |---|---|
-| `portfolios/<スラッグ>` | portfolio-importer で取り込んだプロジェクト。`nginx`（リバースプロキシのサービス名）は使えない |
+| `portfolios/<スラッグ>` | portfolio-importer で取り込んだプロジェクト。`nginx`・`certbot`（リバースプロキシ・証明書の更新のサービス名）は使えない |
+| `--regenerate` | プロジェクトを指定せずに付け、`config.json` と `stack/services.json` から `stack/` の設定（compose・nginx・`init-cert.sh`・`.gitignore`）だけを作り直す。`config.json` を変えたときに使う。ソースのコピー・`apps.json` の変更は行わない |
 | `--enable-api` | フロントエンドを実 API に切り替える（下の表の4）。`/add-portfolio` は登録に成功したら必ず付けて実行し、`apps.json` の `env` でバックエンドの URL を設定する（手順は [SKILL.md](../../.claude/skills/add-portfolio/SKILL.md) の手順5）。付けなければ `apps.json` は変えず、書く内容を `warnings` で案内する |
 
 結果は JSON（`slug`・`service`・`port`・`backendUrl`・`dockerfile`・`frontendEnv`・`warnings`）で標準出力に出る。エラー時は理由を標準エラーに出し、終了コード 1 で終わる（何も書き込まない）。
@@ -52,7 +48,7 @@ VPS には Docker Compose v2.24 以降が必要（`env_file` の `required: fals
 1. `stack/` を VPS にアップロードする（例 `scp -r portfolios/backend-compose/stack user@vps:~/portfolio-stack`）。
 2. バックエンドが環境変数（API キーなど）を使うなら、`stack/services/<スラッグ>/.env` に書く（`.env.example` を参照）。`letsencrypt/`・`certbot/`・`.env` は git で管理しない。
 3. 起動する。
-   - `https: true`: `stack/` で `sh init-cert.sh [メールアドレス]` を実行する。証明書（`letsencrypt/live/<domain>/`）がなければ、nginx を止めて certbot の standalone（80 番）で取得し、その後 `docker compose up -d --build` を実行する。証明書があれば起動だけを行うため、2回目以降の起動にも使える。メールアドレスを省略するとメールなしで Let's Encrypt に登録する。試すときに Let's Encrypt の発行回数の制限が気になる場合は、スクリプトの `certonly` に `--staging` を足して試す（その証明書はブラウザに信頼されないため、試した後に `letsencrypt/` を消して取り直す）。
+   - `https: true`: `stack/` で `sh init-cert.sh [メールアドレス]` を実行する。証明書（`letsencrypt/live/<domain>/`）がなければ、nginx を止めて certbot の standalone（80 番）で取得し、その後 `docker compose up -d --build` を実行する。証明書があれば起動だけを行うため、2回目以降の起動にも使える。メールアドレスを省略するとメールなしで Let's Encrypt に登録する。取得に失敗したら、止めた nginx を起動し直してエラーで終わる（Let's Encrypt には失敗の回数の制限があるため、原因を直してから再実行する）。
    - `https: false`: `docker compose up -d --build` を実行する。
 
    nginx と全バックエンドのコンテナが作られる（1つのバックエンドが起動しなくても、nginx とほかのバックエンドは動く）。
