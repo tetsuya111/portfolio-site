@@ -10,13 +10,19 @@
       "slug": "task-box-it-develop",
       "outputDir": "out",
       "buildArgs": [],
-      "mock": true
+      "mock": false,
+      "env": {
+        "NEXT_PUBLIC_API_BASE_URL": "https://free-junk-porn.site/task-box-it-develop"
+      }
     },
     {
       "slug": "media-feed",
       "outputDir": "out",
       "buildArgs": [],
-      "mock": true
+      "mock": false,
+      "env": {
+        "NEXT_PUBLIC_API_URL": "https://free-junk-porn.site/media-feed/api"
+      }
     }
   ]
 }
