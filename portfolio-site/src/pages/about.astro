@@ -1,33 +1,152 @@
 ---
+// 自己紹介ページ。profile.md の本文が決まった書式（自己紹介・経歴・スキル・資格）なら、経歴をタイムライン、
+// スキル・資格をタグで描く。書式が違うとき（装飾・未知の見出しなど）は本文を Markdown のまま表示する。
 import { getEntry, render } from "astro:content";
 import BaseLayout from "../layouts/BaseLayout.astro";
-import Eyebrow from "../components/Eyebrow.astro";
+import SectionHeading from "../components/SectionHeading.astro";
+import { parseProfileBody } from "../lib/profile-body";
 
 const profile = await getEntry("profile", "profile");
 if (!profile) throw new Error("src/content/profile/profile.md がありません");
 const { Content } = await render(profile);
+const body = parseProfileBody(profile.body ?? "");
+
+// 色分けの順番。Tailwind がクラス名を拾えるよう、組み立てずに完全な名前で書く
+const TONES = [
+  { text: "text-spectrum-1", dot: "bg-spectrum-1", soft: "bg-spectrum-1/10" },
+  { text: "text-spectrum-2", dot: "bg-spectrum-2", soft: "bg-spectrum-2/10" },
+  { text: "text-spectrum-3", dot: "bg-spectrum-3", soft: "bg-spectrum-3/10" },
+  { text: "text-spectrum-4", dot: "bg-spectrum-4", soft: "bg-spectrum-4/10" },
+] as const;
+const tone = (i: number) => TONES[i % TONES.length] as (typeof TONES)[number];
+const card = "rounded-card border border-line bg-surface shadow-sm";
 ---
 
 <BaseLayout title="自己紹介" description={profile.data.summary}>
-  <header class="rounded-card bg-linear-to-br from-hero-from to-hero-to px-6 py-10 sm:px-10">
-    <Eyebrow>Profile</Eyebrow>
-    <h1 class="mt-2 font-heading text-3xl font-bold tracking-tight break-words sm:text-4xl">{profile.data.name}</h1>
-    <p class="mt-2 text-lg font-medium text-muted">{profile.data.role}</p>
-    {
-      profile.data.links && profile.data.links.length > 0 && (
-        <ul class="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm">
-          {profile.data.links.map((l) => (
-            <li>
-              <a href={l.url} target="_blank" rel="noopener noreferrer" class="font-semibold text-link hover:underline">
-                {l.label}
-              </a>
-            </li>
-          ))}
-        </ul>
-      )
-    }
+  <header class="overflow-hidden rounded-card border border-line bg-linear-to-br from-hero-from to-hero-to">
+    <div aria-hidden="true" class="h-1 bg-spectrum"></div>
+    <div class="bg-grid px-6 py-10 sm:px-10 sm:py-12">
+      <p aria-hidden="true" class="font-eyebrow text-xs font-bold tracking-wide text-link">
+        ~/profile $ whoami<span class="motion-safe:animate-pulse">_</span>
+      </p>
+      <h1 class="mt-3 font-heading text-3xl font-bold tracking-tight break-words sm:text-4xl">{profile.data.name}</h1>
+      <p class="mt-2 text-lg font-medium text-muted">{profile.data.role}</p>
+      {profile.data.summary && <p class="mt-4 max-w-2xl leading-relaxed">{profile.data.summary}</p>}
+      {
+        profile.data.links && profile.data.links.length > 0 && (
+          <ul class="mt-6 flex flex-wrap gap-2 text-sm">
+            {profile.data.links.map((l) => (
+              <li>
+                <a
+                  href={l.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-block rounded-full border border-line bg-surface px-4 py-1.5 font-semibold text-link hover:underline"
+                >
+                  {l.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+    </div>
   </header>
-  <div class="prose prose-themed mt-10 max-w-none">
-    <Content />
-  </div>
+
+  {
+    body ? (
+      <>
+        {body.intro.length > 0 && (
+          <section class="mt-14">
+            <SectionHeading eyebrow="About" title="自己紹介" class="mb-6" />
+            <div class="max-w-3xl space-y-4 leading-relaxed">
+              {body.intro.map((p, i) => (
+                <p class={i === 0 ? "text-lg font-semibold" : undefined}>{p}</p>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {body.career.length > 0 && (
+          <section class="mt-14">
+            <SectionHeading eyebrow="Career" title="経歴" class="mb-6" />
+            {/* 左の縦線（グラデーション）に沿って、各項目の点とカードを並べる */}
+            <ol
+              aria-label="経歴"
+              class="relative space-y-5 pl-9 before:absolute before:inset-y-3 before:left-2.5 before:w-0.5 before:rounded-full before:bg-spectrum-y before:content-['']"
+            >
+              {body.career.map((c, i) => (
+                <li class="relative">
+                  <span
+                    aria-hidden="true"
+                    class:list={[
+                      "absolute top-5 -left-[35px] size-5 rounded-full border-4 border-page shadow-sm",
+                      tone(i).dot,
+                    ]}
+                  />
+                  <article class:list={[card, "p-5"]}>
+                    <p data-period class:list={["font-eyebrow text-sm font-bold tracking-wide", tone(i).text]}>
+                      {c.period}
+                    </p>
+                    <h3 class="mt-1 font-heading text-lg leading-snug font-bold">{c.title}</h3>
+                    {c.details.length > 0 && (
+                      <ul aria-label="担当内容" class="mt-3 flex flex-wrap gap-1.5">
+                        {c.details.map((d) => (
+                          <li class:list={["rounded-md px-2 py-0.5 text-xs font-medium", tone(i).soft, tone(i).text]}>
+                            {d}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </article>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
+
+        {(body.skills.length > 0 || body.certifications.length > 0) && (
+          <section class="mt-14">
+            <SectionHeading eyebrow="Skills" title="スキル" class="mb-6" />
+            {body.skills.length > 0 && (
+              <ul aria-label="スキル" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {body.skills.map((group, i) => (
+                  <li class:list={[card, "overflow-hidden"]}>
+                    <div aria-hidden="true" class:list={["h-1", tone(i).dot]} />
+                    <ul class="flex flex-wrap gap-2 p-4">
+                      {group.map((t) => (
+                        <li class:list={["rounded-full px-3 py-1 text-sm font-semibold", tone(i).soft, tone(i).text]}>
+                          <span aria-hidden="true" class="font-eyebrow">#</span>
+                          {t}
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {body.certifications.length > 0 && (
+              <>
+                <h3 class="mt-10 mb-4 font-heading text-lg font-bold">資格</h3>
+                <ul aria-label="資格" class="flex flex-wrap gap-2">
+                  {body.certifications.flat().map((c) => (
+                    <li class="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-sm font-semibold">
+                      <span aria-hidden="true" class="text-spectrum-4">
+                        ✓
+                      </span>
+                      {c}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </section>
+        )}
+      </>
+    ) : (
+      <div class="prose prose-themed mt-10 max-w-none">
+        <Content />
+      </div>
+    )
+  }
 </BaseLayout>
