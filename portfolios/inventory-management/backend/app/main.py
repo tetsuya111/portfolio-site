@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import Settings, get_settings
 from app.db import make_engine, make_session_factory
+from app.routers import auth, users
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -32,4 +33,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    app.include_router(auth.router)
+    app.include_router(users.router)
     return app

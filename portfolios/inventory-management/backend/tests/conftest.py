@@ -1,7 +1,10 @@
+import os
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+
+os.environ.setdefault("BCRYPT_ROUNDS", "4")  # app.security の import 前に設定する
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
