@@ -208,13 +208,13 @@
 ### Task 13: Docker・開発環境・ドキュメント（NFR-ENV-1・3、NFR-DOC-1・2）
 
 **Files:**
-- Create: `backend/Dockerfile`、`backend/.dockerignore`、`docker-compose.yml`、`backend/entrypoint.sh`、`README.md`、`docs/architecture.md`、`backend/tests/test_docs.py`
+- Create: `backend/Dockerfile`、`backend/.dockerignore`、`docker-compose.yml`、`README.md`、`docs/architecture.md`、`backend/tests/test_docs.py`
 
 **Interfaces:**
 - Consumes: Task 1〜12 のすべて。
 
 - [ ] Step 1: `test_openapi_lists_all_endpoints`（design.md の API 表の12＋`GET /users`＋`/health` がすべて OpenAPI に載る）を書く。
 - [ ] Step 2: 失敗すれば修正し、成功を確認する。
-- [ ] Step 3: Dockerfile（python:3.12-slim、非 root、`entrypoint.sh` で `alembic upgrade head` → uvicorn）、docker-compose.yml（backend、`./data` を `/data` に、`DATABASE_URL=sqlite:////data/inventory.db`）、README（構成・起動・テスト・デモアカウント・環境変数・API 一覧・設計資料へのリンク）、architecture.md（構成図・ER 図・在庫整合性の説明・画面一覧）を書く。
+- [ ] Step 3: Dockerfile（python:3.12-slim、非 root、CMD で `alembic upgrade head` → uvicorn。Windows でのチェックアウト時に CRLF で壊れないよう、シェルスクリプトのファイルは使わない）、docker-compose.yml（backend、名前付きボリュームを `/data` に、`DATABASE_URL=sqlite:////data/inventory.db`）、README（構成・起動・テスト・デモアカウント・環境変数・API 一覧・設計資料へのリンク）、architecture.md（構成図・ER 図・在庫整合性の説明・画面一覧）を書く。
 - [ ] Step 4: `npm test`・`npm run lint`・`npm run build` 成功を確認する。
 - [ ] Step 5: コミットする。

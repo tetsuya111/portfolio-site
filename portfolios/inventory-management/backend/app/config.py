@@ -27,6 +27,14 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
 
+    @field_validator("jwt_secret", mode="before")
+    @classmethod
+    def _empty_secret_is_unset(cls, value: object) -> object:
+        # 空文字（.env.example のまま・compose で未指定）は未設定として扱う
+        if isinstance(value, str) and not value.strip():
+            return DEV_JWT_SECRET
+        return value
+
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
