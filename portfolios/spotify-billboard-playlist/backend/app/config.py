@@ -53,10 +53,18 @@ def _public_path(frontend_url: str) -> str:
     return parts.path.rstrip("/")
 
 
-def _warn_redirect_mismatch(frontend_url: str, redirect_uri: str) -> None:
+def _check_redirect_uri(frontend_url: str, public_path: str, redirect_uri: str) -> None:
+    """state の Cookie（FRONTEND_URL のホストの <パス>/auth）がコールバックに届くかを確かめる。"""
+    frontend, redirect = urlsplit(frontend_url), urlsplit(redirect_uri)
+    state_path = public_path + "/auth/"
+    if redirect.hostname != frontend.hostname or not redirect.path.startswith(state_path):
+        raise ConfigError(
+            "SPOTIFY_REDIRECT_URI は FRONTEND_URL と同じホストの "
+            f"{state_path} の下にしてください（state の Cookie が届かないため）: {redirect_uri}"
+        )
     expected = frontend_url + "/auth/callback"
     if redirect_uri != expected:
-        # state の Cookie は FRONTEND_URL のパスの下に発行するため、ずれるとコールバックに届かない
+        # Cookie はスキーム・ポートを区別しないため届くが、想定の構成と違う
         logger.warning(
             "SPOTIFY_REDIRECT_URI (%s) が FRONTEND_URL + /auth/callback (%s) と違います",
             redirect_uri,
@@ -93,7 +101,7 @@ def load_settings(*, web: bool = True) -> Settings:
         _require_https_unless_loopback("FRONTEND_URL", frontend_url)
         _require_https_unless_loopback("SPOTIFY_REDIRECT_URI", redirect_uri)
         cookie_secure = _cookie_secure(frontend_url)
-        _warn_redirect_mismatch(frontend_url, redirect_uri)
+        _check_redirect_uri(frontend_url, public_path, redirect_uri)
     return Settings(
         spotify_client_id=os.environ.get("SPOTIFY_CLIENT_ID", ""),
         spotify_client_secret=os.environ.get("SPOTIFY_CLIENT_SECRET", ""),

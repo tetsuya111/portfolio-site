@@ -328,7 +328,6 @@ Resources:
               ViewerProtocolPolicy: https-only
               AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
               CachedMethods: [GET, HEAD]
-              Compress: true
               # マネージドポリシー: CachingDisabled / AllViewerExceptHostHeader / SecurityHeadersPolicy
               CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
               OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
@@ -341,7 +340,6 @@ Resources:
               ViewerProtocolPolicy: https-only
               AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
               CachedMethods: [GET, HEAD]
-              Compress: true
               CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
               OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
               ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03
@@ -363,13 +361,23 @@ Resources:
               FunctionARN: !GetAtt DirectoryIndexFunction.FunctionMetadata.FunctionARN
         # エラー応答の設定はディストリビューション全体（S3 と VPS の両方）に効く。
         # 存在しないキーは 404（SiteBucketPolicy の ListBucket）で、404 だけを 404 ページにする。
-        # それ以外はバックエンドの応答（403 の CSRF の拒否など）をそのまま返し、キャッシュもしない
+        # それ以外はバックエンドの応答（403 の CSRF の拒否など）をそのまま返す。
+        # CloudFront が既定でキャッシュするエラー（既定 10 秒）は、404 も含めてすべてキャッシュしない
+        # （バックエンドが一時的に返したエラーを、復旧後に他の人へ返さないため）
         CustomErrorResponses:
           - ErrorCode: 400
             ErrorCachingMinTTL: 0
           - ErrorCode: 403
             ErrorCachingMinTTL: 0
+          - ErrorCode: 405
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 414
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 416
+            ErrorCachingMinTTL: 0
           - ErrorCode: 500
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 501
             ErrorCachingMinTTL: 0
           - ErrorCode: 502
             ErrorCachingMinTTL: 0
@@ -380,7 +388,7 @@ Resources:
           - ErrorCode: 404
             ResponseCode: 404
             ResponsePagePath: /404.html
-            ErrorCachingMinTTL: 60
+            ErrorCachingMinTTL: 0
         WebACLId: !If [UseWaf, !GetAtt WebAcl.Arn, !Ref "AWS::NoValue"]
         ViewerCertificate:
           AcmCertificateArn: !Ref Certificate

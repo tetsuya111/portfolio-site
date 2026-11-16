@@ -79,6 +79,7 @@ def test_unsupported_scheme_rejected(monkeypatch):
 @pytest.mark.parametrize("url", ["http://localhost:3000", "http://[::1]:3000"])
 def test_http_loopback_allowed(monkeypatch, url):
     monkeypatch.setenv("FRONTEND_URL", url)
+    monkeypatch.setenv("SPOTIFY_REDIRECT_URI", url + "/auth/callback")
     assert load_settings().frontend_url == url
 
 
@@ -110,8 +111,25 @@ def test_frontend_url_with_query_or_fragment_rejected(monkeypatch, suffix):
         load_settings()
 
 
-def test_redirect_uri_mismatch_warns(monkeypatch, caplog):
-    _site(monkeypatch, redirect="https://site.example/auth/callback")
+@pytest.mark.parametrize(
+    "redirect",
+    [
+        # state の Cookie（<パス>/auth）がコールバックに届かない
+        "https://site.example/auth/callback",
+        "https://other.example/apps/spotify-billboard-playlist/auth/callback",
+        "https://site.example/apps/spotify-billboard-playlist/authx/callback",
+    ],
+)
+def test_redirect_uri_outside_state_cookie_rejected(monkeypatch, redirect):
+    _site(monkeypatch, redirect=redirect)
+    with pytest.raises(ConfigError):
+        load_settings()
+
+
+def test_redirect_uri_mismatch_within_cookie_scope_warns(monkeypatch, caplog):
+    # Cookie はポートを区別しないため届くが、想定と違う構成なので警告だけ出す
+    monkeypatch.setenv("FRONTEND_URL", "http://127.0.0.1:3000")
+    monkeypatch.setenv("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8000/auth/callback")
     with caplog.at_level("WARNING", logger="app.config"):
         load_settings()
     assert "SPOTIFY_REDIRECT_URI" in caplog.text

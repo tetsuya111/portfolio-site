@@ -119,16 +119,16 @@ npm run build   # next build
    ```
 
    - `FRONTEND_URL` はサイトのドメインにフロントエンドのパスを付けた URL（末尾の `/` なし）。`Origin` の確認はこのオリジン（`https://portfolio.example.com`）で行い、Cookie はこのパスの下（state は `/apps/spotify-billboard-playlist/auth`、セッションは `/apps/spotify-billboard-playlist/`）に発行する。ログイン後はこの URL + `/` に戻る。
-   - `SPOTIFY_REDIRECT_URI` は `FRONTEND_URL` + `/auth/callback`（違うと起動時に警告が出て、ログインが失敗する）。VPS のドメインではなくサイトのドメインにする。
+   - `SPOTIFY_REDIRECT_URI` は `FRONTEND_URL` + `/auth/callback`。VPS のドメインではなくサイトのドメインにする（state の Cookie が届かないため、`FRONTEND_URL` と違うホストや `<パス>/auth/` の外にするとバックエンドが起動しない）。
    - `COOKIE_SECURE` は指定しない（https なので Secure が付く）。
    - 変えたら `docker compose up -d spotify-billboard-playlist` で作り直す。
 2. **Spotify Developer Dashboard**: アプリの **Redirect URIs** に手順1の `SPOTIFY_REDIRECT_URI` を追加する。開発モードのアプリは **User Management** に登録したユーザーしかログインできないため、試してもらうアカウントを登録する（登録していないアカウントは Spotify の画面でエラーになる）。
 3. **CloudFront**: サイトのスタックのパラメーター `BackendDomainName` に VPS のドメイン（`vps.example.com`）を入れて `aws cloudformation deploy` する（[portfolio-site/infra/README.md](../../portfolio-site/infra/README.md#パラメーター)）。dev のスタックも同じ VPS を指してよいが、`FRONTEND_URL` は1つしか指定できないため、ログインできるのは `.env` に書いたサイトだけ。
-4. **フロントエンド**: [portfolio-site/apps/apps.json](../../portfolio-site/apps/apps.json) の `"mock": false` のまま、サイトをデプロイする（`next build` が API・認証のパスに `/apps/spotify-billboard-playlist` を付ける）。
+4. **フロントエンド**: [portfolio-site/apps/apps.json](../../portfolio-site/apps/apps.json) の `"mock": false` のまま、サイトをデプロイする（`next build` が API・認証のパスに `/apps/spotify-billboard-playlist` を付ける）。**手順3のスタックの更新を先に行う**（`BackendDomainName` が空のままだと API が S3 に届いて 404 になり、画面にエラーが出る。VPS を用意できない間は `"mock": true` に戻す）。
 5. **動作確認**: サイトの `/apps/spotify-billboard-playlist/` を開き、ログイン → Spotify で許可 → 同じページに「ログイン中」で戻る → チャートの URL を入れてプレイリストを作成 →「Spotifyで開く」→ 再読み込みしてもログイン中 → ログアウトで「未ログイン」に戻る、を確かめる。
 
 制限:
 
 - セッションはバックエンドのメモリーに持つため、コンテナの再起動・作り直しでログインが切れる。
-- CloudFront のエラーページの設定はサイト全体に効くため、存在しない API（404）は JSON ではなくサイトの 404 ページになる（画面には「エラーが発生しました（HTTP 404）」と出る）。それ以外のエラー（400・401・403・429・5xx）はバックエンドの応答のまま届き、キャッシュもされない。
+- CloudFront のエラーページの設定はサイト全体に効くため、存在しない API（404）は JSON ではなくサイトの 404 ページになる（画面には「エラーが発生しました（HTTP 404）」と出る）。それ以外のエラー（400・401・403・429・5xx など）はバックエンドの応答のまま届く。エラー（404 を含む）は CloudFront にキャッシュされない。
 - VPS へ直接（`https://vps.example.com/spotify-billboard-playlist/...`）来た状態を変えるリクエストは、`Origin` がサイトと違うため 403 になる。

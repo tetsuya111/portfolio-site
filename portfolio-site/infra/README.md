@@ -32,7 +32,7 @@ flowchart LR
 | `Certificate` | ACM 証明書 | `DomainName` の証明書。DNS 検証で、検証用レコードはホストゾーンに自動作成される |
 | `DirectoryIndexFunction` | CloudFront Function | `/about/` や `/about` へのリクエストを `/about/index.html` に置き換える（Astro の出力形式に合わせる） |
 | `BackendPathFunction` | CloudFront Function | `BackendDomainName` を指定したときだけ。VPS へ転送するパスの先頭の `/apps` を取り除く（`/apps/<slug>/api/...` → `/<slug>/api/...`） |
-| `Distribution` | CloudFront | HTTPS へリダイレクト、TLS 1.2 以上、HTTP/2・HTTP/3、IPv6。キャッシュはマネージドの CachingOptimized、レスポンスヘッダーは SecurityHeadersPolicy。404 は `/404.html` を 404 で返す。400・403・5xx はページを置き換えず、キャッシュしない（バックエンドの応答をそのまま返すため）。`BackendDomainName` を指定すると、`/apps/spotify-billboard-playlist/api/*`・`/auth/*` を VPS（https のみ、読み取り 60 秒）へキャッシュせずに転送する（Host 以外のヘッダー・Cookie・クエリを渡す。手順は [spotify-billboard-playlist の README](../../portfolios/spotify-billboard-playlist/README.md#ポートフォリオサイトで公開する)） |
+| `Distribution` | CloudFront | HTTPS へリダイレクト、TLS 1.2 以上、HTTP/2・HTTP/3、IPv6。キャッシュはマネージドの CachingOptimized、レスポンスヘッダーは SecurityHeadersPolicy。404 は `/404.html` を 404 で返す。ほかのエラー（400・403・5xx など）はページを置き換えずにバックエンドの応答をそのまま返す。エラーは 404 を含めて CloudFront にキャッシュしない（バックエンドが一時的に返したエラーを復旧後に返さないため）。`BackendDomainName` を指定すると、`/apps/spotify-billboard-playlist/api/*`・`/auth/*` を VPS（https のみ、読み取り 60 秒）へキャッシュせずに転送する（Host 以外のヘッダー・Cookie・クエリを渡す。手順は [spotify-billboard-playlist の README](../../portfolios/spotify-billboard-playlist/README.md#ポートフォリオサイトで公開する)） |
 | `AliasRecordA` / `AliasRecordAAAA` | Route 53 | `DomainName` から CloudFront へのエイリアス |
 | `BuildLogGroup` / `TestLogGroup` | CloudWatch Logs | CodeBuild のログ（デプロイ用・テスト用で分ける。30日保存） |
 | `CodeBuildTestRole` | IAM ロール | テスト用。`TestLogGroup` への書き込みだけを許可（S3・CloudFront には触れない）。このアカウントの `<スタック名>-test` からだけ引き受けられる |

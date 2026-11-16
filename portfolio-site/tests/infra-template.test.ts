@@ -90,13 +90,14 @@ describe("infra/template.yaml", () => {
     expect(d.DefaultCacheBehavior.FunctionAssociations[0].EventType).toBe("viewer-request");
     // 404 だけを 404 ページにする（403 はバックエンドの CSRF の拒否などをそのまま返すため置き換えない）
     const paged = d.CustomErrorResponses.filter((e: any) => e.ResponsePagePath);
-    expect(paged).toEqual([{ ErrorCode: 404, ResponseCode: 404, ResponsePagePath: "/404.html", ErrorCachingMinTTL: 60 }]);
+    expect(paged).toEqual([{ ErrorCode: 404, ResponseCode: 404, ResponsePagePath: "/404.html", ErrorCachingMinTTL: 0 }]);
   });
 
   it("does not cache backend errors and does not replace them with the 404 page", () => {
     const d = one("AWS::CloudFront::Distribution").Properties.DistributionConfig;
     const unpaged = d.CustomErrorResponses.filter((e: any) => !e.ResponsePagePath);
-    expect(unpaged.map((e: any) => e.ErrorCode)).toEqual([400, 403, 500, 502, 503, 504]);
+    // CloudFront が既定でキャッシュするエラーコードすべて
+    expect(unpaged.map((e: any) => e.ErrorCode)).toEqual([400, 403, 405, 414, 416, 500, 501, 502, 503, 504]);
     for (const e of unpaged) {
       expect(e.ErrorCachingMinTTL).toBe(0);
       expect(e.ResponseCode).toBeUndefined();
@@ -159,6 +160,8 @@ describe("infra/template.yaml", () => {
         expect(b.CachePolicyId).toBe("4135ea2d-6df8-44a3-9df3-4b5a84be39ad");
         expect(b.OriginRequestPolicyId).toBe("b689b0a8-53d0-40ab-baf2-68738e2966ac");
         expect(b.ResponseHeadersPolicyId).toBe(d.DefaultCacheBehavior.ResponseHeadersPolicyId);
+        // CachingDisabled は圧縮を有効にしないため、Compress を付けても効かない
+        expect(b.Compress).toBeUndefined();
         expect(b.FunctionAssociations).toEqual([
           { EventType: "viewer-request", FunctionARN: { "Fn::GetAtt": ["BackendPathFunction", "FunctionMetadata.FunctionARN"] } },
         ]);
