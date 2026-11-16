@@ -12,7 +12,7 @@
       "buildArgs": [],
       "mock": false,
       "env": {
-        "NEXT_PUBLIC_API_BASE_URL": "https://free-junk-porn.site/task-box-it-develop"
+        "NEXT_PUBLIC_API_BASE_URL": "http://free-junk-porn.site/task-box-it-develop"
       }
     },
     {
@@ -21,7 +21,7 @@
       "buildArgs": [],
       "mock": false,
       "env": {
-        "NEXT_PUBLIC_API_URL": "https://free-junk-porn.site/media-feed/api"
+        "NEXT_PUBLIC_API_URL": "http://free-junk-porn.site/media-feed/api"
       }
     }
   ]
