@@ -1,0 +1,308 @@
+:root {
+  --color-bg: #faf7f2;
+  --color-surface: #ffffff;
+  --color-text: #2b2620;
+  --color-muted: #6b6258;
+  --color-border: #e4ddd2;
+  --color-accent: #d9480f;
+  --color-accent-strong: #a8370a;
+  --color-accent-soft: #fff0e6;
+  --color-error: #b42318;
+  --color-error-soft: #fef3f2;
+  --color-pin-selected: #1d4ed8;
+  --radius: 12px;
+  --shadow: 0 8px 24px rgb(43 38 32 / 0.16);
+  --detail-width: 360px;
+
+  font-family:
+    system-ui, -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo,
+    sans-serif;
+  color: var(--color-text);
+  line-height: 1.6;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+}
+
+/* ===== 全体レイアウト：ヘッダー・ジャンル・状態・地図を縦に並べ、地図が残りの高さを使う ===== */
+.layout {
+  display: grid;
+  grid-template-rows: auto auto auto 1fr;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.site-header {
+  padding: 12px 16px 4px;
+}
+
+.site-header__title {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.site-header__lead {
+  margin: 2px 0 0;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+/* ===== ジャンルボタン（スマホでは横スクロール） ===== */
+.genre-bar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.genre-button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 6px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+
+.genre-button:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+.genre-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.genre-button:focus-visible,
+.shop-detail__close:focus-visible,
+.shop-detail a:focus-visible {
+  outline: 3px solid var(--color-pin-selected);
+  outline-offset: 2px;
+}
+
+.genre-button--active {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ===== 状態表示 ===== */
+.status {
+  min-height: 1.6em;
+  padding: 0 16px 8px;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+.status[data-state="error"] {
+  margin: 0 16px 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--color-error-soft);
+  color: var(--color-error);
+}
+
+.status p,
+.status ul {
+  margin: 0;
+}
+
+.status ul {
+  padding-left: 1.25em;
+}
+
+/* ===== 地図と詳細パネル ===== */
+.content {
+  position: relative;
+  display: flex;
+  min-height: 0;
+}
+
+.map {
+  flex: 1;
+  min-width: 0;
+  background: #e9e4dc;
+}
+
+/* 地図が使えないときは、空の灰色の領域に案内を出す */
+.map[data-state="unavailable"]::before {
+  content: "地図を表示できません（上のメッセージを確認してください）";
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 16px;
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.shop-detail {
+  width: var(--detail-width);
+  flex: none;
+  overflow-y: auto;
+  padding: 16px;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.shop-detail[hidden] {
+  display: none;
+}
+
+.shop-detail__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.shop-detail__name {
+  flex: 1;
+  margin: 0;
+  font-size: 1.125rem;
+  overflow-wrap: anywhere;
+}
+
+.shop-detail__close {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.shop-detail__close:hover {
+  background: var(--color-border);
+}
+
+.shop-detail p {
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.shop-detail__address {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+.shop-detail__rating {
+  color: var(--color-accent-strong);
+  font-weight: 600;
+}
+
+.shop-detail a {
+  color: var(--color-accent-strong);
+}
+
+.shop-detail__hours h3 {
+  margin: 12px 0 4px;
+  font-size: 0.875rem;
+}
+
+.shop-detail__hours ul {
+  margin: 0;
+  padding-left: 1.25em;
+  font-size: 0.8125rem;
+}
+
+.shop-detail .shop-detail__maps-link {
+  display: block;
+  margin-top: 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+}
+
+.shop-detail .shop-detail__maps-link:hover {
+  background: var(--color-accent-strong);
+}
+
+.shop-detail .shop-detail__attribution {
+  margin-top: 12px;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+}
+
+/* ===== ピン（Advanced Marker の中身）。下端が店舗の位置になる ===== */
+.pin {
+  width: 26px;
+  height: 26px;
+  margin-bottom: 4px;
+  border: 2px solid #fff;
+  border-radius: 50% 50% 50% 0;
+  background: var(--color-accent);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.35);
+  transform: rotate(-45deg);
+  transform-origin: center;
+  cursor: pointer;
+  transition:
+    transform 0.15s,
+    background-color 0.15s;
+}
+
+.pin:hover {
+  transform: rotate(-45deg) scale(1.15);
+}
+
+.pin--selected,
+.pin--selected:hover {
+  background: var(--color-pin-selected);
+  transform: rotate(-45deg) scale(1.35);
+}
+
+/* ===== スマホ：詳細パネルは地図の上に重なる下部シートにする ===== */
+@media (max-width: 767px) {
+  .site-header__lead {
+    font-size: 0.8125rem;
+  }
+
+  .shop-detail {
+    position: absolute;
+    inset: auto 0 0 0;
+    width: auto;
+    max-height: 60%;
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+    border-radius: var(--radius) var(--radius) 0 0;
+    box-shadow: var(--shadow);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .genre-button,
+  .pin {
+    transition: none;
+  }
+}
