@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { ApiError, createPlaylist, fetchChart, getMe, logout } from "@/lib/api";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ApiError, createPlaylist, fetchChart, getMe, loginPath, logout, withBase } from "@/lib/api";
 
 function mockFetch(status: number, body: unknown) {
   const fn = vi.fn().mockResolvedValue(
@@ -165,5 +165,41 @@ describe("api", () => {
     const err = await getMe().catch((e) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(0);
+  });
+});
+
+describe("base path", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("未設定ならルートからのパスのまま", () => {
+    vi.stubEnv("NEXT_PUBLIC_BASE_PATH", "");
+    expect(withBase("/api/me")).toBe("/api/me");
+  });
+
+  it("NEXT_PUBLIC_BASE_PATH を API・ログアウトのパスの先頭に付ける", async () => {
+    vi.stubEnv("NEXT_PUBLIC_BASE_PATH", "/apps/x");
+    const fn = mockFetchSequence(
+      [200, LOGGED_IN],
+      [200, { id: 1, url: "u", title: "", tracks: [] }],
+      [200, { playlist_id: "p", url: "u", added: 0, not_found: [] }],
+      [204, undefined],
+    );
+    await getMe();
+    await fetchChart("x");
+    await createPlaylist("n", []);
+    await logout();
+    expect(fn.mock.calls.map((c) => c[0])).toEqual([
+      "/apps/x/api/me",
+      "/apps/x/api/charts",
+      "/apps/x/api/playlists",
+      "/apps/x/auth/logout",
+    ]);
+  });
+
+  it("ログインのリンクにも付ける", () => {
+    vi.stubEnv("NEXT_PUBLIC_BASE_PATH", "/apps/x");
+    expect(loginPath()).toBe("/apps/x/auth/login");
   });
 });

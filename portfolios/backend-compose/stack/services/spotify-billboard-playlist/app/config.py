@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -11,6 +12,8 @@ DEFAULT_DB_PATH = str(Path(__file__).resolve().parent.parent / "data" / "app.db"
 DEFAULT_REDIRECT_URI = "http://127.0.0.1:3000/auth/callback"
 DEFAULT_FRONTEND_URL = "http://127.0.0.1:3000"
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+logger = logging.getLogger(__name__)
 
 
 class ConfigError(ValueError):
@@ -26,6 +29,8 @@ class Settings:
     frontend_url: str = DEFAULT_FRONTEND_URL
     db_path: str = DEFAULT_DB_PATH
     cookie_secure: bool = False
+    # 公開時のパスの接頭辞（FRONTEND_URL のパス。例 /apps/<slug>）。Cookie のパスに使う
+    public_path: str = ""
 
 
 def _is_loopback(url: str) -> bool:
@@ -38,6 +43,25 @@ def _require_https_unless_loopback(name: str, url: str) -> None:
     if scheme == "https" or (scheme == "http" and _is_loopback(url)):
         return
     raise ConfigError(f"{name} は https で指定してください（http はループバックのみ可）: {url}")
+
+
+def _public_path(frontend_url: str) -> str:
+    """FRONTEND_URL のパス（末尾の / なし）。バックエンドはフロントエンドと同じパスの下に置く。"""
+    parts = urlsplit(frontend_url)
+    if parts.query or parts.fragment:
+        raise ConfigError(f"FRONTEND_URL にクエリ・フラグメントは付けられません: {frontend_url}")
+    return parts.path.rstrip("/")
+
+
+def _warn_redirect_mismatch(frontend_url: str, redirect_uri: str) -> None:
+    expected = frontend_url + "/auth/callback"
+    if redirect_uri != expected:
+        # state の Cookie は FRONTEND_URL のパスの下に発行するため、ずれるとコールバックに届かない
+        logger.warning(
+            "SPOTIFY_REDIRECT_URI (%s) が FRONTEND_URL + /auth/callback (%s) と違います",
+            redirect_uri,
+            expected,
+        )
 
 
 def _cookie_secure(frontend_url: str) -> bool:
@@ -63,10 +87,13 @@ def load_settings(*, web: bool = True) -> Settings:
     redirect_uri = os.environ.get("SPOTIFY_REDIRECT_URI", DEFAULT_REDIRECT_URI)
     frontend_url = os.environ.get("FRONTEND_URL", DEFAULT_FRONTEND_URL).rstrip("/")
     cookie_secure = False
+    public_path = ""
     if web:
+        public_path = _public_path(frontend_url)
         _require_https_unless_loopback("FRONTEND_URL", frontend_url)
         _require_https_unless_loopback("SPOTIFY_REDIRECT_URI", redirect_uri)
         cookie_secure = _cookie_secure(frontend_url)
+        _warn_redirect_mismatch(frontend_url, redirect_uri)
     return Settings(
         spotify_client_id=os.environ.get("SPOTIFY_CLIENT_ID", ""),
         spotify_client_secret=os.environ.get("SPOTIFY_CLIENT_SECRET", ""),
@@ -74,4 +101,5 @@ def load_settings(*, web: bool = True) -> Settings:
         frontend_url=frontend_url,
         db_path=os.environ.get("DB_PATH", DEFAULT_DB_PATH),
         cookie_secure=cookie_secure,
+        public_path=public_path,
     )
