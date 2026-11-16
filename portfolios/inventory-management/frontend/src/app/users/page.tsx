@@ -14,13 +14,24 @@ function Users() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>("staff");
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     apiFetch<User[]>("/users")
-      .then(setUsers)
-      .catch((e) => setError(e instanceof ApiError ? e.message : "読み込みに失敗しました。"));
+      .then((items) => {
+        if (cancelled) return;
+        setUsers(items);
+        setLoadError(null);
+      })
+      .catch((e) => {
+        if (!cancelled) setLoadError(e instanceof ApiError ? e.message : "読み込みに失敗しました。");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [reloadKey]);
 
   async function handleSubmit(event: FormEvent) {
@@ -49,7 +60,9 @@ function Users() {
     <div className="grid cols-2">
       <section>
         <h2>登録済みのユーザー</h2>
-        {users === null ? (
+        {loadError ? (
+          <p className="alert">{loadError}</p>
+        ) : users === null ? (
           <p className="muted">読み込み中…</p>
         ) : (
           <div className="table-wrap">

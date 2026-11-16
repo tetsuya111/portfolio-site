@@ -15,14 +15,26 @@ function RecordForm() {
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [result, setResult] = useState<Movement | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   // 登録のたび（成功・失敗とも）に読み直し、他の利用者の入出庫を在庫数の表示に反映する。
   useEffect(() => {
+    // 連続して登録したとき、古い読み込みの結果で上書きしないよう、最新の読み込みだけを反映する
+    let cancelled = false;
     apiFetch<Product[]>("/products")
-      .then(setProducts)
-      .catch((e) => setError(e instanceof ApiError ? e.message : "読み込みに失敗しました。"));
+      .then((items) => {
+        if (cancelled) return;
+        setProducts(items);
+        setLoadError(null);
+      })
+      .catch((e) => {
+        if (!cancelled) setLoadError(e instanceof ApiError ? e.message : "商品の読み込みに失敗しました。");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [reloadKey]);
 
   async function handleSubmit(event: FormEvent) {
@@ -46,7 +58,9 @@ function RecordForm() {
     }
   }
 
-  if (products === null && !error) return <p className="muted">読み込み中…</p>;
+  if (products === null) {
+    return loadError ? <p className="alert">{loadError}</p> : <p className="muted">読み込み中…</p>;
+  }
   if (products?.length === 0) return <p className="muted">商品が登録されていません。先に商品を登録してください。</p>;
 
   return (
@@ -88,6 +102,7 @@ function RecordForm() {
           <input maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
         </label>
       </div>
+      {loadError && <p className="alert">{loadError}（在庫数の表示が古い可能性があります）</p>}
       {error && (
         <p className="alert" role="alert">
           {error}

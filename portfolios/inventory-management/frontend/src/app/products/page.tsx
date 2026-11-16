@@ -14,7 +14,8 @@ function ProductList() {
   const [products, setProducts] = useState<Product[] | null>(null);
   const [keyword, setKeyword] = useState("");
   const [query, setQuery] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null); // 一覧の読み込みのエラー
+  const [actionError, setActionError] = useState<string | null>(null); // 削除のエラー
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -26,7 +27,10 @@ function ProductList() {
         setError(null);
       })
       .catch((e) => {
-        if (!cancelled) setError(e instanceof ApiError ? e.message : "読み込みに失敗しました。");
+        if (cancelled) return;
+        // 古い検索条件の結果を残さない
+        setProducts([]);
+        setError(e instanceof ApiError ? e.message : "読み込みに失敗しました。");
       });
     return () => {
       cancelled = true;
@@ -35,6 +39,7 @@ function ProductList() {
 
   function handleSearch(event: FormEvent) {
     event.preventDefault();
+    setActionError(null);
     setQuery(keyword.trim());
   }
 
@@ -42,9 +47,12 @@ function ProductList() {
     if (!window.confirm(`「${product.name}」を削除しますか？（入出庫履歴は残ります）`)) return;
     try {
       await apiFetch(`/products/${product.id}`, { method: "DELETE" });
+      setActionError(null);
       setReloadKey((k) => k + 1);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "削除に失敗しました。");
+      setActionError(e instanceof ApiError ? e.message : "削除に失敗しました。");
+      // 他の管理者が先に削除した（404）場合などに、一覧を最新にする
+      setReloadKey((k) => k + 1);
     }
   }
 
@@ -63,9 +71,9 @@ function ProductList() {
           商品を登録
         </Link>
       </form>
-      {error && (
+      {(error || actionError) && (
         <p className="alert" role="alert">
-          {error}
+          {actionError ?? error}
         </p>
       )}
       {products === null ? (

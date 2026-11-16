@@ -18,6 +18,9 @@ from app.schemas import MovementOut, Summary, SummaryItem
 
 logger = logging.getLogger(__name__)
 
+# 在庫不足の判定と読み直しの間に在庫が増えたときに、出庫をやり直す回数
+MAX_RETRIES = 3
+
 
 class ProductNotFound(Exception):
     pass
@@ -62,9 +65,18 @@ def record_movement(
         )
         # RETURNING で更新後の在庫数を同じ文で受け取る（0行更新なら None）
         stock_after = db.execute(stmt).scalar_one_or_none()
+        current: int | None = None
+        for _ in range(MAX_RETRIES):
+            if stock_after is not None:
+                break
+            current = db.scalar(select(Product.stock).where(active))
+            if current is None or current < quantity:
+                break
+            # UPDATE と読み直しの間に入庫があり、今なら出庫できる。矛盾したメッセージを
+            # 返さないよう、条件付き UPDATE をやり直す。
+            stock_after = db.execute(stmt).scalar_one_or_none()
 
         if stock_after is None:
-            current = db.scalar(select(Product.stock).where(active))
             db.rollback()
             if current is None:
                 raise ProductNotFound(product_id)
