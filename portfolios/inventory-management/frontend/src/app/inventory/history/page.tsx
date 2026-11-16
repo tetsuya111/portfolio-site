@@ -50,7 +50,10 @@ function History() {
         setError(null);
       })
       .catch((e) => {
-        if (!cancelled) setError(e instanceof ApiError ? e.message : "読み込みに失敗しました。");
+        if (cancelled) return;
+        // 古い条件の結果を残すと新しい条件の結果に見えるため、表示を消す
+        setPage(null);
+        setError(e instanceof ApiError ? e.message : "読み込みに失敗しました。");
       });
     return () => {
       cancelled = true;
@@ -120,7 +123,7 @@ function History() {
         </p>
       )}
       {!page ? (
-        <p className="muted">読み込み中…</p>
+        error ? null : <p className="muted">読み込み中…</p>
       ) : page.items.length === 0 ? (
         <p className="muted">データがありません。</p>
       ) : (

@@ -44,3 +44,11 @@ def test_unknown_env_is_checked_like_production(env):
 @pytest.mark.parametrize("env", ["development", "test", "Development "])
 def test_dev_and_test_allow_default_secret(env):
     Settings(app_env=env).validate_for_env()
+
+
+def test_create_app_refuses_low_bcrypt_rounds_in_production(monkeypatch):
+    from app import security
+
+    monkeypatch.setattr(security, "BCRYPT_ROUNDS", 4)
+    with pytest.raises(ValueError):
+        create_app(Settings(app_env="production", jwt_secret="x" * 40))

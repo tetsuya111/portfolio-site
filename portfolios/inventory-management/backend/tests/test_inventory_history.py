@@ -129,3 +129,19 @@ def test_history_date_range_uses_utc_offset(client, db_session, setup):
 def test_history_utc_offset_out_of_range_422(client, setup, offset):
     _, headers = setup
     assert history(client, headers, utc_offset_minutes=offset).status_code == 422
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"date_to": "9999-12-31"},
+        {"date_from": "0001-01-01", "utc_offset_minutes": 540},
+        {"date_from": "9999-12-31", "utc_offset_minutes": -840},
+    ],
+)
+def test_history_extreme_dates_do_not_500(client, db_session, setup, params):
+    user, headers = setup
+    p = create_product(db_session)
+    add_movement(db_session, user, p, "in", 1, datetime(2026, 1, 1, tzinfo=UTC))
+    res = history(client, headers, **params)
+    assert res.status_code == 200

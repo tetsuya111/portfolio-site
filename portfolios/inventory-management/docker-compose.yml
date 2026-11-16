@@ -5,7 +5,8 @@ services:
   backend:
     build: ./backend
     ports:
-      - "8000:8000"
+      # 開発用の秘密鍵で動くため、このマシンからだけ接続できるようにする
+      - "127.0.0.1:8000:8000"
     environment:
       # 開発用。本番では APP_ENV=production（Dockerfile の既定）と32文字以上の JWT_SECRET を指定する。
       APP_ENV: development

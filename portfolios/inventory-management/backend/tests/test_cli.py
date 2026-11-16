@@ -2,6 +2,7 @@ import pytest
 from sqlalchemy import func, select
 
 from app import cli
+from app.config import Settings
 from app.models import Product, StockMovement, User
 
 pytestmark = pytest.mark.usefixtures("engine")
@@ -54,3 +55,26 @@ def test_cli_create_admin_prompts_when_no_password(settings, monkeypatch):
     monkeypatch.delenv("INVENTORY_ADMIN_PASSWORD", raising=False)
     monkeypatch.setattr(cli.getpass, "getpass", lambda prompt: "password123")
     assert cli.main(["create-admin", "--username", "prompted"], settings=settings) == 0
+
+
+def test_cli_seed_demo_refuses_existing_demo_sku(settings, db_session):
+    db_session.add(Product(sku="ST-001", name="本物の商品", stock=7))
+    db_session.commit()
+    assert cli.main(["seed-demo"], settings=settings) == 1
+    db_session.expire_all()
+    assert db_session.scalar(select(func.count(User.id))) == 0
+    assert db_session.scalar(select(Product.stock).where(Product.sku == "ST-001")) == 7
+
+
+def test_cli_seed_demo_skips_when_any_demo_user_exists(settings, db_session):
+    from tests.factories import create_user
+
+    create_user(db_session, username="demo-staff")
+    assert cli.main(["seed-demo"], settings=settings) == 0
+    assert db_session.scalar(select(func.count(Product.id))) == 0
+
+
+def test_cli_seed_demo_refused_in_production(tmp_path, engine):
+    prod = Settings(app_env="production", database_url=str(engine.url), jwt_secret="x" * 40)
+    assert cli.main(["seed-demo"], settings=prod) == 1
+    assert cli.main(["seed-demo", "--allow-production"], settings=prod) == 0

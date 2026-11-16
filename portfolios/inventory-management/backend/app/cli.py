@@ -72,26 +72,35 @@ def _create_admin(db: Session, username: str, password: str) -> int:
 
 
 def _seed_demo(db: Session) -> int:
-    if db.scalar(select(User.id).where(User.username == DEMO_USERS[0][0])) is not None:
+    """デモデータを作る。書き込む前にすべての前提を確認し、途中で失敗して半端に残らないようにする。"""
+    demo_names = [name for name, _ in DEMO_USERS]
+    if db.scalar(select(User.id).where(User.username.in_(demo_names))) is not None:
         print("デモデータは作成済みです。")
         return 0
+    demo_skus = [sku for sku, *_ in DEMO_PRODUCTS]
+    taken = db.scalars(select(Product.sku).where(Product.sku.in_(demo_skus))).all()
+    if taken:
+        # 実際の商品（削除済みを含む）の在庫をデモの入出庫で動かさないため、作成しない。
+        print(
+            f"デモ用の商品コードが既に使われているため作成しません: {', '.join(taken)}",
+            file=sys.stderr,
+        )
+        return 1
     users = [
         create_user(db, UserCreate(username=name, password=DEMO_PASSWORD, role=role))
         for name, role in DEMO_USERS
     ]
     products: dict[str, Product] = {}
     for sku, name, category, unit, price, reorder in DEMO_PRODUCTS:
-        product = db.scalar(select(Product).where(Product.sku == sku))
-        if product is None:
-            product = Product(
-                sku=sku,
-                name=name,
-                category=category,
-                unit=unit,
-                unit_price=price,
-                reorder_point=reorder,
-            )
-            db.add(product)
+        product = Product(
+            sku=sku,
+            name=name,
+            category=category,
+            unit=unit,
+            unit_price=price,
+            reorder_point=reorder,
+        )
+        db.add(product)
         products[sku] = product
     db.commit()
     for i, (sku, kind, qty) in enumerate(DEMO_MOVEMENTS):
@@ -121,10 +130,22 @@ def main(argv: Sequence[str] | None = None, settings: Settings | None = None) ->
             f"省略時は環境変数 {ADMIN_PASSWORD_ENV}、なければ入力を求める"
         ),
     )
-    sub.add_parser("seed-demo", help="デモ用のユーザー・商品・入出庫を作成する")
+    seed = sub.add_parser("seed-demo", help="デモ用のユーザー・商品・入出庫を作成する")
+    seed.add_argument(
+        "--allow-production",
+        action="store_true",
+        help="本番環境でも作成する（公開デモ用。パスワードが README に載っている点に注意）",
+    )
     args = parser.parse_args(argv)
 
     settings = settings or get_settings()
+    if args.command == "seed-demo" and settings.is_production and not args.allow_production:
+        print(
+            "本番環境ではデモデータを作成しません（公開されたパスワードの管理者ができるため）。"
+            "公開デモとして作る場合は --allow-production を付けてください。",
+            file=sys.stderr,
+        )
+        return 1
     engine = make_engine(settings.database_url)
     try:
         with make_session_factory(engine)() as db:

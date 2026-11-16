@@ -5,12 +5,14 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StringConstraints, field_validator
 
+from app.security import BCRYPT_MAX_BYTES
+
 Role = Literal["admin", "staff"]
 MovementType = Literal["in", "out"]
 
 USERNAME_PATTERN = r"^[A-Za-z0-9_-]+$"
 PASSWORD_MIN_LENGTH = 8
-PASSWORD_MAX_BYTES = 72  # bcrypt が扱える上限
+PASSWORD_MAX_BYTES = BCRYPT_MAX_BYTES  # bcrypt が扱える上限
 MAX_QUANTITY = 1_000_000
 
 

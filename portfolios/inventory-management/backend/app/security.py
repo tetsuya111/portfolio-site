@@ -14,6 +14,8 @@ JWT_ALGORITHM = "HS256"
 BCRYPT_MAX_BYTES = 72
 # コスト（既定12）。テストでは環境変数 BCRYPT_ROUNDS で下げて高速化する。
 BCRYPT_ROUNDS = int(os.environ.get("BCRYPT_ROUNDS", "12"))
+# 本番で許すコストの下限（テスト用の低い値が本番に紛れ込むのを防ぐ）
+MIN_PRODUCTION_BCRYPT_ROUNDS = 10
 
 
 def hash_password(password: str) -> str:

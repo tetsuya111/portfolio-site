@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app import security
 from app.config import Settings, get_settings
 from app.db import make_engine, make_session_factory
 from app.routers import auth, inventory, products, users
@@ -11,6 +12,9 @@ from app.routers import auth, inventory, products, users
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     settings.validate_for_env()
+    if settings.is_production and security.BCRYPT_ROUNDS < security.MIN_PRODUCTION_BCRYPT_ROUNDS:
+        minimum = security.MIN_PRODUCTION_BCRYPT_ROUNDS
+        raise ValueError(f"本番環境の BCRYPT_ROUNDS は {minimum} 以上にしてください。")
 
     app = FastAPI(
         title="在庫管理システム API",

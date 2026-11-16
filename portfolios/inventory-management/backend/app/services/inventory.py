@@ -55,10 +55,15 @@ def record_movement(
                 .where(active, Product.stock >= quantity)
                 .values(stock=Product.stock - quantity)
             )
-        stmt = stmt.values(updated_at=utcnow()).execution_options(synchronize_session=False)
-        updated = db.execute(stmt).rowcount
+        stmt = (
+            stmt.values(updated_at=utcnow())
+            .returning(Product.stock)
+            .execution_options(synchronize_session=False)
+        )
+        # RETURNING で更新後の在庫数を同じ文で受け取る（0行更新なら None）
+        stock_after = db.execute(stmt).scalar_one_or_none()
 
-        if updated == 0:
+        if stock_after is None:
             current = db.scalar(select(Product.stock).where(active))
             db.rollback()
             if current is None:
@@ -72,7 +77,6 @@ def record_movement(
             )
             raise InsufficientStock(available=current, requested=quantity)
 
-        stock_after = db.scalar(select(Product.stock).where(Product.id == product_id))
         movement = StockMovement(
             product_id=product_id,
             user_id=user.id,
@@ -128,11 +132,12 @@ def list_history(
         conditions.append(StockMovement.product_id == product_id)
     if movement_type is not None:
         conditions.append(StockMovement.type == movement_type)
-    if date_from is not None:
-        start = _start_of_day(date_from, utc_offset_minutes)
+    # 日時の範囲外（0001-01-01・9999-12-31 付近）になる境界は「制限なし」として扱う。
+    start = _start_of_day(date_from, utc_offset_minutes) if date_from else None
+    end = _start_of_day(date_to, utc_offset_minutes, next_day=True) if date_to else None
+    if start is not None:
         conditions.append(StockMovement.created_at >= start)
-    if date_to is not None:
-        end = _start_of_day(date_to + timedelta(days=1), utc_offset_minutes)
+    if end is not None:
         conditions.append(StockMovement.created_at < end)
 
     total = db.scalar(select(func.count(StockMovement.id)).where(*conditions)) or 0
@@ -146,9 +151,15 @@ def list_history(
     return list(items), total
 
 
-def _start_of_day(day: date, utc_offset_minutes: int) -> datetime:
-    """ローカル日付 day の0時を UTC の日時で返す。"""
-    return datetime.combine(day, time.min, tzinfo=UTC) - timedelta(minutes=utc_offset_minutes)
+def _start_of_day(day: date, utc_offset_minutes: int, next_day: bool = False) -> datetime | None:
+    """ローカル日付 day（next_day なら翌日）の0時を UTC の日時で返す。範囲外なら None。"""
+    try:
+        start = datetime.combine(day, time.min, tzinfo=UTC)
+        if next_day:
+            start += timedelta(days=1)
+        return start - timedelta(minutes=utc_offset_minutes)
+    except OverflowError:
+        return None
 
 
 def get_summary(db: Session) -> Summary:

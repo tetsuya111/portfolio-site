@@ -66,7 +66,7 @@ npm --prefix frontend install
 node scripts/run-backend.mjs -m app.cli seed-demo
 ```
 
-デモ用のアカウントは `demo-admin`（管理者）・`demo-staff`（一般）で、パスワードはどちらも `demo-password` です。**公開環境では必ずパスワードを変えるか、デモ用のアカウントを作らないでください。**
+デモ用のアカウントは `demo-admin`（管理者）・`demo-staff`（一般）で、パスワードはどちらも `demo-password` です。本番環境（`APP_ENV` が `development`・`test` 以外）では、`--allow-production` を付けない限り作成しません。**公開デモとして作る場合は、管理者の権限が誰にでも使える点に注意してください。**
 
 ## 起動
 
@@ -132,6 +132,11 @@ npm run build     # frontend を静的出力（frontend/out/）
 - [docs/specs/requirements.md](docs/specs/requirements.md) — 要件定義（前提と仮定・受け入れ基準・Non-Goals）
 - [docs/specs/design.md](docs/specs/design.md) — 設計（API・データモデル・検討した代替案・横断的関心事）
 - [docs/specs/tasks.md](docs/specs/tasks.md) — 実装タスク
+
+## 既知の制約
+
+- 履歴の期間の絞り込みは、画面を開いた時点のブラウザの UTC からの差で日付を解釈します。夏時間（DST）のある地域で切り替えをまたぐ期間を指定すると、境界が最大1時間ずれます（日本時間には影響しません）。
+- `docker compose` の設定は開発用で、`127.0.0.1:8000` でだけ待ち受けます。
 
 ## スコープ外（将来の拡張候補）
 
