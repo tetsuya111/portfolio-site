@@ -95,3 +95,40 @@ npm run build   # next build
 - 状態を変える POST は、フロントエンドのオリジンからのみ受け付ける（`Origin` が無い場合は `Sec-Fetch-Site: same-origin` のときだけ）。ログイン中は `GET /api/me` が返す `csrf_token` を `X-CSRF-Token` ヘッダーで送る必要がある。
 - `FRONTEND_URL`・`SPOTIFY_REDIRECT_URI` は https で指定する。http はループバックのホスト（`127.0.0.1`・`localhost`・`::1`）だけ許され、それ以外はバックエンドが起動しない。
 - Cookie の Secure 属性は `COOKIE_SECURE=true|false` で指定する。未指定なら `FRONTEND_URL` が https のときだけ付ける。`false` は `FRONTEND_URL` がループバックのときだけ指定できる。
+
+## ポートフォリオサイトで公開する
+
+ポートフォリオサイト（[portfolio-site/](../../portfolio-site/)）の `/apps/spotify-billboard-playlist/` で、VPS のバックエンドにつないで動かす手順。サイトの CloudFront が `/apps/spotify-billboard-playlist/api/*`・`/auth/*` を VPS に転送するため、ブラウザからはフロントエンドと API が同じオリジン・同じパスの下に見える（Cookie は `SameSite=Lax` のまま、CORS は使わない）。
+
+```
+ブラウザ → CloudFront（サイトのドメイン）
+            ├ /apps/spotify-billboard-playlist/        → S3（静的出力したフロントエンド）
+            └ /apps/spotify-billboard-playlist/api/*, /auth/*
+                → （先頭の /apps を取り除く）https://<VPS>/spotify-billboard-playlist/... → nginx → FastAPI（/api/..., /auth/...）
+```
+
+以下、サイトが `https://portfolio.example.com`、VPS が `vps.example.com` の場合の例。
+
+1. **VPS の `.env`**（[backend-compose](../backend-compose/README.md) の `stack/services/spotify-billboard-playlist/.env`）:
+
+   ```
+   SPOTIFY_CLIENT_ID=<Dashboard の Client ID>
+   SPOTIFY_CLIENT_SECRET=<Dashboard の Client Secret>
+   FRONTEND_URL=https://portfolio.example.com/apps/spotify-billboard-playlist
+   SPOTIFY_REDIRECT_URI=https://portfolio.example.com/apps/spotify-billboard-playlist/auth/callback
+   ```
+
+   - `FRONTEND_URL` はサイトのドメインにフロントエンドのパスを付けた URL（末尾の `/` なし）。`Origin` の確認はこのオリジン（`https://portfolio.example.com`）で行い、Cookie はこのパスの下（state は `/apps/spotify-billboard-playlist/auth`、セッションは `/apps/spotify-billboard-playlist/`）に発行する。ログイン後はこの URL + `/` に戻る。
+   - `SPOTIFY_REDIRECT_URI` は `FRONTEND_URL` + `/auth/callback`（違うと起動時に警告が出て、ログインが失敗する）。VPS のドメインではなくサイトのドメインにする。
+   - `COOKIE_SECURE` は指定しない（https なので Secure が付く）。
+   - 変えたら `docker compose up -d spotify-billboard-playlist` で作り直す。
+2. **Spotify Developer Dashboard**: アプリの **Redirect URIs** に手順1の `SPOTIFY_REDIRECT_URI` を追加する。開発モードのアプリは **User Management** に登録したユーザーしかログインできないため、試してもらうアカウントを登録する（登録していないアカウントは Spotify の画面でエラーになる）。
+3. **CloudFront**: サイトのスタックのパラメーター `BackendDomainName` に VPS のドメイン（`vps.example.com`）を入れて `aws cloudformation deploy` する（[portfolio-site/infra/README.md](../../portfolio-site/infra/README.md#パラメーター)）。dev のスタックも同じ VPS を指してよいが、`FRONTEND_URL` は1つしか指定できないため、ログインできるのは `.env` に書いたサイトだけ。
+4. **フロントエンド**: [portfolio-site/apps/apps.json](../../portfolio-site/apps/apps.json) の `"mock": false` のまま、サイトをデプロイする（`next build` が API・認証のパスに `/apps/spotify-billboard-playlist` を付ける）。
+5. **動作確認**: サイトの `/apps/spotify-billboard-playlist/` を開き、ログイン → Spotify で許可 → 同じページに「ログイン中」で戻る → チャートの URL を入れてプレイリストを作成 →「Spotifyで開く」→ 再読み込みしてもログイン中 → ログアウトで「未ログイン」に戻る、を確かめる。
+
+制限:
+
+- セッションはバックエンドのメモリーに持つため、コンテナの再起動・作り直しでログインが切れる。
+- CloudFront のエラーページの設定はサイト全体に効くため、存在しない API（404）は JSON ではなくサイトの 404 ページになる（画面には「エラーが発生しました（HTTP 404）」と出る）。それ以外のエラー（400・401・403・429・5xx）はバックエンドの応答のまま届き、キャッシュもされない。
+- VPS へ直接（`https://vps.example.com/spotify-billboard-playlist/...`）来た状態を変えるリクエストは、`Origin` がサイトと違うため 403 になる。
