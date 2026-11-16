@@ -12,7 +12,8 @@
       "buildArgs": [],
       "mock": false,
       "env": {
-        "NEXT_PUBLIC_API_BASE_URL": "http://free-junk-porn.site/task-box-it-develop"
+        "NEXT_PUBLIC_API_BASE_URL": "http://free-junk-porn.site/task-box-it-develop",
+        "NEXT_PUBLIC_GOOGLE_CLIENT_ID": "1087547011306-ms3tlk0sfsjh19n6jfem5p356abl9sc9.apps.googleusercontent.com"
       }
     },
     {

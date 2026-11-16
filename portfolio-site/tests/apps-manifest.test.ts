@@ -20,6 +20,11 @@ describe("validateManifest", () => {
     expect(validateManifest({ apps: [app({ env })] })[0].env).toEqual(env);
   });
 
+  it("accepts a non-URL value made of safe characters (OAuth client ID など)", () => {
+    const env = { NEXT_PUBLIC_GOOGLE_CLIENT_ID: "1234-abc_DEF.apps.googleusercontent.com", VITE_FLAG: "true" };
+    expect(validateManifest({ apps: [app({ env })] })[0].env).toEqual(env);
+  });
+
   it.each([
     ["apps not array", { apps: {} }],
     ["not object", null],
@@ -44,6 +49,9 @@ describe("validateManifest", () => {
     // ["env http value", { apps: [app({ env: { VITE_API_URL: "http://x.com" } })] }],
     ["env ftp value", { apps: [app({ env: { VITE_API_URL: "ftp://x.com" } })] }],
     ["env shell metachar value", { apps: [app({ env: { VITE_API_URL: "https://x.com/;rm" } })] }],
+    ["env non-URL value with space", { apps: [app({ env: { VITE_ID: "a b" } })] }],
+    ["env non-URL value with shell metachar", { apps: [app({ env: { VITE_ID: "a&calc" } })] }],
+    ["env empty value", { apps: [app({ env: { VITE_ID: "" } })] }],
     ["env non-string value", { apps: [app({ env: { VITE_API_URL: 1 } })] }],
   ])("rejects %s", (_name, data) => {
     expect(() => validateManifest(data)).toThrow();

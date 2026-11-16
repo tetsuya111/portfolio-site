@@ -1,6 +1,7 @@
 """バックエンドを docker compose のフォルダ（stack/）に登録するコマンドの入口（実装は stackgen/cli.py）。
 
-使い方: python portfolios/backend-compose/add_backend.py portfolios/<スラッグ>
+使い方: python portfolios/backend-compose/add_backend.py portfolios/<スラッグ> [--enable-api]
+      python portfolios/backend-compose/add_backend.py --regenerate
 """
 
 import sys
