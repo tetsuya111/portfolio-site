@@ -21,12 +21,15 @@ export interface AppEntry {
 const SAFE_ARG = /^[\w@./:=-]+$/;
 /**
  * env の名前は公開用の接頭辞を持つものだけ（NODE_OPTIONS・PATH などビルドの挙動を変える変数を入れさせない）。
- * 値は https の URL で、シェルを経由しても安全な文字だけ（サイトは HTTPS のため http の API は呼べない）
+ * 値は https の URL か、URL でない値（OAuth のクライアント ID・フラグなど）で、どちらもシェルを経由しても安全な文字だけ
+ * （サイトは HTTPS のため http の API は呼べない）。値はビルドで JS に埋め込まれ公開されるため、秘密情報は書かない
  */
 const ENV_NAME = /^(?:VITE_|PUBLIC_|NEXT_PUBLIC_)[A-Z0-9_]+$/;
 // TODO（テスト用に一時的に無効化）: VPS を https にしたら元に戻す。http の API は HTTPS のサイトからは混在コンテンツで呼べない
-// const ENV_VALUE = /^https:\/\/[A-Za-z0-9.\-_~/:%]+$/;
-const ENV_VALUE = /^https?:\/\/[A-Za-z0-9.\-_~/:%]+$/;
+// const ENV_URL = /^https:\/\/[A-Za-z0-9.\-_~/:%]+$/;
+const ENV_URL = /^https?:\/\/[A-Za-z0-9.\-_~/:%]+$/;
+/** URL でない値。: や / を許すと URL の規則（https に限る）を回避できるため含めない */
+const ENV_TOKEN = /^[A-Za-z0-9._-]+$/;
 
 function validateEnv(env: unknown, where: string): Record<string, string> {
   if (env === undefined) return {};
@@ -36,8 +39,10 @@ function validateEnv(env: unknown, where: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [name, value] of Object.entries(env)) {
     if (!ENV_NAME.test(name)) throw new Error(`${where}.env の名前「${name}」は VITE_・PUBLIC_・NEXT_PUBLIC_ で始まる英大文字・数字・_ にしてください`);
-    if (typeof value !== "string" || !ENV_VALUE.test(value)) {
-      throw new Error(`${where}.env.${name} は https:// で始まる URL（英数字と . - _ ~ / : % だけ）にしてください`);
+    if (typeof value !== "string" || !(ENV_URL.test(value) || ENV_TOKEN.test(value))) {
+      throw new Error(
+        `${where}.env.${name} は https:// で始まる URL（英数字と . - _ ~ / : % だけ）か、英数字と . - _ だけの値にしてください`,
+      );
     }
     out[name] = value;
   }
