@@ -21,35 +21,43 @@ _FLASK_ASSIGN = re.compile(r"^([A-Za-z_]\w*)\s*=\s*Flask\(", re.MULTILINE)
 _HAS_CMD = re.compile(r"^\s*(CMD|ENTRYPOINT)\b", re.MULTILINE | re.IGNORECASE)
 _EXPOSE = re.compile(r"^\s*EXPOSE\s+(\d+)", re.MULTILINE | re.IGNORECASE)
 
+# Docker の .dockerignore は、**/ を付けないとビルドコンテキストの直下にしか一致しない。秘密情報・依存・キャッシュは
+# どの階層でも除く。secrets.* は設定ファイル形式だけにする（secrets.py などのソースは残す。importer のコピー規則と同じ）
 DOCKERIGNORE = """\
-.git
-.env
-.env.*
-!.env.example
-*.sqlite
-*.sqlite3
-*.db
-.venv
-venv
-__pycache__
-*.egg-info
-.pytest_cache
-.ruff_cache
-node_modules
+**/.git
+**/.env
+**/.env.*
+!**/.env.example
+**/*.sqlite
+**/*.sqlite3
+**/*.db
+**/.venv
+**/venv
+**/__pycache__
+**/*.egg-info
+**/.pytest_cache
+**/.ruff_cache
+**/node_modules
 tests
-*.pem
-*.key
-*.p12
-*.pfx
-*.jks
-*.keystore
-*.secret
-id_rsa*
-id_ed25519*
-.npmrc
-credentials*.json
-service-account*.json
-secrets.*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.jks
+**/*.keystore
+**/*.secret
+**/id_rsa*
+**/id_ed25519*
+**/.npmrc
+**/credentials*.json
+**/service-account*.json
+**/secrets.json
+**/secrets.yaml
+**/secrets.yml
+**/secrets.toml
+**/secrets.ini
+**/secrets.env
+**/secrets.txt
 Dockerfile
 .dockerignore
 """

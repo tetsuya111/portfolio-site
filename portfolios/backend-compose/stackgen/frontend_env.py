@@ -89,6 +89,10 @@ def update_apps_json(repo_root: Path, slug: str, url: str, apply: bool = True) -
                       f'フロントエンドのコードを確かめ、apps.json の {slug} に "env" と "mock": false を書いてください'
                       f"（バックエンドの URL: {url}）"]
     name, others = full[0], [n for n in names if n != full[0]]
+    current = entry.get("env") if isinstance(entry.get("env"), dict) else {}
+    if entry.get("mock") is not True and current.get(name) == url:
+        # 既に実 API に切り替え済み（--enable-api なしの再登録でも、モックと報告しない）
+        return {name: url}, []
     if not apply:
         return None, [f"フロントエンドはモックのままにしました。VPS でバックエンドを起動してから --enable-api を付けて"
                       f"再実行すると、apps.json の {slug} に env.{name}={url} を書き、実 API に切り替えます"]

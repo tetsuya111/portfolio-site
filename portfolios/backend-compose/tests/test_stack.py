@@ -47,10 +47,10 @@ class RenderNginxTest(unittest.TestCase):
     def test_https(self):
         text = render_nginx([Service("a", 8000)], HTTPS)
         self.assertIn("server_name api.portfolio.link;", text)
-        self.assertIn("location /a/ {", text)
+        self.assertIn("location ~ ^/a(?:/|$) {", text)
         self.assertIn("resolver 127.0.0.11", text)
         self.assertIn("set $upstream_a http://a:8000;", text)
-        self.assertIn("rewrite ^/a/(.*)$ /$1 break;", text)
+        self.assertIn("rewrite ^/a/?(.*)$ /$1 break;", text)
         self.assertIn("proxy_pass $upstream_a;", text)
         self.assertIn("return 301 https://$host$request_uri;", text)
         self.assertIn("ssl_certificate /etc/nginx/certs/fullchain.pem;", text)
@@ -70,7 +70,7 @@ class WriteStackTest(TempDirMixin, unittest.TestCase):
     def test_writes_files(self):
         write_stack(self.tmp, [Service("a", 8000)], HTTPS)
         self.assertIn("build: ./services/a", (self.tmp / "docker-compose.yml").read_text(encoding="utf-8"))
-        self.assertIn("location /a/", (self.tmp / "nginx" / "default.conf").read_text(encoding="utf-8"))
+        self.assertIn("location ~ ^/a(?:/|$)", (self.tmp / "nginx" / "default.conf").read_text(encoding="utf-8"))
         ignore = (self.tmp / ".gitignore").read_text(encoding="utf-8")
         self.assertIn("certs/", ignore)
         self.assertIn("services/*/.env", ignore)
@@ -89,3 +89,20 @@ class LoadServicesTest(TempDirMixin, unittest.TestCase):
                 write_json(self.tmp / "services.json", data)
                 with self.assertRaises(StackError):
                     load_services(self.tmp)
+
+
+class Round3Test(TempDirMixin, unittest.TestCase):
+    def test_compose_has_no_depends_on_and_mounts_certbot(self):
+        text = render_compose([Service("a", 8000), Service("b", 3000)], HTTPS)
+        self.assertNotIn("depends_on", text)
+        self.assertIn("./certbot:/var/www/certbot:ro", text)
+
+    def test_acme_challenge_is_served_over_http(self):
+        text = render_nginx([Service("a", 8000)], HTTPS)
+        http_server = text.split("listen 443")[0]
+        self.assertIn("location /.well-known/acme-challenge/ {\n        root /var/www/certbot;", http_server)
+        self.assertIn("return 301", http_server)
+
+    def test_gitignore_has_certbot(self):
+        write_stack(self.tmp, [], HTTPS)
+        self.assertIn("certbot/", (self.tmp / ".gitignore").read_text(encoding="utf-8"))

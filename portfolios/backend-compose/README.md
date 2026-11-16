@@ -40,10 +40,12 @@ python portfolios/backend-compose/add_backend.py portfolios/<スラッグ> [--en
 
 ## VPS での手順
 
+VPS には Docker Compose v2.24 以降が必要（`env_file` の `required: false` を使うため）。
+
 1. `stack/` を VPS にアップロードする（例 `scp -r portfolios/backend-compose/stack user@vps:~/portfolio-stack`）。
-2. `https: true` なら、`stack/certs/` に証明書 `fullchain.pem`・`privkey.pem` を置く（Let's Encrypt の certbot などで取得する）。
-3. バックエンドが環境変数（API キーなど）を使うなら、`stack/services/<スラッグ>/.env` に書く（`.env.example` を参照）。`certs/` と `.env` は git で管理しない。
-4. `docker compose up -d --build` を実行する。nginx と全バックエンドのコンテナが作られる。
+2. `https: true` なら、`stack/certs/` に証明書 `fullchain.pem`・`privkey.pem` を置く。初回は nginx を起動する前に `certbot certonly --standalone -d <domain>` で取得してコピーする。更新は nginx を動かしたまま `certbot renew --webroot -w <stack のパス>/certbot` で行い（80 番のチャレンジは nginx が `certbot/` から答える）、`certs/` にコピーして `docker compose exec nginx nginx -s reload` で読み込ませる。
+3. バックエンドが環境変数（API キーなど）を使うなら、`stack/services/<スラッグ>/.env` に書く（`.env.example` を参照）。`certs/`・`certbot/`・`.env` は git で管理しない。
+4. `docker compose up -d --build` を実行する。nginx と全バックエンドのコンテナが作られる（1つのバックエンドが起動しなくても、nginx とほかのバックエンドは動く）。
 5. 動作を確かめたら、ローカルで `add_backend.py portfolios/<スラッグ> --enable-api` を実行し、`apps.json` の変更をデプロイする。
 
 ## 開発

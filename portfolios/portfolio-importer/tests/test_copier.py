@@ -11,7 +11,7 @@ class SlugTest(unittest.TestCase):
         self.assertEqual(make_slug("--Foo..Bar--"), "foo-bar")
 
     def test_validate_slug_rejects_invalid_and_reserved(self):
-        for bad in ["", "A", "a--b", "-a", "日本語", "docs", "docker-images", "portfolio-importer", "skillsheet-profile", "backend-compose", "batch", "x" * 65]:
+        for bad in ["", "A", "a--b", "-a", "日本語", "a\n", "docs", "docker-images", "portfolio-importer", "skillsheet-profile", "backend-compose", "batch", "x" * 65]:
             with self.subTest(bad=bad), self.assertRaises(PortfolioError):
                 validate_slug(bad)
         validate_slug("my-app-2")

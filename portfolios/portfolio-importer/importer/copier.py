@@ -27,7 +27,7 @@ def make_slug(name: str) -> str:
 
 
 def validate_slug(slug: str) -> None:
-    if not (1 <= len(slug) <= 64) or not SLUG_RE.match(slug):
+    if not (1 <= len(slug) <= 64) or not SLUG_RE.fullmatch(slug):
         raise PortfolioError(f"スラッグ「{slug}」は英小文字・数字をハイフンでつないだ1〜64文字にしてください")
     if slug in RESERVED_SLUGS:
         raise PortfolioError(f"スラッグ「{slug}」は予約されているため使えません")

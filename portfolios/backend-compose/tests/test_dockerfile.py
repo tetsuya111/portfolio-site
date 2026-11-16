@@ -72,3 +72,17 @@ class DetectPortTest(unittest.TestCase):
     def test_defaults(self):
         self.assertEqual(detect_port("FROM x\n", "python"), 8000)
         self.assertEqual(detect_port("FROM x\n", "node"), 3000)
+
+
+class DockerignoreTest(TempDirMixin, unittest.TestCase):
+    def test_nested_secrets_and_source_named_secrets(self):
+        write(self.tmp / "requirements.txt", "")
+        write_docker_files(self.tmp, "python")
+        lines = (self.tmp / ".dockerignore").read_text(encoding="utf-8").splitlines()
+        self.assertIn("**/.env", lines)
+        self.assertIn("**/*.key", lines)
+        self.assertIn("!**/.env.example", lines)
+        self.assertIn("**/secrets.json", lines)
+        # secrets.py などのソースは除かない
+        self.assertNotIn("secrets.*", lines)
+        self.assertNotIn("**/secrets.*", lines)

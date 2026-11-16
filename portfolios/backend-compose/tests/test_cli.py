@@ -76,7 +76,7 @@ class CliTest(TempDirMixin, unittest.TestCase):
         self.assertTrue((service / "main.py").is_file())
         self.assertFalse((service / ".env").exists())
         self.assertIn("build: ./services/my-app", (self.stack / "docker-compose.yml").read_text(encoding="utf-8"))
-        self.assertIn("location /my-app/", (self.stack / "nginx" / "default.conf").read_text(encoding="utf-8"))
+        self.assertIn("location ~ ^/my-app(?:/|$)", (self.stack / "nginx" / "default.conf").read_text(encoding="utf-8"))
 
     def test_root_backend_excludes_frontend(self):
         write(self.project / "requirements.txt", "flask\n")

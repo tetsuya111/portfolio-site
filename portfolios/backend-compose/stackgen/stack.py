@@ -21,6 +21,8 @@ RESERVED_SERVICES = {"nginx"}
 GITIGNORE = """\
 # TLS 証明書（VPS 上で配置する。fullchain.pem・privkey.pem）
 certs/
+# certbot の HTTP-01 チャレンジのファイル（VPS 上で作られる）
+certbot/
 # バックエンドの秘密情報（VPS 上で配置する）
 services/*/.env
 """
@@ -50,8 +52,7 @@ def load_services(stack_dir: Path) -> list[Service]:
     for s in services:
         # 値は compose・nginx の設定にそのまま書くため、取り込みと同じ規則で使える文字を限定する
         try:
-            # validate_slug は末尾の改行を許す（re.match の $）ため、改行は別に拒否する
-            if not isinstance(s.slug, str) or "\n" in s.slug or s.slug in RESERVED_SERVICES:
+            if not isinstance(s.slug, str) or s.slug in RESERVED_SERVICES:
                 raise PortfolioError("")
             validate_slug(s.slug)
         except PortfolioError as e:
@@ -85,10 +86,10 @@ def render_compose(services: list[Service], cfg: Config) -> str:
         lines.append('      - "443:443"')
     lines += ["    volumes:", "      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro"]
     if cfg.https:
-        lines.append("      - ./certs:/etc/nginx/certs:ro")
-    if services:
-        lines.append("    depends_on:")
-        lines += [f"      - {s.slug}" for s in services]
+        # 証明書と、certbot（--webroot）の HTTP-01 チャレンジのファイル置き場
+        lines += ["      - ./certs:/etc/nginx/certs:ro", "      - ./certbot:/var/www/certbot:ro"]
+    # depends_on は書かない（1つのバックエンドの起動失敗で nginx・ほかのバックエンドまで止めないため。
+    # 転送先は要求のたびに名前を引くので、起動順に依存しない）
     for s in services:
         lines += [
             f"  {s.slug}:",
@@ -119,10 +120,11 @@ def _locations(services: list[Service]) -> str:
     blocks = ["    resolver 127.0.0.11 valid=10s ipv6=off;\n"]
     for s in services:
         var = f"$upstream_{s.slug.replace('-', '_')}"
-        # 前置き /<スラッグ> を外して転送する（/<スラッグ>/api/x?q=1 → /api/x?q=1）
-        blocks.append(f"    location /{s.slug}/ {{\n"
+        # 前置き /<スラッグ> を外して転送する（/<スラッグ>/api/x?q=1 → /api/x?q=1、/<スラッグ> → /）。
+        # スラッグは英小文字・数字・ハイフンだけのため、正規表現にそのまま書いてよい
+        blocks.append(f"    location ~ ^/{s.slug}(?:/|$) {{\n"
                       f"        set {var} http://{s.slug}:{s.port};\n"
-                      f"        rewrite ^/{s.slug}/(.*)$ /$1 break;\n"
+                      f"        rewrite ^/{s.slug}/?(.*)$ /$1 break;\n"
                       f"        proxy_pass {var};\n"
                       + _PROXY_HEADERS.format(slug=s.slug)
                       + "    }\n")
@@ -139,7 +141,9 @@ def render_nginx(services: list[Service], cfg: Config) -> str:
         head
         + "server {\n    listen 80;\n"
         f"    server_name {cfg.domain};\n"
-        "    return 301 https://$host$request_uri;\n}\n\n"
+        # 証明書の更新（certbot certonly --webroot -w ./certbot）のため、チャレンジだけは http で答える
+        "    location /.well-known/acme-challenge/ {\n        root /var/www/certbot;\n    }\n"
+        "    location / {\n        return 301 https://$host$request_uri;\n    }\n}\n\n"
         "server {\n    listen 443 ssl;\n"
         f"    server_name {cfg.domain};\n"
         "    ssl_certificate /etc/nginx/certs/fullchain.pem;\n"

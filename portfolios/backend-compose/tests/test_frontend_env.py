@@ -104,3 +104,10 @@ class UpdateAppsJsonGuardsTest(UpdateAppsJsonTest):
         self.assertIsNone(env)
         self.assertTrue(any("VITE_API_URL" in w and "--enable-api" in w for w in warnings))
         self.assertEqual(self.manifest.read_text(encoding="utf-8"), before)
+
+    def test_already_enabled_is_reported_without_apply(self):
+        data = json.loads(self.manifest.read_text(encoding="utf-8"))
+        data["apps"][0].update({"mock": False, "env": {"VITE_API_URL": self.URL}})
+        write_json(self.manifest, data)
+        write(self.apps / "a" / "src" / "x.ts", "VITE_API_URL")
+        self.assertEqual(update_apps_json(self.tmp, "a", self.URL, apply=False), ({"VITE_API_URL": self.URL}, []))
