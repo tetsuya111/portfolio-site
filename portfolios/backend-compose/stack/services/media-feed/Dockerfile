@@ -7,4 +7,5 @@ COPY --chown=appuser:appuser . .
 RUN pip install --no-cache-dir -r requirements.txt && pip install --no-cache-dir gunicorn
 USER appuser
 EXPOSE 8000
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]
+# 起動のたびにマイグレーションを適用する（DB は SQLite でコンテナ内にあり、作り直すと空になるため）
+CMD ["sh", "-c", "python manage.py migrate --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:8000"]
