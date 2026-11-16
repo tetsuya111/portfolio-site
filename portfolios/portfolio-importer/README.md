@@ -29,7 +29,7 @@ python portfolios/portfolio-importer/add_portfolio.py <プロジェクトのパ�
 
 - 既にあるファイル（コピー先以外）は上書きせず、`warnings` に出す。コピー先 `portfolios/<スラッグ>/` が既にあるとエラー。
 - リポジトリ外には書き込まない。
-- バックエンドは配信しない（S3 で完結させるため、Dockerfile の生成やイメージの作成は行わない）。フロントエンドはモックの応答で動く。
+- バックエンドは配信しない（S3 で完結させるため、Dockerfile の生成やイメージの作成は行わない）。フロントエンドはモックの応答で動く。VPS でバックエンドを動かす場合は、取り込み後に [backend-compose](../backend-compose/README.md) で docker compose に登録する。
 
 ## 出力（JSON）
 
