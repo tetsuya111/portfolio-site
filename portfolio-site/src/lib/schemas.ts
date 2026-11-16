@@ -61,6 +61,14 @@ export const skillSchema = z.object({
   order: z.number().int().default(0),
 });
 
+/** トップページの「こんな方とお話ししたい」1件（src/content/audiences/*.md）。order の昇順に並べる。 */
+export const audienceSchema = z.object({
+  title: z.string().min(1),
+  /** タイルの見出しの下に出す補足（任意） */
+  description: z.string().min(1).optional(),
+  order: z.number().int().default(0),
+});
+
 export const articleSchema = z.object({
   title: z.string().min(1),
   date: z.coerce.date(),
@@ -74,6 +82,7 @@ export type Portfolio = z.infer<typeof portfolioSchema>;
 export type Article = z.infer<typeof articleSchema>;
 export type Service = z.infer<typeof serviceSchema>;
 export type Skill = z.infer<typeof skillSchema>;
+export type Audience = z.infer<typeof audienceSchema>;
 
 /** zod の検証エラーを「項目: 理由」の文字列配列にする（API・コマンドの表示用）。 */
 export function formatIssues(error: z.ZodError): string[] {

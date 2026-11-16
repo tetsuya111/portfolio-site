@@ -34,7 +34,7 @@ export function publishedArticles<T extends { data: { date: Date; draft: boolean
     .sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
 }
 
-/** サービス・スキルを order の昇順に並べる。同じ order は title（なければ name）の日本語順。 */
+/** サービス・スキル・こんな方とお話ししたいを order の昇順に並べる。同じ order は title（なければ name）の日本語順。 */
 export function sortByOrder<T extends { data: { order: number; title?: string; name?: string } }>(items: T[]): T[] {
   const label = (i: T) => i.data.title ?? i.data.name ?? "";
   return [...items].sort((a, b) => a.data.order - b.data.order || label(a).localeCompare(label(b), "ja"));

@@ -1,9 +1,9 @@
-// src/content/ の md（サービス・スキル・ポートフォリオ）がスキーマを満たし、トップページに必要な項目を持つことを確かめる
+// src/content/ の md（サービス・スキル・こんな方とお話ししたい・ポートフォリオ）がスキーマを満たし、トップページに必要な項目を持つことを確かめる
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseMarkdown } from "../src/lib/markdown-file";
-import { portfolioSchema, serviceSchema, skillSchema } from "../src/lib/schemas";
+import { audienceSchema, portfolioSchema, serviceSchema, skillSchema } from "../src/lib/schemas";
 
 const root = join(import.meta.dirname, "..", "src", "content");
 
@@ -29,6 +29,12 @@ describe("content files", () => {
       expect(r.data?.examples.length, i.file).toBeGreaterThan(0);
       expect(r.data?.famous.length, i.file).toBeGreaterThan(0);
     }
+  });
+
+  it("has valid audiences", () => {
+    const items = frontmatters("audiences");
+    expect(items.length).toBeGreaterThan(0);
+    for (const i of items) expect(audienceSchema.safeParse(i.data).success, i.file).toBe(true);
   });
 
   it("has valid portfolios", () => {
