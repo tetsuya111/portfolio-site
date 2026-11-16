@@ -140,4 +140,15 @@ describe("createShopDetail", () => {
     expect(document.activeElement).toBe(opener);
     opener.remove();
   });
+
+  test("フォーカスがパネル内にあるときに hide したら、開く前の要素へ戻す", () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    const detail = createShopDetail(el, { onClose: () => {} });
+    detail.show(fullShop());
+    detail.hide();
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
+  });
 });

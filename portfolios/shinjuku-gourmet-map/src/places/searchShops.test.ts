@@ -38,10 +38,12 @@ describe("boundsAround", () => {
   });
 });
 
-test("経度は -180〜180 に収める", () => {
-  const b = boundsAround({ lat: 0, lng: 179.99 }, 5000);
-  expect(b.east).toBe(180);
-  expect(boundsAround({ lat: 0, lng: -179.99 }, 5000).west).toBe(-180);
+test("180度経線をまたぐ場合は経度を -180〜180 に折り返す（west > east になる）", () => {
+  const east = boundsAround({ lat: 0, lng: 179.99 }, 5000);
+  expect(east.east).toBeCloseTo(-179.965, 2);
+  expect(east.west).toBeCloseTo(179.945, 2);
+  const west = boundsAround({ lat: 0, lng: -179.99 }, 5000);
+  expect(west.west).toBeCloseTo(179.965, 2);
 });
 
 describe("buildSearchRequest", () => {

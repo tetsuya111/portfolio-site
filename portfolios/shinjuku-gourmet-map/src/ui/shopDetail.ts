@@ -72,18 +72,19 @@ export function createShopDetail(el: HTMLElement, { onClose }: ShopDetailOptions
   el.classList.add("shop-detail");
   el.setAttribute("aria-label", "お店の詳細");
 
-  /** 開く前にフォーカスしていた要素（閲覧者が閉じたらここへ戻す） */
+  /** 開く前にフォーカスしていた要素（閉じたときにフォーカスがパネル内にあればここへ戻す） */
   let returnFocusTo: HTMLElement | null = null;
 
   const hide = () => {
+    const hadFocus = el.contains(document.activeElement);
     el.hidden = true;
     el.replaceChildren();
+    if (hadFocus && returnFocusTo?.isConnected) returnFocusTo.focus();
+    returnFocusTo = null;
   };
   const closeByUser = () => {
     if (el.hidden) return;
     hide();
-    if (returnFocusTo?.isConnected) returnFocusTo.focus();
-    returnFocusTo = null;
     onClose();
   };
 

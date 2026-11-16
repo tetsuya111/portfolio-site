@@ -27,15 +27,21 @@ const FIELDS = [
 
 const METERS_PER_DEGREE_LAT = 111_000;
 
-/** 中心から半径 radiusMeters の円を囲む矩形を返す（近似。経度は -180〜180 に収める） */
+/** 経度を -180〜180 に折り返す */
+const wrapLng = (lng: number) => ((((lng + 180) % 360) + 360) % 360) - 180;
+
+/**
+ * 中心から半径 radiusMeters の円を囲む矩形を返す（近似）。
+ * 180度経線をまたぐ場合は経度を折り返し、west > east の矩形になる。
+ */
 export function boundsAround(center: LatLngLiteral, radiusMeters: number): LatLngBoundsLiteral {
   const dLat = radiusMeters / METERS_PER_DEGREE_LAT;
   const dLng = radiusMeters / (METERS_PER_DEGREE_LAT * Math.cos((center.lat * Math.PI) / 180));
   return {
     north: center.lat + dLat,
     south: center.lat - dLat,
-    east: Math.min(center.lng + dLng, 180),
-    west: Math.max(center.lng - dLng, -180),
+    east: wrapLng(center.lng + dLng),
+    west: wrapLng(center.lng - dLng),
   };
 }
 

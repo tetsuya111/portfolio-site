@@ -31,14 +31,14 @@ class FakeBounds implements LatLngBoundsObject {
   }
 }
 
-function setup() {
+function setup(zoom = 15) {
   FakeMarker.created = [];
   const map = { fitBounds: vi.fn(), panTo: vi.fn(), setZoom: vi.fn() };
   const layer = createMarkerLayer({
     map,
     marker: { AdvancedMarkerElement: FakeMarker },
     core: { LatLngBounds: FakeBounds },
-    defaultView: { center: { lat: 35, lng: 139 }, zoom: 15 },
+    defaultView: { center: { lat: 35, lng: 139 }, zoom },
   });
   return { map, layer };
 }
@@ -124,5 +124,28 @@ describe("createMarkerLayer", () => {
     expect(selected()).toEqual([true, false]);
     layer.highlight(null);
     expect(selected()).toEqual([false, false]);
+  });
+
+  test("1件のときも設定の初期ズームより引いた表示にはしない", () => {
+    const { map, layer } = setup(19);
+    layer.show([shop("a")], () => {});
+    expect(map.setZoom).toHaveBeenCalledWith(19);
+  });
+
+  test("ピンの作成が途中で失敗しても、作成済みのピンは clear で消せる", () => {
+    const { layer } = setup();
+    const original = FakeMarker.prototype.addListener;
+    let count = 0;
+    FakeMarker.prototype.addListener = function (this: FakeMarker, e: "click", h: () => void) {
+      if (++count === 2) throw new Error("marker");
+      return original.call(this, e, h);
+    };
+    try {
+      expect(() => layer.show([shop("a"), shop("b"), shop("c")], () => {})).toThrow("marker");
+    } finally {
+      FakeMarker.prototype.addListener = original;
+    }
+    layer.clear();
+    expect(FakeMarker.created.every((m) => m.map === null)).toBe(true);
   });
 });

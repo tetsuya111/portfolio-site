@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { CALLBACK_NAME, createGoogleMapsLoader, SCRIPT_ID } from "./loadGoogleMaps";
+import { CALLBACK_NAME, LOAD_TIMEOUT_MS, loadGoogleMaps, SCRIPT_ID } from "./loadGoogleMaps";
 
 type TestWindow = Window & Record<string, unknown>;
 const win = window as unknown as TestWindow;
@@ -18,16 +18,16 @@ function simulateLoaded(importLibrary = vi.fn(async (name: string) => ({ name })
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   document.getElementById(SCRIPT_ID)?.remove();
   delete win.google;
   delete win[CALLBACK_NAME];
   delete win.gm_authFailure;
 });
 
-describe("createGoogleMapsLoader", () => {
-  test("APIキー・言語・地域・コールバック付きの script を1つ追加する", () => {
-    const load = createGoogleMapsLoader();
-    void load({ apiKey: "k&ey" });
+describe("loadGoogleMaps", () => {
+  test("APIキー・言語・地域・コールバック付きの script を追加する", () => {
+    void loadGoogleMaps({ apiKey: "k&ey" });
     const url = new URL(findScript().src);
     expect(url.origin + url.pathname).toBe("https://maps.googleapis.com/maps/api/js");
     expect(url.searchParams.get("key")).toBe("k&ey");
@@ -39,8 +39,7 @@ describe("createGoogleMapsLoader", () => {
   });
 
   test("読み込み完了で4つのライブラリを返す", async () => {
-    const load = createGoogleMapsLoader();
-    const promise = load({ apiKey: "k" });
+    const promise = loadGoogleMaps({ apiKey: "k" });
     const importLibrary = simulateLoaded();
     const libs = await promise;
     expect(importLibrary.mock.calls.map((c) => c[0]).sort()).toEqual(["core", "maps", "marker", "places"]);
@@ -48,38 +47,23 @@ describe("createGoogleMapsLoader", () => {
   });
 
   test("script の読み込みに失敗したら reject する", async () => {
-    const load = createGoogleMapsLoader();
-    const promise = load({ apiKey: "k" });
+    const promise = loadGoogleMaps({ apiKey: "k" });
     findScript().dispatchEvent(new Event("error"));
     await expect(promise).rejects.toThrow("Google マップを読み込めませんでした");
   });
 
+  test("一定時間内に読み込みが終わらなければ reject する", async () => {
+    vi.useFakeTimers();
+    const promise = loadGoogleMaps({ apiKey: "k" });
+    const assertion = expect(promise).rejects.toThrow("時間内に");
+    await vi.advanceTimersByTimeAsync(LOAD_TIMEOUT_MS);
+    await assertion;
+  });
+
   test("認証に失敗したら onAuthFailure を呼ぶ", () => {
     const onAuthFailure = vi.fn();
-    void createGoogleMapsLoader()({ apiKey: "k", onAuthFailure });
+    void loadGoogleMaps({ apiKey: "k", onAuthFailure });
     (win.gm_authFailure as () => void)();
     expect(onAuthFailure).toHaveBeenCalledOnce();
-  });
-
-  test("2回呼んでも script は1つで、同じ結果を返す", async () => {
-    const load = createGoogleMapsLoader();
-    const first = load({ apiKey: "k" });
-    const second = load({ apiKey: "k" });
-    expect(document.querySelectorAll(`#${SCRIPT_ID}`)).toHaveLength(1);
-    simulateLoaded();
-    expect(await second).toBe(await first);
-  });
-
-  test("読み込みに失敗したら、次の呼び出しで読み込み直す", async () => {
-    const load = createGoogleMapsLoader();
-    const first = load({ apiKey: "k" });
-    const failed = findScript();
-    failed.dispatchEvent(new Event("error"));
-    await expect(first).rejects.toThrow();
-    const second = load({ apiKey: "k" });
-    expect(findScript()).not.toBe(failed);
-    expect(document.querySelectorAll(`#${SCRIPT_ID}`)).toHaveLength(1);
-    simulateLoaded();
-    await expect(second).resolves.toBeDefined();
   });
 });

@@ -32,7 +32,7 @@ interface Dependencies {
 interface Pin {
   shopId: string;
   marker: AdvancedMarker;
-  listener: MapListener;
+  listener: MapListener | null;
   element: HTMLElement;
 }
 
@@ -47,7 +47,7 @@ export function createMarkerLayer({ map, marker, core, defaultView }: Dependenci
 
   const clear = () => {
     for (const pin of pins) {
-      pin.listener.remove();
+      pin.listener?.remove();
       pin.marker.map = null;
     }
     pins = [];
@@ -56,25 +56,31 @@ export function createMarkerLayer({ map, marker, core, defaultView }: Dependenci
   return {
     show(shops, onSelect) {
       clear();
-      pins = shops.map((shop) => {
+      // 途中で例外が起きても clear で消せるよう、作ったピンはすぐ pins に入れる
+      for (const shop of shops) {
         const element = createPinElement();
-        const m = new marker.AdvancedMarkerElement({
-          map,
-          position: shop.location,
-          title: shop.name,
-          content: element,
-          gmpClickable: true,
-        });
-        const listener = m.addListener("click", () => onSelect(shop));
-        return { shopId: shop.id, marker: m, listener, element };
-      });
+        const pin: Pin = {
+          shopId: shop.id,
+          marker: new marker.AdvancedMarkerElement({
+            map,
+            position: shop.location,
+            title: shop.name,
+            content: element,
+            gmpClickable: true,
+          }),
+          listener: null,
+          element,
+        };
+        pins.push(pin);
+        pin.listener = pin.marker.addListener("click", () => onSelect(shop));
+      }
 
       if (shops.length === 0) {
         map.panTo(defaultView.center);
         map.setZoom(defaultView.zoom);
       } else if (shops.length === 1) {
         map.panTo(shops[0].location);
-        map.setZoom(SINGLE_SHOP_ZOOM);
+        map.setZoom(Math.max(SINGLE_SHOP_ZOOM, defaultView.zoom));
       } else {
         const bounds = new core.LatLngBounds();
         for (const shop of shops) bounds.extend(shop.location);

@@ -29,7 +29,7 @@
 ## T4. Google Maps の読み込み（FR-5.4）
 
 - [x] `src/maps/googleTypes.ts`: 利用する最小の型（`GoogleMapsNamespace`、`MapsLibrary`、`MarkerLibrary`、`PlacesLibrary`、`PlaceLike` など）
-- [x] `src/maps/loadGoogleMaps.test.ts`: script タグのURL（key・`loading=async`・`language=ja`・`region=JP`・callback）、コールバックで resolve、script の error で reject、`gm_authFailure` で `onAuthFailure` 呼び出し、2回呼んでも script は1つ
+- [x] `src/maps/loadGoogleMaps.test.ts`: script タグのURL（key・`loading=async`・`language=ja`・`region=JP`・callback）、コールバックで resolve、script の error で reject、一定時間で読み込みが終わらなければ reject、`gm_authFailure` で `onAuthFailure` 呼び出し
 - [x] `src/maps/loadGoogleMaps.ts`
 - 確認: `npx vitest run src/maps/loadGoogleMaps.test.ts`
 

@@ -3,7 +3,8 @@ import rawConfig from "./config/map-config.json";
 import { createApp, type App } from "./app";
 import { ConfigError, parseMapConfig, type Genre, type MapConfig } from "./config/parseMapConfig";
 import { readApiSettings } from "./env";
-import { createGoogleMapsLoader } from "./maps/loadGoogleMaps";
+import type { GoogleLibraries, GoogleMap } from "./maps/googleTypes";
+import { loadGoogleMaps } from "./maps/loadGoogleMaps";
 import { createMarkerLayer } from "./maps/markerLayer";
 import { createShopSearcher } from "./places/searchShops";
 import { cacheByGenre } from "./places/shopCache";
@@ -40,15 +41,21 @@ async function main(): Promise<void> {
   const bar = createGenreBar(byId("genres"), config.genres, (genre) => {
     if (app) {
       void app.selectGenre(genre);
-    } else {
-      requestedGenre = genre;
-      bar.setActive(genre.id);
+      return;
     }
+    requestedGenre = genre;
+    bar.setActive(genre.id);
+    status.loading(genre);
   });
+  const detailEl = byId("detail");
 
   /** 地図が使えないことを表示し、以降の操作と表示更新を止める（FR-5.3, FR-5.4） */
+  let unavailable = false;
   const markMapUnavailable = (message: string, details?: string[]) => {
+    if (unavailable) return; // 最初の原因（認証失敗など）を後続のエラーで上書きしない
+    unavailable = true;
     app?.disable();
+    bar.setActive("");
     bar.setDisabled(true);
     status.error(message, details);
     mapEl.dataset.state = "unavailable";
@@ -63,44 +70,51 @@ async function main(): Promise<void> {
     return;
   }
 
-  // 4. Maps JavaScript API を読み込み、地図を1回だけ作る（FR-5.4, FR-2.3）
-  let authFailed = false;
+  // 4. Maps JavaScript API を読み込む（FR-5.4）
+  let libs: GoogleLibraries;
   try {
-    const libs = await createGoogleMapsLoader()({
+    libs = await loadGoogleMaps({
       apiKey: settings.apiKey,
-      onAuthFailure: () => {
-        authFailed = true;
-        markMapUnavailable("Google マップの認証に失敗しました。APIキーとその制限設定を確認してください。");
-      },
-    });
-    if (authFailed) return;
-    const map = new libs.maps.Map(mapEl, {
-      center: config.area.center,
-      zoom: config.area.zoom,
-      mapId: settings.mapId,
-      clickableIcons: false,
-    });
-    const detail = createShopDetail(byId("detail"), { onClose: () => app?.handleDetailClosed() });
-    app = createApp({
-      genres: config.genres,
-      search: cacheByGenre(createShopSearcher(libs.places, config.area)),
-      layer: createMarkerLayer({
-        map,
-        marker: libs.marker,
-        core: libs.core,
-        defaultView: { center: config.area.center, zoom: config.area.zoom },
-      }),
-      status,
-      detail,
-      setActiveGenre: (id) => bar.setActive(id),
+      onAuthFailure: () =>
+        markMapUnavailable("Google マップの認証に失敗しました。APIキーとその制限設定を確認してください。"),
     });
   } catch (error) {
     console.error(error);
     markMapUnavailable(error instanceof Error ? error.message : "Google マップを読み込めませんでした。");
     return;
   }
+  if (unavailable) return;
 
-  // 5. 準備中に押されたジャンル、なければ先頭のジャンルから表示する（FR-1.2）
+  // 5. 地図は1回だけ作り、ジャンルを切り替えても使い続ける（FR-2.3）
+  let map: GoogleMap;
+  try {
+    map = new libs.maps.Map(mapEl, {
+      center: config.area.center,
+      zoom: config.area.zoom,
+      mapId: settings.mapId,
+      clickableIcons: false,
+    });
+  } catch (error) {
+    console.error(error);
+    markMapUnavailable("地図を作成できませんでした。Map ID の設定を確認してください。");
+    return;
+  }
+
+  app = createApp({
+    genres: config.genres,
+    search: cacheByGenre(createShopSearcher(libs.places, config.area)),
+    layer: createMarkerLayer({
+      map,
+      marker: libs.marker,
+      core: libs.core,
+      defaultView: { center: config.area.center, zoom: config.area.zoom },
+    }),
+    status,
+    detail: createShopDetail(detailEl, { onClose: () => app?.handleDetailClosed() }),
+    setActiveGenre: (id) => bar.setActive(id),
+  });
+
+  // 6. 準備中に押されたジャンル、なければ先頭のジャンルから表示する（FR-1.2）
   await app.start(requestedGenre);
 }
 
