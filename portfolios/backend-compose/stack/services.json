@@ -1,6 +1,10 @@
 {
   "services": [
     {
+      "slug": "inventory-management",
+      "port": 8000
+    },
+    {
       "slug": "media-feed",
       "port": 8000
     },
