@@ -13,10 +13,34 @@ export interface AppEntry {
   buildArgs: string[];
   /** true なら mock/handlers.js のモックを出力の HTML に差し込み、バックエンドなしで動かす */
   mock: boolean;
+  /** ビルド時の環境変数（バックエンドの URL など。backend-compose が書く）。npm ci・npm run build に渡す */
+  env: Record<string, string>;
 }
 
 /** シェルを経由しても安全な文字だけの引数（Windows では npm をシェル経由で起動するため） */
 const SAFE_ARG = /^[\w@./:=-]+$/;
+/**
+ * env の名前は公開用の接頭辞を持つものだけ（NODE_OPTIONS・PATH などビルドの挙動を変える変数を入れさせない）。
+ * 値は https の URL で、シェルを経由しても安全な文字だけ（サイトは HTTPS のため http の API は呼べない）
+ */
+const ENV_NAME = /^(?:VITE_|PUBLIC_|NEXT_PUBLIC_)[A-Z0-9_]+$/;
+const ENV_VALUE = /^https:\/\/[A-Za-z0-9.\-_~/:%]+$/;
+
+function validateEnv(env: unknown, where: string): Record<string, string> {
+  if (env === undefined) return {};
+  if (typeof env !== "object" || env === null || Array.isArray(env)) {
+    throw new Error(`${where}.env は {"環境変数名": "値"} の形にしてください`);
+  }
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries(env)) {
+    if (!ENV_NAME.test(name)) throw new Error(`${where}.env の名前「${name}」は VITE_・PUBLIC_・NEXT_PUBLIC_ で始まる英大文字・数字・_ にしてください`);
+    if (typeof value !== "string" || !ENV_VALUE.test(value)) {
+      throw new Error(`${where}.env.${name} は https:// で始まる URL（英数字と . - _ ~ / : % だけ）にしてください`);
+    }
+    out[name] = value;
+  }
+  return out;
+}
 
 function isSafeRelativeDir(dir: string): boolean {
   if (dir === "" || isAbsolute(dir) || /^[A-Za-z]:/.test(dir) || dir.includes("\\")) return false;
@@ -43,15 +67,16 @@ export function validateManifest(data: unknown): AppEntry[] {
       throw new Error(`${where}.buildArgs は英数字と @ . / : = - _ だけの文字列の配列にしてください`);
     }
     if (a.mock !== undefined && typeof a.mock !== "boolean") throw new Error(`${where}.mock は true か false にしてください`);
-    return { slug: a.slug, outputDir: a.outputDir, buildArgs: [...a.buildArgs], mock: a.mock ?? false };
+    const env = validateEnv((raw as { env?: unknown }).env, where);
+    return { slug: a.slug, outputDir: a.outputDir, buildArgs: [...a.buildArgs], mock: a.mock ?? false, env };
   });
 }
 
 export interface BuildOptions {
   appsDir: string;
   distDir: string;
-  /** コマンドを実行して終了コードを返す */
-  run: (cmd: string, args: string[], cwd: string) => number;
+  /** コマンドを実行して終了コードを返す。env は実行環境の環境変数に追加して渡す */
+  run: (cmd: string, args: string[], cwd: string, env: Record<string, string>) => number;
   /** モックのランタイム（src/lib/mock-runtime.js）のパス。mock: true のアプリがあるときに必要 */
   mockRuntime?: string;
 }
@@ -115,7 +140,7 @@ export function buildApps(apps: AppEntry[], { appsDir, distDir, run, mockRuntime
     const build = ["run", "build", ...(app.buildArgs.length ? ["--", ...app.buildArgs] : [])];
     // インストールスクリプトは実行しない（乗っ取られた依存のスクリプトにデプロイ用の権限を使わせない）
     for (const args of [["ci", "--ignore-scripts"], build]) {
-      const code = run("npm", args, cwd);
+      const code = run("npm", args, cwd, app.env);
       if (code !== 0) throw new Error(`${app.slug}: npm ${args.join(" ")} が失敗しました（終了コード ${code}）`);
     }
     const out = join(cwd, app.outputDir);
