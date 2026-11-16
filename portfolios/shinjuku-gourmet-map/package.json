@@ -1,0 +1,24 @@
+{
+  "name": "shinjuku-gourmet-map",
+  "private": true,
+  "version": "0.1.0",
+  "description": "新宿のおすすめ店をジャンル切り替えでGoogleマップに表示するポートフォリオ用Webアプリ",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "test": "node scripts/run-vitest.mjs run",
+    "lint": "eslint . && tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "globals": "^16.5.0",
+    "jsdom": "^27.4.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  }
+}
