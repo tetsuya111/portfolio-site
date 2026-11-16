@@ -48,8 +48,19 @@ class WriteDockerFilesTest(TempDirMixin, unittest.TestCase):
         # 起動のたびに migrate し、Django の既定の DB（/app/db.sqlite3）の実体をボリューム（/data）に置く
         self.assertIn('CMD ["sh", "-c", "python manage.py migrate --noinput && '
                       'exec gunicorn config.wsgi:application --bind 0.0.0.0:8000"]', text)
-        self.assertIn("RUN ln -s /data/db.sqlite3 /app/db.sqlite3\n", text)
-        self.assertLess(text.index("ln -s"), text.index("USER appuser"))
+        # -f: 手書きの .dockerignore で db.sqlite3 がコピーされていてもビルドを止めない
+        self.assertIn("RUN ln -sf /data/db.sqlite3 /app/db.sqlite3\n", text)
+        self.assertLess(text.index("ln -sf"), text.index("USER appuser"))
+
+    def test_django_with_uvicorn_still_links_db_and_migrates(self):
+        # manage.py があれば、起動コマンドが uvicorn（ASGI）でも Django として DB をボリュームに置く
+        write(self.tmp / "requirements.txt", "django\n")
+        write(self.tmp / "manage.py", "")
+        write(self.tmp / "README.md", "uvicorn config.asgi:application\n")
+        text, _ = self.dockerfile()
+        self.assertIn('CMD ["sh", "-c", "python manage.py migrate --noinput && '
+                      'exec uvicorn config.asgi:application --host 0.0.0.0 --port 8000"]', text)
+        self.assertIn("RUN ln -sf /data/db.sqlite3 /app/db.sqlite3\n", text)
 
     def test_flask_uses_gunicorn(self):
         write(self.tmp / "requirements.txt", "flask\n")
@@ -78,7 +89,14 @@ class WriteDockerFilesTest(TempDirMixin, unittest.TestCase):
         write(self.tmp / ".dockerignore", "x\n")
         text, warnings = self.dockerfile()
         self.assertEqual(text, 'FROM scratch\nCMD ["x"]\n')
-        self.assertEqual(len(warnings), 2)
+        self.assertEqual(len(warnings), 3)
+        # /data を作らない Dockerfile では、ボリュームが root の持ち物になり非 root のアプリが書けない
+        self.assertTrue(any("/data" in w for w in warnings), warnings)
+
+    def test_existing_dockerfile_with_data_dir_has_no_data_warning(self):
+        write(self.tmp / "Dockerfile", "FROM scratch\nRUN mkdir /data\nCMD [\"x\"]\n")
+        _, warnings = self.dockerfile()
+        self.assertFalse(any("/data" in w for w in warnings), warnings)
 
 
 class DetectPortTest(unittest.TestCase):

@@ -75,8 +75,9 @@ VPS には Docker Compose v2.24 以降が必要（`env_file` の `required: fals
 | spotify-billboard-playlist | `/data/app.db`（Dockerfile の `ENV DB_PATH`） |
 
 - 初めて起動したとき（ボリュームが空）は、Django は起動時の `migrate` で、spotify-billboard-playlist は起動時のテーブルの作成で、空の DB から動く。
-- 新しく登録したバックエンドも `/data` がマウントされるが、DB をそこに置くかはアプリの設定による。Django 以外は DB のパスを `/data` 配下に向ける設定（環境変数など）を Dockerfile か `.env` に書く。
-- バックアップ: `docker compose stop <スラッグ>` → `docker compose cp <スラッグ>:/data ./backup-<スラッグ>` → `docker compose start <スラッグ>`（止めてから写すと、書き込み途中の状態を写さない）。戻すときは止めてから `docker compose cp ./backup-<スラッグ>/. <スラッグ>:/data` を実行し、写したファイルの所有者を実行ユーザーに戻してから（`docker compose run --rm --no-deps --user root --entrypoint chown <スラッグ> -R appuser:appuser /data`。node のバックエンドは `node:node`）`docker compose start <スラッグ>` する。
+- 新しく登録したバックエンドも `/data` がマウントされるが、DB をそこに置くかはアプリの設定による。生成する Dockerfile は、Django（`manage.py` がある）なら `/app/db.sqlite3` をリンクする（settings の `BASE_DIR` が `/app` で、DB が既定の `BASE_DIR / 'db.sqlite3'` の前提。違う場合は Dockerfile のリンクを直す）。Django 以外は DB のパスを `/data` 配下に向ける設定（環境変数など）を Dockerfile か `.env` に書く。
+- 既にあった Dockerfile は上書きしないため、`/data` を作っていなければ登録時に警告する。そのままだと `/data` が root の持ち物になり、非 root のアプリは書き込めないため、実行ユーザーの持ち物の `/data` を作る行を足す。
+- バックアップ: `docker compose stop <スラッグ>` → `docker compose cp <スラッグ>:/data/. ./backup-<スラッグ>`（`/data/.` で中身だけを写す。`./backup-<スラッグ>` が既にあっても `data/` の入れ子にならない） → `docker compose start <スラッグ>`（止めてから写すと、書き込み途中の状態を写さない）。戻すときは止めてから `docker compose cp ./backup-<スラッグ>/. <スラッグ>:/data` を実行し、写したファイルの所有者を実行ユーザーに戻してから（`docker compose run --rm --no-deps --user root --entrypoint chown <スラッグ> -R appuser:appuser /data`。node のバックエンドは `node:node`）`docker compose start <スラッグ>` する。
 - 初期化（DB を空にする）: `docker compose rm -sf <スラッグ>` → `docker volume rm <プロジェクト名>_<スラッグ>-data` → `docker compose up -d <スラッグ>`。
 
 ## HTTPS で公開できたあとに戻すもの

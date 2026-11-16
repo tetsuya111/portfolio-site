@@ -7,7 +7,7 @@ RUN useradd --create-home appuser && mkdir /data && chown appuser:appuser /app /
 COPY --chown=appuser:appuser . .
 RUN pip install --no-cache-dir -r requirements.txt && pip install --no-cache-dir gunicorn
 # Django の既定の DB（/app/db.sqlite3）の実体をボリューム（/data）に置く（-wal・-shm もリンク先に作られる）
-RUN ln -s /data/db.sqlite3 /app/db.sqlite3
+RUN ln -sf /data/db.sqlite3 /app/db.sqlite3
 USER appuser
 EXPOSE 8000
 # 起動のたびにマイグレーションを適用する（空のボリュームでの初回の起動と、スキーマの更新のため）

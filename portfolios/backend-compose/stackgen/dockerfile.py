@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 from pathlib import Path
 
 from importer.detect import has_script, read_package_json
@@ -83,26 +84,28 @@ def _python_command(d: Path) -> tuple[list[str] | None, bool, bool]:
     host = ["--host", "0.0.0.0", "--port", str(PYTHON_PORT)]
     bind = ["--bind", f"0.0.0.0:{PYTHON_PORT}"]
     fastapi = wsgi = flask = None
+    # manage.py があれば Django とみなす（起動が gunicorn でも uvicorn（ASGI）でも、DB の置き場所と migrate は同じ）
+    django = (d / "manage.py").is_file()
     for rel in _sources(d):
         text = (d / rel).read_text(encoding="utf-8", errors="replace")
         m = _UVICORN.search(text)
         if m:
             # 記載された起動方法を最優先する（見つかった時点で探索をやめる）
-            return ["uvicorn", m.group(1)] + (["--factory"] if m.group(2) else []) + host, False, False
+            return ["uvicorn", m.group(1)] + (["--factory"] if m.group(2) else []) + host, False, django
         if rel.suffix != ".py":
             continue
         if fastapi is None and (a := _FASTAPI_ASSIGN.search(text)):
             fastapi = ["uvicorn", f"{_module(rel)}:{a.group(1)}"] + host
-        if wsgi is None and rel.name == "wsgi.py" and (d / "manage.py").is_file():
+        if wsgi is None and rel.name == "wsgi.py" and django:
             wsgi = ["gunicorn", f"{_module(rel)}:application"] + bind
         if flask is None and (a := _FLASK_ASSIGN.search(text)):
             flask = ["gunicorn", f"{_module(rel)}:{a.group(1)}"] + bind
     for cmd in (fastapi, wsgi, flask):
         if cmd is not None:
-            return cmd, cmd[0] == "gunicorn", cmd is wsgi
+            return cmd, cmd[0] == "gunicorn", django
     if (d / "main.py").is_file():
-        return ["python", "main.py"], False, False
-    return None, False, False
+        return ["python", "main.py"], False, django
+    return None, False, django
 
 
 def _cmd_line(cmd: list[str] | None) -> str:
@@ -129,13 +132,15 @@ def _python_dockerfile(d: Path) -> tuple[str, bool]:
         steps.append("pip install --no-cache-dir uvicorn")
     install = " && ".join(steps) or "true"
     db_link = ""
+    if django:
+        # Django の既定の DB（BASE_DIR / 'db.sqlite3'。BASE_DIR が /app の前提）の実体をボリューム（/data）に置く。
+        # SQLite はリンク先を開き、-wal・-shm もリンク先に作る。-f は、手書きの .dockerignore で db.sqlite3 が
+        # コピーされていてもビルドを止めないため（DB の正はボリューム）
+        db_link = "RUN ln -sf /data/db.sqlite3 /app/db.sqlite3\n"
     if django and cmd is not None:
-        # Django の既定の DB（BASE_DIR / 'db.sqlite3'）の実体をボリューム（/data）に置く。SQLite はリンク先を開き、
-        # -wal・-shm もリンク先に作る。.dockerignore が *.sqlite3 を除くため、COPY したファイルとはぶつからない
-        db_link = "RUN ln -s /data/db.sqlite3 /app/db.sqlite3\n"
         # 起動のたびにマイグレーションを適用する（空のボリュームでの初回の起動と、スキーマの更新のため）。
-        # exec で gunicorn を PID 1 にし、停止の合図を受ける
-        cmd = ["sh", "-c", "python manage.py migrate --noinput && exec " + " ".join(cmd)]
+        # exec でサーバーを PID 1 にし、停止の合図を受ける
+        cmd = ["sh", "-c", "python manage.py migrate --noinput && exec " + shlex.join(cmd)]
     text = (
         _HEADER
         + "FROM python:3.12-slim\n"
@@ -189,7 +194,13 @@ def write_docker_files(d: Path, kind: str) -> tuple[Path, list[str]]:
     warnings: list[str] = []
     if dockerfile.exists():
         warnings.append(f"{dockerfile.name} が既にあるため上書きしませんでした")
-        has_cmd = bool(_HAS_CMD.search(dockerfile.read_text(encoding="utf-8", errors="replace")))
+        existing = dockerfile.read_text(encoding="utf-8", errors="replace")
+        has_cmd = bool(_HAS_CMD.search(existing))
+        if "/data" not in existing:
+            # compose は /data に DB 用の名前付きボリュームをマウントする。イメージに /data がないと root の持ち物で
+            # 作られ、非 root で動くアプリは書き込めない
+            warnings.append("Dockerfile が /data を作っていません。DB を永続化するなら、実行ユーザーの持ち物の /data を作り"
+                            "（例 RUN mkdir /data && chown appuser:appuser /data）、DB をそこに置いてください")
     else:
         text, has_cmd = _python_dockerfile(d) if kind == "python" else _node_dockerfile(d)
         dockerfile.write_text(text, encoding="utf-8", newline="\n")
