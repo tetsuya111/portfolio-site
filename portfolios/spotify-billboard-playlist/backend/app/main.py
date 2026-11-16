@@ -77,9 +77,6 @@ def create_app(
 ) -> FastAPI:
     app = FastAPI(title="Billboard → Spotify Playlist")
     secure_cookie = settings.cookie_secure
-    # サイトの /apps/<slug>/ の下で配信するときは、Cookie もそのパスの下に限る
-    state_cookie_path = settings.public_path + "/auth"
-    session_cookie_path = settings.public_path + "/"
     limiter = chart_limiter or RateLimiter(CHART_RATE_LIMIT, CHART_RATE_WINDOW)
 
     def require_same_origin(request: Request) -> None:
@@ -161,7 +158,7 @@ def create_app(
             STATE_COOKIE,
             state,
             max_age=STATE_MAX_AGE,
-            path=state_cookie_path,
+            path="/auth",
             httponly=True,
             samesite="lax",
             secure=secure_cookie,
@@ -201,12 +198,12 @@ def create_app(
             )
         )
         response = RedirectResponse(settings.frontend_url + "/", status_code=302)
-        response.delete_cookie(STATE_COOKIE, path=state_cookie_path)
+        response.delete_cookie(STATE_COOKIE, path="/auth")
         response.set_cookie(
             SESSION_COOKIE,
             sid,
             max_age=SESSION_MAX_AGE,
-            path=session_cookie_path,
+            path="/",
             httponly=True,
             samesite="lax",
             secure=secure_cookie,
@@ -231,7 +228,7 @@ def create_app(
         if current is not None:
             sessions.delete(current[0])
         response = Response(status_code=204)
-        response.delete_cookie(SESSION_COOKIE, path=session_cookie_path)
+        response.delete_cookie(SESSION_COOKIE, path="/")
         return response
 
     # ---- プレイリスト ----
