@@ -78,8 +78,8 @@ def _module(rel: Path) -> str:
     return ".".join(rel.with_suffix("").parts)
 
 
-def _python_command(d: Path) -> tuple[list[str] | None, bool]:
-    """起動コマンドと、gunicorn を入れる必要があるかを返す。"""
+def _python_command(d: Path) -> tuple[list[str] | None, bool, bool]:
+    """起動コマンドと、gunicorn を入れる必要があるか、Django（manage.py と wsgi.py）で起動するかを返す。"""
     host = ["--host", "0.0.0.0", "--port", str(PYTHON_PORT)]
     bind = ["--bind", f"0.0.0.0:{PYTHON_PORT}"]
     fastapi = wsgi = flask = None
@@ -88,7 +88,7 @@ def _python_command(d: Path) -> tuple[list[str] | None, bool]:
         m = _UVICORN.search(text)
         if m:
             # 記載された起動方法を最優先する（見つかった時点で探索をやめる）
-            return ["uvicorn", m.group(1)] + (["--factory"] if m.group(2) else []) + host, False
+            return ["uvicorn", m.group(1)] + (["--factory"] if m.group(2) else []) + host, False, False
         if rel.suffix != ".py":
             continue
         if fastapi is None and (a := _FASTAPI_ASSIGN.search(text)):
@@ -99,10 +99,10 @@ def _python_command(d: Path) -> tuple[list[str] | None, bool]:
             flask = ["gunicorn", f"{_module(rel)}:{a.group(1)}"] + bind
     for cmd in (fastapi, wsgi, flask):
         if cmd is not None:
-            return cmd, cmd[0] == "gunicorn"
+            return cmd, cmd[0] == "gunicorn", cmd is wsgi
     if (d / "main.py").is_file():
-        return ["python", "main.py"], False
-    return None, False
+        return ["python", "main.py"], False, False
+    return None, False, False
 
 
 def _cmd_line(cmd: list[str] | None) -> str:
@@ -121,13 +121,21 @@ def _python_dockerfile(d: Path) -> tuple[str, bool]:
     if pyproject.is_file() and re.search(r"^\[project\]", pyproject.read_text(encoding="utf-8", errors="replace"),
                                          re.MULTILINE):
         steps.append("pip install --no-cache-dir .")
-    cmd, gunicorn = _python_command(d)
+    cmd, gunicorn, django = _python_command(d)
     # 起動に使うサーバーは依存に書かれていないことがあるため入れる（既に入っていれば何もしない）
     if gunicorn:
         steps.append("pip install --no-cache-dir gunicorn")
     elif cmd is not None and cmd[0] == "uvicorn":
         steps.append("pip install --no-cache-dir uvicorn")
     install = " && ".join(steps) or "true"
+    db_link = ""
+    if django and cmd is not None:
+        # Django の既定の DB（BASE_DIR / 'db.sqlite3'）の実体をボリューム（/data）に置く。SQLite はリンク先を開き、
+        # -wal・-shm もリンク先に作る。.dockerignore が *.sqlite3 を除くため、COPY したファイルとはぶつからない
+        db_link = "RUN ln -s /data/db.sqlite3 /app/db.sqlite3\n"
+        # 起動のたびにマイグレーションを適用する（空のボリュームでの初回の起動と、スキーマの更新のため）。
+        # exec で gunicorn を PID 1 にし、停止の合図を受ける
+        cmd = ["sh", "-c", "python manage.py migrate --noinput && exec " + " ".join(cmd)]
     text = (
         _HEADER
         + "FROM python:3.12-slim\n"
@@ -135,10 +143,13 @@ def _python_dockerfile(d: Path) -> tuple[str, bool]:
         "WORKDIR /app\n"
         # 実行ユーザーがアプリのディレクトリ（SQLite などのデータ）に書き込めるよう、所有者を合わせる
         # COPY --chown はコピーしたファイルだけの所有者を変え、WORKDIR で root が作った /app 自体は変えない。
-        # 起動時に /app/logs・/app/data を作るアプリ（取り込み時に除いたディレクトリ）のため、/app も渡す
-        "RUN useradd --create-home appuser && chown appuser:appuser /app\n"
+        # 起動時に /app/logs・/app/data を作るアプリ（取り込み時に除いたディレクトリ）のため、/app も渡す。
+        # /data は DB を置く名前付きボリュームのマウント先。初回のマウントでイメージの所有者が引き継がれる
+        "RUN useradd --create-home appuser && mkdir /data && chown appuser:appuser /app /data\n"
         "COPY --chown=appuser:appuser . .\n"
         f"RUN {install}\n"
+        + db_link
+        +
         "USER appuser\n"
         f"EXPOSE {PYTHON_PORT}\n"
         + _cmd_line(cmd)
@@ -158,7 +169,8 @@ def _node_dockerfile(d: Path) -> tuple[str, bool]:
         + "FROM node:22-slim\n"
         "WORKDIR /app\n"
         # 実行ユーザー（node）がアプリのディレクトリに書き込めるよう、所有者を合わせてから依存を入れる
-        "RUN chown node:node /app\n"
+        # /data は DB を置く名前付きボリュームのマウント先。初回のマウントでイメージの所有者が引き継がれる
+        "RUN mkdir /data && chown node:node /app /data\n"
         "USER node\n"
         "COPY --chown=node:node package*.json ./\n"
         f"RUN {install}\n"

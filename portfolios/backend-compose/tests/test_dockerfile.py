@@ -32,8 +32,12 @@ class WriteDockerFilesTest(TempDirMixin, unittest.TestCase):
         # 起動時に /app/logs・/app/data を作るアプリのため、/app 自体も実行ユーザーの持ち物にする
         write(self.tmp / "requirements.txt", "")
         text, _ = self.dockerfile()
-        self.assertIn("RUN useradd --create-home appuser && chown appuser:appuser /app\n", text)
+        # /data は名前付きボリュームのマウント先。初回のマウントでイメージの所有者が引き継がれる
+        self.assertIn("RUN useradd --create-home appuser && mkdir /data && chown appuser:appuser /app /data\n", text)
         self.assertLess(text.index("chown appuser:appuser /app"), text.index("USER appuser"))
+        # Django 以外には、DB のシンボリックリンクも migrate も入れない
+        self.assertNotIn("db.sqlite3", text)
+        self.assertNotIn("migrate", text)
 
     def test_django_uses_gunicorn(self):
         write(self.tmp / "requirements.txt", "django\n")
@@ -41,7 +45,11 @@ class WriteDockerFilesTest(TempDirMixin, unittest.TestCase):
         write(self.tmp / "config" / "wsgi.py", "application = get_wsgi_application()\n")
         text, _ = self.dockerfile()
         self.assertIn("pip install --no-cache-dir gunicorn", text)
-        self.assertIn('CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]', text)
+        # 起動のたびに migrate し、Django の既定の DB（/app/db.sqlite3）の実体をボリューム（/data）に置く
+        self.assertIn('CMD ["sh", "-c", "python manage.py migrate --noinput && '
+                      'exec gunicorn config.wsgi:application --bind 0.0.0.0:8000"]', text)
+        self.assertIn("RUN ln -s /data/db.sqlite3 /app/db.sqlite3\n", text)
+        self.assertLess(text.index("ln -s"), text.index("USER appuser"))
 
     def test_flask_uses_gunicorn(self):
         write(self.tmp / "requirements.txt", "flask\n")
@@ -61,6 +69,7 @@ class WriteDockerFilesTest(TempDirMixin, unittest.TestCase):
         write(self.tmp / "package-lock.json", "{}")
         text, _ = self.dockerfile("node")
         self.assertIn('CMD ["npm", "start"]', text)
+        self.assertIn("RUN mkdir /data && chown node:node /app /data\n", text)
         self.assertIn("npm ci --omit=dev", text)
         self.assertIn("EXPOSE 3000", text)
 
