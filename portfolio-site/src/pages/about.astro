@@ -71,7 +71,11 @@ const card = "rounded-card border border-line bg-surface shadow-sm";
         {body.career.length > 0 && (
           <section class="mt-14">
             <SectionHeading eyebrow="Career" title="経歴" class="mb-6" />
-            {/* 左の縦線（グラデーション）に沿って、各項目の点とカードを並べる */}
+            {/*
+              左の縦線（グラデーション）に沿って、各項目の点とカードを並べる。
+              点の位置 -left-[35px] は、ol の pl-9（36px）・線の before:left-2.5（10px）と w-0.5（2px）・点の size-5（20px）から
+              「線の中心 11px − 点の半径 10px − 36px」で決めている。どれかを変えるときは合わせて直す
+            */}
             <ol
               aria-label="経歴"
               class="relative space-y-5 pl-9 before:absolute before:inset-y-3 before:left-2.5 before:w-0.5 before:rounded-full before:bg-spectrum-y before:content-['']"

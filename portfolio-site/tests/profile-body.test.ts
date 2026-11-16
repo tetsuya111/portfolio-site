@@ -55,6 +55,8 @@ describe("parseProfileBody", () => {
   it("splits details only on 、 outside nested parentheses", () => {
     const body = "## 経歴\n\n- 2025年: 開発（React（Next.js、Remix）、TypeScript）\n";
     expect(parseProfileBody(body)?.career[0]?.details).toEqual(["React（Next.js、Remix）", "TypeScript"]);
+    const half = "## 経歴\n\n- 2025年: 開発（React (Next.js、Remix)、TypeScript）\n";
+    expect(parseProfileBody(half)?.career[0]?.details).toEqual(["React (Next.js、Remix)", "TypeScript"]);
   });
 
   it("allows sections to be missing", () => {
@@ -90,6 +92,10 @@ describe("parseProfileBody", () => {
     ["an apostrophe", sample.replace("二段落目。", "It's")],
     ["a double hyphen", sample.replace("二段落目。", "a -- b")],
     ["an ellipsis", sample.replace("二段落目。", "続く...")],
+    ["an email address", sample.replace("二段落目。", "連絡: me@example.com")],
+    ["a hard line break", sample.replace("一段落目。\n", "一段落目。  \n")],
+    ["a nested ordered list marker", sample.replace("- Python / Go", "- 1. Python / Go")],
+    ["a nested bullet marker", sample.replace("- Python / Go", "- - Python / Go")],
   ])("returns null for %s", (_, body) => {
     expect(parseProfileBody(body)).toBeNull();
   });

@@ -23,9 +23,10 @@ export interface ProfileBody {
 
 /**
  * 描画すると Markdown の装飾・HTML・エスケープ・自動リンク・記号の置き換え（smartypants の引用符・ダッシュ・三点リーダー）
- * になりうるもの。そのまま文字として出すと Markdown の表示と変わるため扱わない
+ * になりうるもの（@ はメールアドレスの自動リンク、行末の2つ以上の空白は強制改行）。
+ * そのまま文字として出すと Markdown の表示と変わるため扱わない
  */
-const DECORATION = /[[\]*`<>_|#&\\~"']|--|\.\.\.|:\/\/|www\./;
+const DECORATION = /[[\]*`<>_|#&\\~"'@]|--|\.\.\.|:\/\/|www\.| {2,}$/m;
 
 /** 段落として読めない行（Markdown の箇条書き・区切り線・見出しの下線・字下げのコードなど） */
 const NON_PARAGRAPH = /^(?:\s|[-+]\s|\d+[.)]\s|[-=]+\s*$)/;
@@ -34,16 +35,18 @@ const NON_PARAGRAPH = /^(?:\s|[-+]\s|\d+[.)]\s|[-=]+\s*$)/;
 const SECTION_ORDER = ["自己紹介", "経歴", "スキル", "資格#h3"];
 
 const LIST_ITEM = /^- (\S.*)$/;
+/** 箇条書きの中身の先頭が、さらに箇条書きの記号（入れ子のリストになる） */
+const NESTED_MARKER = /^(?:[-+*]|\d+[.)])(?:\s|$)/;
 const CAREER_ITEM = /^([^:：]{1,30}?)\s*[:：]\s*(\S.*)$/;
 
-/** 「、」で区切る。入れ子の（）の中の「、」では区切らない */
+/** 「、」で区切る。入れ子の（）・()の中の「、」では区切らない */
 function splitTopLevel(text: string): string[] {
   const parts: string[] = [];
   let depth = 0;
   let current = "";
   for (const ch of text) {
-    if (ch === "（") depth++;
-    else if (ch === "）") depth = Math.max(0, depth - 1);
+    if (ch === "（" || ch === "(") depth++;
+    else if (ch === "）" || ch === ")") depth = Math.max(0, depth - 1);
     if (ch === "、" && depth === 0) {
       parts.push(current);
       current = "";
@@ -80,7 +83,7 @@ function listItems(lines: string[]): string[] | null {
   for (const line of lines) {
     if (line.trim() === "") continue;
     const m = LIST_ITEM.exec(line.trimEnd());
-    if (!m) return null;
+    if (!m || NESTED_MARKER.test(m[1] as string)) return null;
     items.push((m[1] as string).trim());
   }
   return items;
