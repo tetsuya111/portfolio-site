@@ -4,3 +4,4 @@ certs/
 certbot/
 # バックエンドの秘密情報（VPS 上で配置する）
 services/*/.env
+letsencrypt/

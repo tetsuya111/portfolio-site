@@ -1,0 +1,2 @@
+# VPS（Linux）で sh に読ませるため、Windows で checkout しても改行を LF のままにする
+*.sh text eol=lf
