@@ -9,9 +9,18 @@ import { audienceSchema, portfolioSchema } from "../src/lib/schemas";
 import { resolveConsultation } from "../src/lib/consultation";
 import { resolveTheme } from "../src/lib/theme";
 import { siteConfig } from "../src/site.config";
+import { parseProfileBody } from "../src/lib/profile-body";
 
 const dist = join(import.meta.dirname, "..", "dist");
 const html = (p: string) => readFileSync(join(dist, p, "index.html"), "utf8");
+/** Astro がテキストに行うのと同じエスケープ（& < > " '） */
+const escapeHtml = (t: string) =>
+  t
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 
 describe("build output", () => {
   it("has dist/", () => {
@@ -52,14 +61,7 @@ describe("build output", () => {
     // タイトルが order の順に、見出しの後に並ぶ
     let pos = heading;
     for (const t of titles) {
-      // Astro はテキストの & < > " ' をエスケープして出力する
-      const escaped = t
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#39;");
-      const next = top.indexOf(`>${escaped}</h3>`, pos);
+      const next = top.indexOf(`>${escapeHtml(t)}</h3>`, pos);
       expect(next, t).toBeGreaterThan(pos);
       pos = next;
     }
@@ -118,6 +120,37 @@ describe("build output", () => {
     const name = profile.data.name;
     expect(typeof name === "string" && name.length > 0).toBe(true);
     expect(html("about")).toContain(`>${String(name)}</h1>`);
+  });
+
+  it("shows the summary, the career timeline, skills and certifications on the about page", () => {
+    // 期待値は profile.md から求める（内容を差し替えてもテストを直さずに済むように）
+    const md = parseMarkdown(readFileSync(join(import.meta.dirname, "..", "src", "content", "profile", "profile.md"), "utf8"));
+    const body = parseProfileBody(md.body);
+    if (!body) throw new Error("profile.md の本文が決まった書式ではありません");
+    const about = html("about");
+    const esc = escapeHtml;
+    // meta description にも同じ文が出るため、ヘッダーの段落（<p>）として出ていることを確かめる
+    if (typeof md.data.summary === "string") expect(about).toContain(`>${esc(md.data.summary)}</p>`);
+    const timeline = /<ol[^>]*aria-label="経歴"[^>]*>([\s\S]*?)<\/ol>/.exec(about)?.[1] ?? "";
+    expect(timeline.match(/data-period/g)?.length).toBe(body.career.length);
+    for (const c of body.career) {
+      expect(timeline).toContain(esc(c.period));
+      expect(timeline).toContain(`>${esc(c.title)}</h3>`);
+      for (const d of c.details) expect(timeline).toContain(`>${esc(d)}</li>`);
+    }
+    // タグは、それぞれの一覧の中の項目（# ・✓ の飾りの後）として出ていることを確かめる
+    const region = (label: string, end: string) => {
+      const start = about.indexOf(`aria-label="${label}"`);
+      expect(start, label).toBeGreaterThanOrEqual(0);
+      return about.slice(start, about.indexOf(end, start));
+    };
+    const skills = region("スキル", "</section>");
+    for (const tag of body.skills.flat()) expect(skills).toContain(`#</span>${esc(tag)}</li>`);
+    const certs = region("資格", "</ul>");
+    for (const tag of body.certifications.flat()) expect(certs).toContain(`✓</span>${esc(tag)}</li>`);
+    expect(about).toMatch(/<h3[^>]*>資格<\/h3>/);
+    // 決まった書式で読めたときは、本文を Markdown のまま重ねて出さない
+    expect(about).not.toContain('class="prose');
   });
 
   it("lists published articles and excludes drafts", () => {

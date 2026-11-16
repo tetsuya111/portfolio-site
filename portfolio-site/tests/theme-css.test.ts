@@ -25,6 +25,10 @@ const TOKENS = [
   "focus",
   "hero-from",
   "hero-to",
+  "spectrum-1",
+  "spectrum-2",
+  "spectrum-3",
+  "spectrum-4",
   "font-body",
   "font-heading",
   "font-eyebrow",
@@ -79,7 +83,20 @@ const TEXT_PAIRS: [string, string][] = [
   // 冒頭のパネルの小見出し（Hello・Profile）
   ["link", "hero-from"],
   ["link", "hero-to"],
+  // 自己紹介ページの色分け（期間・タグの文字）
+  ...[1, 2, 3, 4].flatMap((n): [string, string][] => [
+    [`spectrum-${n}`, "surface"],
+    [`spectrum-${n}`, "base"],
+  ]),
 ];
+
+/** a を p（0〜1）、b を 1 - p の割合で混ぜた色（Tailwind の bg-xxx/10 を surface に重ねたときの見た目） */
+function mix(a: string, b: string, p: number): string {
+  const ch = (h: string, i: number) => parseInt(h.slice(1 + i * 2, 3 + i * 2), 16);
+  return `#${[0, 1, 2]
+    .map((i) => Math.round(ch(a, i) * p + ch(b, i) * (1 - p)).toString(16).padStart(2, "0"))
+    .join("")}`;
+}
 // フォーカス枠など文字以外の要素は 3:1（WCAG 2.1 1.4.11）
 const NON_TEXT_PAIRS: [string, string][] = [
   ["focus", "base"],
@@ -107,6 +124,12 @@ describe.each(THEMES)("theme %s", (theme) => {
 
   it.each(NON_TEXT_PAIRS)("%s on %s has contrast >= 3", (fg, bg) => {
     expect(contrast(vars[fg] as string, vars[bg] as string)).toBeGreaterThanOrEqual(3);
+  });
+
+  // 自己紹介ページのタグ: 文字 text-spectrum-N、背景 bg-spectrum-N/10（surface の上）
+  it.each([1, 2, 3, 4])("spectrum-%i on its 10%% tint has contrast >= 4.5", (n) => {
+    const c = vars[`spectrum-${n}`] as string;
+    expect(contrast(c, mix(c, vars.surface as string, 0.1))).toBeGreaterThanOrEqual(4.5);
   });
 });
 
