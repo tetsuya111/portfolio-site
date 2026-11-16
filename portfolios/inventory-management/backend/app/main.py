@@ -1,0 +1,44 @@
+"""FastAPI アプリケーションの組み立て。"""
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app import security
+from app.config import Settings, get_settings
+from app.db import make_engine, make_session_factory
+from app.routers import auth, inventory, products, users
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    settings = settings or get_settings()
+    settings.validate_for_env()
+    if settings.is_production and security.BCRYPT_ROUNDS < security.MIN_PRODUCTION_BCRYPT_ROUNDS:
+        minimum = security.MIN_PRODUCTION_BCRYPT_ROUNDS
+        raise ValueError(f"本番環境の BCRYPT_ROUNDS は {minimum} 以上にしてください。")
+
+    app = FastAPI(
+        title="在庫管理システム API",
+        version="0.1.0",
+        description="商品マスタ・入出庫・在庫集計を扱う在庫管理システムの API。",
+    )
+    app.state.settings = settings
+    app.state.engine = make_engine(settings.database_url)
+    app.state.session_factory = make_session_factory(app.state.engine)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
+
+    @app.get("/health", tags=["system"])
+    def health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    app.include_router(auth.router)
+    app.include_router(users.router)
+    app.include_router(products.router)
+    app.include_router(inventory.router)
+    return app

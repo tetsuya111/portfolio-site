@@ -1,0 +1,20 @@
+# 開発・動作確認用。バックエンドだけをコンテナで起動する（フロントエンドは npm run dev:frontend）。
+#   docker compose up -d --build
+#   docker compose exec backend python -m app.cli seed-demo
+services:
+  backend:
+    build: ./backend
+    ports:
+      # 開発用の秘密鍵で動くため、このマシンからだけ接続できるようにする
+      - "127.0.0.1:8000:8000"
+    environment:
+      # 開発用。本番では APP_ENV=production（Dockerfile の既定）と32文字以上の JWT_SECRET を指定する。
+      APP_ENV: development
+      DATABASE_URL: sqlite:////data/inventory.db
+      CORS_ORIGINS: http://localhost:3000
+      JWT_SECRET: ${JWT_SECRET:-}
+    volumes:
+      - inventory-data:/data
+
+volumes:
+  inventory-data:

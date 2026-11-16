@@ -1,0 +1,17 @@
+{
+  "name": "inventory-management",
+  "private": true,
+  "description": "在庫管理システム（FastAPI + Next.js）",
+  "scripts": {
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "node scripts/run-backend.mjs -m pytest",
+    "test:frontend": "npm --prefix frontend test",
+    "lint": "npm run lint:backend && npm run lint:frontend",
+    "lint:backend": "node scripts/run-backend.mjs -m ruff check . && node scripts/run-backend.mjs -m ruff format --check .",
+    "lint:frontend": "npm --prefix frontend run lint",
+    "build": "npm --prefix frontend run build",
+    "dev:backend": "node scripts/run-backend.mjs -m uvicorn app.main:create_app --factory --reload --port 8000",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "db:migrate": "node scripts/run-backend.mjs -m alembic upgrade head"
+  }
+}
