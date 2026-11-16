@@ -73,7 +73,8 @@ export function parseMapConfig(raw: unknown): MapConfig {
     area = {
       name: text(raw.area.name, "area.name"),
       center: {
-        lat: numberIn(center.lat, -90, 90, "area.center.lat"),
+        // 極付近は検索範囲の計算（経度方向の幅）が発散するため除外する
+        lat: numberIn(center.lat, -85, 85, "area.center.lat"),
         lng: numberIn(center.lng, -180, 180, "area.center.lng"),
       },
       radiusMeters: numberIn(raw.area.radiusMeters, 1, 50000, "area.radiusMeters"),

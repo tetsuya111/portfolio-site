@@ -50,4 +50,12 @@ describe("createGenreBar", () => {
     createGenreBar(container, genres.slice(0, 1), () => {});
     expect(buttons()).toHaveLength(1);
   });
+
+  test("setDisabled でボタンを押せなくする", () => {
+    const bar = createGenreBar(container, genres, () => {});
+    bar.setDisabled(true);
+    expect(buttons().every((b) => b.disabled)).toBe(true);
+    bar.setDisabled(false);
+    expect(buttons().some((b) => b.disabled)).toBe(false);
+  });
 });

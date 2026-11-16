@@ -19,13 +19,17 @@ interface GoogleGlobal {
 
 /**
  * Maps JavaScript API を読み込む関数を作る。
- * 返した関数は何度呼んでも script を1回だけ追加し、同じ Promise を返す。
+ * 返した関数は読み込み中・読み込み済みなら同じ Promise を返し、script を重複して追加しない。
+ * 読み込みに失敗した場合は保持せず、次の呼び出しで読み込み直す。
  */
 export function createGoogleMapsLoader(): (options: LoadOptions) => Promise<GoogleLibraries> {
   let loading: Promise<GoogleLibraries> | null = null;
 
   return (options) => {
-    loading ??= load(options);
+    loading ??= load(options).catch((error: unknown) => {
+      loading = null;
+      throw error;
+    });
     return loading;
   };
 }
@@ -51,9 +55,10 @@ function load({ apiKey, onAuthFailure }: LoadOptions): Promise<GoogleLibraries> 
     script.id = SCRIPT_ID;
     script.src = url.toString();
     script.async = true;
-    script.addEventListener("error", () =>
-      reject(new Error("Google マップを読み込めませんでした。通信状況を確認してください。")),
-    );
+    script.addEventListener("error", () => {
+      script.remove();
+      reject(new Error("Google マップを読み込めませんでした。通信状況を確認してください。"));
+    });
     document.head.append(script);
   });
 

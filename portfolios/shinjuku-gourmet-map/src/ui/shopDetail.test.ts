@@ -33,9 +33,8 @@ const q = (selector: string) => el.querySelector(selector);
 
 describe("createShopDetail", () => {
   test("最初は非表示", () => {
-    const detail = createShopDetail(el, { onClose: () => {} });
+    createShopDetail(el, { onClose: () => {} });
     expect(el.hidden).toBe(true);
-    expect(detail.isOpen()).toBe(false);
   });
 
   test("店名・住所を表示する", () => {
@@ -102,7 +101,6 @@ describe("createShopDetail", () => {
     detail.show(fullShop());
     (q(".shop-detail__close") as HTMLButtonElement).click();
     expect(el.hidden).toBe(true);
-    expect(detail.isOpen()).toBe(false);
     expect(onClose).toHaveBeenCalledOnce();
   });
 
@@ -129,5 +127,17 @@ describe("createShopDetail", () => {
     detail.show(minimalShop());
     expect(el.querySelectorAll("h2")).toHaveLength(1);
     expect(q("h2")?.textContent).toBe("最小の店");
+  });
+
+  test("閲覧者が閉じたら、開く前にフォーカスしていた要素へ戻す", () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    const detail = createShopDetail(el, { onClose: () => {} });
+    detail.show(fullShop());
+    detail.show(minimalShop());
+    (q(".shop-detail__close") as HTMLButtonElement).click();
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
   });
 });

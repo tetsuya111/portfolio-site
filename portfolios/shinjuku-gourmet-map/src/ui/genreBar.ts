@@ -3,6 +3,8 @@ import type { Genre } from "../config/parseMapConfig";
 export interface GenreBar {
   /** 選択中のジャンルを切り替える（見た目と aria-pressed） */
   setActive(genreId: string): void;
+  /** 地図が使えないときなどに、すべてのボタンを押せなくする */
+  setDisabled(disabled: boolean): void;
 }
 
 /** 設定ファイルのジャンルを定義順にボタンとして描画する */
@@ -37,6 +39,9 @@ export function createGenreBar(
         button.setAttribute("aria-pressed", String(active));
         button.classList.toggle("genre-button--active", active);
       }
+    },
+    setDisabled(disabled) {
+      for (const button of buttons) button.disabled = disabled;
     },
   };
 }

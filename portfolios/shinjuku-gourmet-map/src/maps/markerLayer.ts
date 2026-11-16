@@ -1,8 +1,17 @@
 import type { Shop } from "../places/shop";
-import type { AdvancedMarker, CoreLibrary, GoogleMap, MapListener, MarkerLibrary } from "./googleTypes";
+import type {
+  AdvancedMarker,
+  CoreLibrary,
+  GoogleMap,
+  LatLngLiteral,
+  MapListener,
+  MarkerLibrary,
+} from "./googleTypes";
 
 /** 全ピンを収めるときの地図の余白（px） */
 const FIT_PADDING = 48;
+/** 検索結果が1件のときのズーム（店の周辺が分かる縮尺） */
+export const SINGLE_SHOP_ZOOM = 17;
 
 export interface MarkerLayer {
   /** 前のピンを消し、店舗ごとにピンを描いて表示範囲を合わせる */
@@ -16,6 +25,8 @@ interface Dependencies {
   map: GoogleMap;
   marker: MarkerLibrary;
   core: CoreLibrary;
+  /** 検索結果が0件のときに戻す表示（エリアの中心と初期ズーム） */
+  defaultView: { center: LatLngLiteral; zoom: number };
 }
 
 interface Pin {
@@ -31,7 +42,7 @@ function createPinElement(): HTMLElement {
   return el;
 }
 
-export function createMarkerLayer({ map, marker, core }: Dependencies): MarkerLayer {
+export function createMarkerLayer({ map, marker, core, defaultView }: Dependencies): MarkerLayer {
   let pins: Pin[] = [];
 
   const clear = () => {
@@ -58,9 +69,13 @@ export function createMarkerLayer({ map, marker, core }: Dependencies): MarkerLa
         return { shopId: shop.id, marker: m, listener, element };
       });
 
-      if (shops.length === 1) {
+      if (shops.length === 0) {
+        map.panTo(defaultView.center);
+        map.setZoom(defaultView.zoom);
+      } else if (shops.length === 1) {
         map.panTo(shops[0].location);
-      } else if (shops.length > 1) {
+        map.setZoom(SINGLE_SHOP_ZOOM);
+      } else {
         const bounds = new core.LatLngBounds();
         for (const shop of shops) bounds.extend(shop.location);
         map.fitBounds(bounds, FIT_PADDING);

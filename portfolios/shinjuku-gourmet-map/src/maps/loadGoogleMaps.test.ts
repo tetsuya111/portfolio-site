@@ -69,4 +69,17 @@ describe("createGoogleMapsLoader", () => {
     simulateLoaded();
     expect(await second).toBe(await first);
   });
+
+  test("読み込みに失敗したら、次の呼び出しで読み込み直す", async () => {
+    const load = createGoogleMapsLoader();
+    const first = load({ apiKey: "k" });
+    const failed = findScript();
+    failed.dispatchEvent(new Event("error"));
+    await expect(first).rejects.toThrow();
+    const second = load({ apiKey: "k" });
+    expect(findScript()).not.toBe(failed);
+    expect(document.querySelectorAll(`#${SCRIPT_ID}`)).toHaveLength(1);
+    simulateLoaded();
+    await expect(second).resolves.toBeDefined();
+  });
 });

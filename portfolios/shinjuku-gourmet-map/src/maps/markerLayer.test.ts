@@ -6,7 +6,7 @@ import type {
   LatLngLiteral,
 } from "./googleTypes";
 import type { Shop } from "../places/shop";
-import { createMarkerLayer } from "./markerLayer";
+import { createMarkerLayer, SINGLE_SHOP_ZOOM } from "./markerLayer";
 
 class FakeMarker {
   static created: FakeMarker[] = [];
@@ -33,11 +33,12 @@ class FakeBounds implements LatLngBoundsObject {
 
 function setup() {
   FakeMarker.created = [];
-  const map = { fitBounds: vi.fn(), panTo: vi.fn() };
+  const map = { fitBounds: vi.fn(), panTo: vi.fn(), setZoom: vi.fn() };
   const layer = createMarkerLayer({
     map,
     marker: { AdvancedMarkerElement: FakeMarker },
     core: { LatLngBounds: FakeBounds },
+    defaultView: { center: { lat: 35, lng: 139 }, zoom: 15 },
   });
   return { map, layer };
 }
@@ -82,17 +83,19 @@ describe("createMarkerLayer", () => {
     ]);
   });
 
-  test("1件なら中心を移動するだけ", () => {
+  test("1件ならその店に寄って拡大する（前のジャンルの縮尺を引き継がない）", () => {
     const { map, layer } = setup();
     layer.show([shop("a", 1, 2)], () => {});
     expect(map.panTo).toHaveBeenCalledWith({ lat: 1, lng: 2 });
+    expect(map.setZoom).toHaveBeenCalledWith(SINGLE_SHOP_ZOOM);
     expect(map.fitBounds).not.toHaveBeenCalled();
   });
 
-  test("0件なら地図を動かさない", () => {
+  test("0件ならエリアの初期表示に戻す", () => {
     const { map, layer } = setup();
     layer.show([], () => {});
-    expect(map.panTo).not.toHaveBeenCalled();
+    expect(map.panTo).toHaveBeenCalledWith({ lat: 35, lng: 139 });
+    expect(map.setZoom).toHaveBeenCalledWith(15);
     expect(map.fitBounds).not.toHaveBeenCalled();
   });
 

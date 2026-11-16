@@ -24,7 +24,7 @@ function setup(search = vi.fn(async (g: Genre) => [shop(`${g.id}-1`), shop(`${g.
     search,
     layer: { show: vi.fn(), clear: vi.fn(), highlight: vi.fn() },
     status: { loading: vi.fn(), result: vi.fn(), error: vi.fn() },
-    detail: { show: vi.fn(), hide: vi.fn(), isOpen: vi.fn(() => false) },
+    detail: { show: vi.fn(), hide: vi.fn() },
     setActiveGenre: vi.fn(),
   };
   return { deps, app: createApp(deps) };
@@ -130,5 +130,39 @@ describe("createApp", () => {
     deps.genres.length = 0;
     await app.start();
     expect(deps.search).not.toHaveBeenCalled();
+  });
+  test("start に渡したジャンルから始める", async () => {
+    const { deps, app } = setup();
+    await app.start(cafe);
+    expect(deps.search).toHaveBeenCalledWith(cafe);
+    expect(deps.search).not.toHaveBeenCalledWith(ramen);
+  });
+
+  test("ピンの表示で例外が起きてもエラーを表示する", async () => {
+    const { deps, app } = setup();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    deps.layer.show.mockImplementation(() => {
+      throw new Error("marker");
+    });
+    await app.selectGenre(ramen);
+    expect(deps.status.error).toHaveBeenCalledWith(
+      "ラーメンのお店を読み込めませんでした。時間をおいてもう一度お試しください。",
+    );
+  });
+
+  test("disable 後は検索中の結果も新しい操作も反映しない", async () => {
+    const pending = deferred<Shop[]>();
+    const { deps, app } = setup(vi.fn(() => pending.promise));
+    const first = app.selectGenre(ramen);
+    app.disable();
+    expect(deps.layer.clear).toHaveBeenCalled();
+    expect(deps.detail.hide).toHaveBeenCalled();
+    pending.resolve([shop("ramen-1")]);
+    await first;
+    await app.selectGenre(cafe);
+    expect(deps.layer.show).not.toHaveBeenCalled();
+    expect(deps.status.result).not.toHaveBeenCalled();
+    expect(deps.status.loading).toHaveBeenCalledTimes(1);
+    expect(deps.search).toHaveBeenCalledTimes(1);
   });
 });

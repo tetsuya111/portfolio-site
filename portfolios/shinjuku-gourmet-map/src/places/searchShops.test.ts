@@ -38,6 +38,12 @@ describe("boundsAround", () => {
   });
 });
 
+test("経度は -180〜180 に収める", () => {
+  const b = boundsAround({ lat: 0, lng: 179.99 }, 5000);
+  expect(b.east).toBe(180);
+  expect(boundsAround({ lat: 0, lng: -179.99 }, 5000).west).toBe(-180);
+});
+
 describe("buildSearchRequest", () => {
   test("ジャンルのクエリ・エリア・取得項目・件数上限を指定する", () => {
     const req = buildSearchRequest(genre, area);

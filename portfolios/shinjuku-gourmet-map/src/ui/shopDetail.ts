@@ -4,7 +4,6 @@ export interface ShopDetail {
   show(shop: Shop): void;
   /** プログラムから閉じる（onClose は呼ばない） */
   hide(): void;
-  isOpen(): boolean;
 }
 
 export interface ShopDetailOptions {
@@ -73,6 +72,9 @@ export function createShopDetail(el: HTMLElement, { onClose }: ShopDetailOptions
   el.classList.add("shop-detail");
   el.setAttribute("aria-label", "お店の詳細");
 
+  /** 開く前にフォーカスしていた要素（閲覧者が閉じたらここへ戻す） */
+  let returnFocusTo: HTMLElement | null = null;
+
   const hide = () => {
     el.hidden = true;
     el.replaceChildren();
@@ -80,6 +82,8 @@ export function createShopDetail(el: HTMLElement, { onClose }: ShopDetailOptions
   const closeByUser = () => {
     if (el.hidden) return;
     hide();
+    if (returnFocusTo?.isConnected) returnFocusTo.focus();
+    returnFocusTo = null;
     onClose();
   };
 
@@ -89,6 +93,8 @@ export function createShopDetail(el: HTMLElement, { onClose }: ShopDetailOptions
 
   return {
     show(shop) {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && !el.contains(active)) returnFocusTo = active;
       const closeButton = h("button", "shop-detail__close", "×");
       closeButton.type = "button";
       closeButton.setAttribute("aria-label", "閉じる");
@@ -98,6 +104,5 @@ export function createShopDetail(el: HTMLElement, { onClose }: ShopDetailOptions
       closeButton.focus();
     },
     hide,
-    isOpen: () => !el.hidden,
   };
 }

@@ -85,7 +85,7 @@ docs/specs/             # 本ドキュメント群
 | 項目 | 制約（parseMapConfig で検証、FR-4.2） |
 | --- | --- |
 | `area.name` | 空でない文字列 |
-| `area.center.lat` / `lng` | 数値。lat は -90〜90、lng は -180〜180 |
+| `area.center.lat` / `lng` | 数値。lat は -85〜85（極付近は検索範囲を計算できないため）、lng は -180〜180 |
 | `area.radiusMeters` | 1〜50000 の数値 |
 | `area.zoom` | 1〜21 の数値 |
 | `genres` | 1件以上の配列 |

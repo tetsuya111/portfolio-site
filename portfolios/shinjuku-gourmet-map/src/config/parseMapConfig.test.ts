@@ -70,9 +70,9 @@ describe("parseMapConfig", () => {
 
   test("緯度・経度が範囲外なら報告する", () => {
     const raw = valid();
-    raw.area.center = { lat: 91, lng: -181 };
+    raw.area.center = { lat: 86, lng: -181 };
     const problems = problemsOf(raw);
-    expect(problems).toContain("area.center.lat: -90〜90 の数値を指定してください");
+    expect(problems).toContain("area.center.lat: -85〜85 の数値を指定してください");
     expect(problems).toContain("area.center.lng: -180〜180 の数値を指定してください");
   });
 

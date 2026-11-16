@@ -32,6 +32,7 @@ export interface MapListener {
 export interface GoogleMap {
   fitBounds(bounds: LatLngBoundsObject, padding?: number): void;
   panTo(point: LatLngLiteral): void;
+  setZoom(zoom: number): void;
 }
 
 export interface MapOptions {
