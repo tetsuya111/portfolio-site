@@ -7,13 +7,14 @@
 """
 
 import logging
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.models import MOVEMENT_IN, MOVEMENT_OUT, Product, StockMovement, User, utcnow
-from app.schemas import MovementOut
+from app.schemas import MovementOut, Summary, SummaryItem
 
 logger = logging.getLogger(__name__)
 
@@ -104,4 +105,64 @@ def movement_to_out(movement: StockMovement) -> MovementOut:
         user_id=movement.user_id,
         username=movement.user.username,
         created_at=movement.created_at,
+    )
+
+
+def list_history(
+    db: Session,
+    *,
+    product_id: int | None = None,
+    movement_type: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[StockMovement], int]:
+    """入出庫の記録を新しい順に返す。期間は UTC の日付で両端を含む。"""
+    conditions = []
+    if product_id is not None:
+        conditions.append(StockMovement.product_id == product_id)
+    if movement_type is not None:
+        conditions.append(StockMovement.type == movement_type)
+    if date_from is not None:
+        conditions.append(StockMovement.created_at >= _start_of_day(date_from))
+    if date_to is not None:
+        conditions.append(StockMovement.created_at < _start_of_day(date_to + timedelta(days=1)))
+
+    total = db.scalar(select(func.count(StockMovement.id)).where(*conditions)) or 0
+    items = db.scalars(
+        select(StockMovement)
+        .where(*conditions)
+        .order_by(StockMovement.created_at.desc(), StockMovement.id.desc())
+        .limit(limit)
+        .offset(offset)
+    ).all()
+    return list(items), total
+
+
+def _start_of_day(day: date) -> datetime:
+    return datetime.combine(day, time.min, tzinfo=UTC)
+
+
+def get_summary(db: Session) -> Summary:
+    products = db.scalars(
+        select(Product).where(Product.is_deleted.is_(False)).order_by(Product.sku)
+    ).all()
+    items = [
+        SummaryItem(
+            product_id=p.id,
+            sku=p.sku,
+            name=p.name,
+            unit=p.unit,
+            stock=p.stock,
+            reorder_point=p.reorder_point,
+            is_low=p.stock <= p.reorder_point,
+        )
+        for p in products
+    ]
+    return Summary(
+        items=items,
+        total_products=len(items),
+        total_stock=sum(i.stock for i in items),
+        low_stock_count=sum(1 for i in items if i.is_low),
     )
