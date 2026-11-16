@@ -1,4 +1,4 @@
-import { LOGIN_PATH, type Me } from "@/lib/api";
+import { loginPath, type Me } from "@/lib/api";
 
 type Props = { me: Me | null; onLogout: () => void };
 
@@ -11,7 +11,7 @@ export default function AuthStatus({ me, onLogout }: Props) {
       <section className="auth">
         <span className="badge off">未ログイン</span>
         {/* OAuth はバックエンドへのページ遷移で開始する */}
-        <a className="button spotify" href={LOGIN_PATH}>
+        <a className="button spotify" href={loginPath()}>
           Spotifyでログイン
         </a>
       </section>

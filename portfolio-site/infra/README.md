@@ -8,6 +8,7 @@
 flowchart LR
   User[閲覧者] -- HTTPS --> R53[Route 53<br/>A / AAAA] --> CF[CloudFront<br/>+ ACM 証明書]
   CF -- OAC --> S3[(S3 バケット<br/>非公開)]
+  CF -- "HTTPS<br/>/apps/spotify-billboard-playlist/api/*, /auth/*<br/>（BackendDomainName 指定時）" --> VPS[VPS のバックエンド]
   GH[GitHub] -- PR --> CBT[CodeBuild テスト用<br/>ログ権限のみ]
   GH -- main への push --> CB[CodeBuild デプロイ用]
   CB -- 成功時のみ s3 sync --> S3
@@ -26,11 +27,12 @@ flowchart LR
 | 論理 ID | 種類 | 内容 |
 |---|---|---|
 | `SiteBucket` | S3 バケット | サイトのファイル置き場。パブリックアクセスをすべてブロック、SSE-S3 暗号化、バージョニング有効（旧バージョンは30日で削除）。スタックを削除しても残る（`DeletionPolicy: Retain`） |
-| `SiteBucketPolicy` | バケットポリシー | このディストリビューションからの `s3:GetObject` だけを許可。HTTPS 以外のアクセスは拒否 |
+| `SiteBucketPolicy` | バケットポリシー | このディストリビューションからの `s3:GetObject` と `s3:ListBucket` だけを許可（`ListBucket` は存在しないキーを 403 でなく 404 にするため）。HTTPS 以外のアクセスは拒否 |
 | `OriginAccessControl` | CloudFront OAC | CloudFront が署名付きで S3 を読むための設定 |
 | `Certificate` | ACM 証明書 | `DomainName` の証明書。DNS 検証で、検証用レコードはホストゾーンに自動作成される |
 | `DirectoryIndexFunction` | CloudFront Function | `/about/` や `/about` へのリクエストを `/about/index.html` に置き換える（Astro の出力形式に合わせる） |
-| `Distribution` | CloudFront | HTTPS へリダイレクト、TLS 1.2 以上、HTTP/2・HTTP/3、IPv6。キャッシュはマネージドの CachingOptimized、レスポンスヘッダーは SecurityHeadersPolicy。403/404 は `/404.html` を 404 で返す |
+| `BackendPathFunction` | CloudFront Function | `BackendDomainName` を指定したときだけ。VPS へ転送するパスの先頭の `/apps` を取り除く（`/apps/<slug>/api/...` → `/<slug>/api/...`） |
+| `Distribution` | CloudFront | HTTPS へリダイレクト、TLS 1.2 以上、HTTP/2・HTTP/3、IPv6。キャッシュはマネージドの CachingOptimized、レスポンスヘッダーは SecurityHeadersPolicy。404 は `/404.html` を 404 で返す。ほかのエラー（400・403・5xx など）はページを置き換えずにバックエンドの応答をそのまま返す。エラーは 404 を含めて CloudFront にキャッシュしない（バックエンドが一時的に返したエラーを復旧後に返さないため）。`BackendDomainName` を指定すると、`/apps/spotify-billboard-playlist/api/*`・`/auth/*` を VPS（https のみ、読み取り 60 秒）へキャッシュせずに転送する（Host 以外のヘッダー・Cookie・クエリを渡す。手順は [spotify-billboard-playlist の README](../../portfolios/spotify-billboard-playlist/README.md#ポートフォリオサイトで公開する)） |
 | `AliasRecordA` / `AliasRecordAAAA` | Route 53 | `DomainName` から CloudFront へのエイリアス |
 | `BuildLogGroup` / `TestLogGroup` | CloudWatch Logs | CodeBuild のログ（デプロイ用・テスト用で分ける。30日保存） |
 | `CodeBuildTestRole` | IAM ロール | テスト用。`TestLogGroup` への書き込みだけを許可（S3・CloudFront には触れない）。このアカウントの `<スタック名>-test` からだけ引き受けられる |
@@ -71,6 +73,7 @@ cp infra/parameters.example.json infra/parameters.json  # 値を書き換える
 | `EnableWaf` | | `false` | `true` で CloudFront に WAF（レート制限）を付ける。Web ACL とルールの月額固定費（数 USD）がかかる。`EnableCloudFront=false` なら作らない |
 | `EnableCloudFront` | | `true` | `false` なら CloudFront・ACM 証明書・Route 53 レコード・ディレクトリ補完の Function・WAF を作らず、S3 へのアップロードだけを行う（ブラウザでは確認できない。キャッシュ無効化もしない）。このときだけ `DomainName`・`HostedZoneId` を空にできる |
 | `SiteBucketName` | | `""`（空） | サイトのファイルを置くバケットの名前。空なら自動で付ける。作成済みのスタックで変えるとバケットが作り直される（旧バケットは残る） |
+| `BackendDomainName` | | `""`（空） | バックエンドを動かす VPS のドメイン名（例 `vps.example.com`。https で待ち受けていること。IP アドレスは不可）。指定すると、サイトの `/apps/spotify-billboard-playlist/api/*`・`/auth/*` をその VPS の `/spotify-billboard-playlist/...` へ転送する（ブラウザからはサイトと同一オリジンに見せる）。空なら転送しない。`EnableCloudFront=false` なら使わない |
 | `DeployPath` | | `""`（空） | バケット内のアップロード先のパス（例 `preview`）。CloudFront はこのパスをドメイン直下として配信する（`OriginPath`）。先頭・末尾に `/` を付けない。空ならバケット直下。デプロイ用ロールの S3 権限もこのパス以下に限る |
 | `EnablePrTests` | | `true` | `false` ならプルリクエストのテスト用 CodeBuild（`<スタック名>-test`）とそのロール・ロググループを作らない（dev スタック用） |
 | `ItArticlesScheduleExpression` | | `rate(1 day)` | IT 記事の定期作成の間隔（`rate(...)` か `cron(...)`、タイムゾーンは Asia/Tokyo） |

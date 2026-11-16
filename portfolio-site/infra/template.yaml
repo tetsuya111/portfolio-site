@@ -32,6 +32,15 @@ Parameters:
       英小文字・数字・- のみ（ドット不可）
     # ドットを含む名前は HTTPS の仮想ホスト形式で証明書が合わないため受け付けない
     AllowedPattern: "^$|^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
+  BackendDomainName:
+    Type: String
+    Default: ""
+    Description: >-
+      バックエンドを動かす VPS のドメイン名（例 vps.example.com。https で待ち受けていること）。
+      指定すると、サイトの /apps/spotify-billboard-playlist/api/* と /auth/* をキャッシュせずに https://<この名前>/spotify-billboard-playlist/... へ転送する
+      （ブラウザからはサイトと同一オリジンに見せ、Cookie と CSRF の確認をそのまま使うため）。未指定（空）なら転送しない。EnableCloudFront=false なら使わない。
+      IP アドレスは不可（CloudFront のカスタムオリジンに指定できないため）
+    AllowedPattern: "^$|^(?![0-9.]+$)(?!-)[a-z0-9-]+(\\.[a-z0-9-]+)+$"
   DeployPath:
     Type: String
     Default: ""
@@ -122,6 +131,7 @@ Parameters:
 Conditions:
   UseCloudFront: !Equals [!Ref EnableCloudFront, "true"]
   # CloudFront を作らないときは WAF も作らない
+  UseBackend: !And [!Condition UseCloudFront, !Not [!Equals [!Ref BackendDomainName, ""]]]
   UseWaf: !And [!Equals [!Ref EnableWaf, "true"], !Condition UseCloudFront]
   UsePrTests: !Equals [!Ref EnablePrTests, "true"]
   HasDeployBranch: !Not [!Equals [!Ref DeployBranch, ""]]
@@ -190,6 +200,21 @@ Resources:
                 StringEquals:
                   AWS:SourceArn: !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}"
             - !Ref "AWS::NoValue"
+          # 一覧の権限がないと S3 は存在しないキーに 403 を返す。404 にして、CloudFront で 403 を 404 ページに
+          # 置き換えなくて済むようにする（403 はバックエンドの CSRF の拒否などをそのまま返したいため）。
+          # 一覧そのものは、Function が / で終わる URI に index.html を付けるためビューアーからは取得できない
+          - !If
+            - UseCloudFront
+            - Sid: AllowCloudFrontList
+              Effect: Allow
+              Principal:
+                Service: cloudfront.amazonaws.com
+              Action: s3:ListBucket
+              Resource: !GetAtt SiteBucket.Arn
+              Condition:
+                StringEquals:
+                  AWS:SourceArn: !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}"
+            - !Ref "AWS::NoValue"
           - Sid: DenyInsecureTransport
             Effect: Deny
             Principal: "*"
@@ -243,6 +268,26 @@ Resources:
           return request;
         }
 
+  # VPS へ転送するパスから先頭の /apps を取り除く（/apps/<slug>/api/... → /<slug>/api/...）。
+  # VPS の nginx は /<slug>/ でバックエンドを振り分け、スラッグも取り除いて /api/... で届ける
+  BackendPathFunction:
+    Type: AWS::CloudFront::Function
+    Condition: UseBackend
+    Properties:
+      Name: !Sub "${AWS::StackName}-backend-path"
+      AutoPublish: true
+      FunctionConfig:
+        Comment: VPS へ転送するパスの先頭の /apps を取り除く
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          if (request.uri.indexOf('/apps/') === 0) {
+            request.uri = request.uri.substring('/apps'.length);
+          }
+          return request;
+        }
+
   Distribution:
     Type: AWS::CloudFront::Distribution
     Condition: UseCloudFront
@@ -264,6 +309,45 @@ Resources:
             OriginPath: !If [HasDeployPath, !Sub "/${DeployPath}", !Ref "AWS::NoValue"]
             S3OriginConfig:
               OriginAccessIdentity: ""
+          - !If
+            - UseBackend
+            - Id: BackendOrigin
+              DomainName: !Ref BackendDomainName
+              CustomOriginConfig:
+                HTTPSPort: 443
+                OriginProtocolPolicy: https-only
+                OriginSSLProtocols: [TLSv1.2]
+                # プレイリストの作成（最大100曲の検索）が既定の 30 秒で切れないよう上限の 60 秒にする
+                OriginReadTimeout: 60
+            - !Ref "AWS::NoValue"
+        # バックエンドの API・認証は VPS へ転送する（キャッシュしない。Cookie・クエリ・Host 以外のヘッダーを渡す）
+        # Host は VPS の名前にして、nginx の server_name と証明書に合わせる
+        CacheBehaviors: !If
+          - UseBackend
+          - - PathPattern: /apps/spotify-billboard-playlist/api/*
+              TargetOriginId: BackendOrigin
+              ViewerProtocolPolicy: https-only
+              AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
+              CachedMethods: [GET, HEAD]
+              # マネージドポリシー: CachingDisabled / AllViewerExceptHostHeader / SecurityHeadersPolicy
+              CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+              OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+              ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03
+              FunctionAssociations:
+                - EventType: viewer-request
+                  FunctionARN: !GetAtt BackendPathFunction.FunctionMetadata.FunctionARN
+            - PathPattern: /apps/spotify-billboard-playlist/auth/*
+              TargetOriginId: BackendOrigin
+              ViewerProtocolPolicy: https-only
+              AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
+              CachedMethods: [GET, HEAD]
+              CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+              OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+              ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03
+              FunctionAssociations:
+                - EventType: viewer-request
+                  FunctionARN: !GetAtt BackendPathFunction.FunctionMetadata.FunctionARN
+          - !Ref "AWS::NoValue"
         DefaultCacheBehavior:
           TargetOriginId: SiteBucketOrigin
           ViewerProtocolPolicy: redirect-to-https
@@ -276,16 +360,36 @@ Resources:
           FunctionAssociations:
             - EventType: viewer-request
               FunctionARN: !GetAtt DirectoryIndexFunction.FunctionMetadata.FunctionARN
-        # 存在しないキーは OAC 経由だと 403 になるため、どちらも 404 ページを返す
+        # エラー応答の設定はディストリビューション全体（S3 と VPS の両方）に効く。
+        # 存在しないキーは 404（SiteBucketPolicy の ListBucket）で、404 だけを 404 ページにする。
+        # それ以外はバックエンドの応答（403 の CSRF の拒否など）をそのまま返す。
+        # CloudFront が既定でキャッシュするエラー（既定 10 秒）は、404 も含めてすべてキャッシュしない
+        # （バックエンドが一時的に返したエラーを、復旧後に他の人へ返さないため）
         CustomErrorResponses:
+          - ErrorCode: 400
+            ErrorCachingMinTTL: 0
           - ErrorCode: 403
-            ResponseCode: 404
-            ResponsePagePath: /404.html
-            ErrorCachingMinTTL: 60
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 405
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 414
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 416
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 500
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 501
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 502
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 503
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 504
+            ErrorCachingMinTTL: 0
           - ErrorCode: 404
             ResponseCode: 404
             ResponsePagePath: /404.html
-            ErrorCachingMinTTL: 60
+            ErrorCachingMinTTL: 0
         WebACLId: !If [UseWaf, !GetAtt WebAcl.Arn, !Ref "AWS::NoValue"]
         ViewerCertificate:
           AcmCertificateArn: !Ref Certificate

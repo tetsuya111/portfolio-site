@@ -4,7 +4,7 @@
       "slug": "spotify-billboard-playlist",
       "outputDir": "out",
       "buildArgs": [],
-      "mock": true
+      "mock": false
     },
     {
       "slug": "task-box-it-develop",

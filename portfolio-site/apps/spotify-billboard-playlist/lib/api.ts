@@ -1,4 +1,6 @@
-// バックエンド(FastAPI)の呼び出し。Next.js の rewrites により同一オリジンの相対パスで届く。
+// バックエンド(FastAPI)の呼び出し。どちらの構成でも同一オリジンで届く。
+// - 開発サーバー: Next.js の rewrites がルートの /api・/auth をバックエンドへ転送する。
+// - 静的出力（ポートフォリオサイト）: CloudFront が basePath の下の /api・/auth を VPS へ転送する。
 
 export class ApiError extends Error {
   readonly status: number;
@@ -10,8 +12,15 @@ export class ApiError extends Error {
   }
 }
 
+/** API・認証のパスに basePath（静的出力のときだけ next.config.ts が埋め込む）を付ける。 */
+export function withBase(path: string): string {
+  return (process.env.NEXT_PUBLIC_BASE_PATH ?? "") + path;
+}
+
 /** OAuth はバックエンドへのページ遷移で開始する（fetch ではなくリンクで使う）。 */
-export const LOGIN_PATH = "/auth/login";
+export function loginPath(): string {
+  return withBase("/auth/login");
+}
 
 /** csrf_token は状態を変えるリクエストに X-CSRF-Token ヘッダーで送り返す。 */
 export type Me =
@@ -47,7 +56,7 @@ async function request<T>(path: string, init?: RequestInit, retryOnForbidden = t
   if (unsafe && csrfToken) headers.set("X-CSRF-Token", csrfToken);
   let res: Response;
   try {
-    res = await fetch(path, { credentials: "same-origin", ...init, headers });
+    res = await fetch(withBase(path), { credentials: "same-origin", ...init, headers });
   } catch {
     throw new ApiError(0, "サーバーに接続できませんでした");
   }

@@ -10,6 +10,7 @@
     "EnableWaf": "false",
     "EnableCloudFront": "true",
     "SiteBucketName": "",
+    "BackendDomainName": "",
     "DeployPath": "",
     "EnablePrTests": "true",
     "ItArticlesScheduleExpression": "rate(1 day)",
