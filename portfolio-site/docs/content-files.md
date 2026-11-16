@@ -17,6 +17,7 @@
 | セキュリティ記事（自動作成） | `src/content/security-articles/<YYYY-MM-DD-スラッグ>.md` | 何件でも | ×（正本は S3） | 定期実行で自動作成（[security-articles.md](security-articles.md)） | × |
 | サービス | `src/content/services/<スラッグ>.md` | 何件でも | ○ | — | × |
 | スキル | `src/content/skills/<スラッグ>.md` | 何件でも | ○ | — | × |
+| こんな方とお話ししたい | `src/content/audiences/<スラッグ>.md` | 何件でも | ○ | — | × |
 
 ## 共通のルール
 
@@ -136,7 +137,7 @@ npm run portfolio:new -- --slug my-app --title "My App" --tags "Astro,AWS" --url
 
 ## サービス（services）
 
-`src/content/services/<スラッグ>.md`。トップページの「サービス」にタイルで並べる（ポートフォリオの上）。本文は使わない（frontmatter だけ）。
+`src/content/services/<スラッグ>.md`。トップページの「サービス」にタイルで並べる（「こんな方とお話ししたい」・ポートフォリオの上）。本文は使わない（frontmatter だけ）。
 
 | 項目 | 必須 | 型 | 既定値 | 表示・用途 |
 |---|---|---|---|---|
@@ -178,6 +179,23 @@ famous:
   - "Docker"
   - "Kubernetes"
 order: 3
+---
+```
+
+## こんな方とお話ししたい（audiences）
+
+`src/content/audiences/<スラッグ>.md`。トップページの「こんな方とお話ししたい」に、1件1タイルで並べる（「サービス」の直後）。本文は使わない（frontmatter だけ）。1件もなければセクションごと出さない。
+
+| 項目 | 必須 | 型 | 既定値 | 表示・用途 |
+|---|---|---|---|---|
+| `title` | ○ | 文字列 | — | タイルの見出し（例: 個人事業主でITツールを作成してほしい方） |
+| `description` | | 文字列 | なし | 見出しの下に出す補足 |
+| `order` | | 整数 | `0` | 並び順（小さい順。同じならタイトル順） |
+
+```markdown
+---
+title: "個人事業主でITツールを作成してほしい方"
+order: 2
 ---
 ```
 

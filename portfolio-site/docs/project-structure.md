@@ -80,6 +80,7 @@ portfolio-site/
 | `articles/<スラッグ>.md` | `articles` | 記事1件 |
 | `services/<スラッグ>.md` | `services` | トップページの「サービス」1件（frontmatter だけ） |
 | `skills/<スラッグ>.md` | `skills` | トップページの「スキル」1件（frontmatter だけ。先頭6件は得意分野にも出す） |
+| `audiences/<スラッグ>.md` | `audiences` | トップページの「こんな方とお話ししたい」1件（frontmatter だけ） |
 | `it-articles/<YYYY-MM-DD-スラッグ>.md` | `itArticles` | 自動作成の IT 記事1件（スキーマは `articles` と同じ。正本は S3 で git には入らない。[it-articles.md](it-articles.md)） |
 | `security-articles/<YYYY-MM-DD-スラッグ>.md` | `securityArticles` | 自動作成のセキュリティ記事1件（スキーマは `articles` と同じ。正本は S3 で git には入らない。[security-articles.md](security-articles.md)） |
 
