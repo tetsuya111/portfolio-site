@@ -50,6 +50,14 @@ def _public_path(frontend_url: str) -> str:
     parts = urlsplit(frontend_url)
     if parts.query or parts.fragment:
         raise ConfigError(f"FRONTEND_URL にクエリ・フラグメントは付けられません: {frontend_url}")
+    # Origin の確認は FRONTEND_URL の scheme://netloc とブラウザの Origin を文字列で比べる。
+    # ブラウザは小文字・既定のポートなしで送るため、そうでなければ POST がすべて 403 になる
+    default_port = {"http": 80, "https": 443}.get(parts.scheme)
+    explicit_default_port = parts.port is not None and parts.port == default_port
+    if parts.netloc != parts.netloc.lower() or explicit_default_port:
+        raise ConfigError(
+            f"FRONTEND_URL のホストは小文字・既定のポートなしで指定してください: {frontend_url}"
+        )
     return parts.path.rstrip("/")
 
 

@@ -148,3 +148,18 @@ def test_redirect_uri_match_does_not_warn(monkeypatch, caplog):
     with caplog.at_level("WARNING", logger="app.config"):
         load_settings()
     assert caplog.text == ""
+
+
+@pytest.mark.parametrize(
+    "frontend",
+    [
+        # Origin（ブラウザは小文字・既定のポートなしで送る）と一致せず、POST がすべて 403 になる
+        "https://Site.example/apps/spotify-billboard-playlist",
+        "https://site.example:443/apps/spotify-billboard-playlist",
+        "http://127.0.0.1:80",
+    ],
+)
+def test_frontend_url_not_matching_browser_origin_rejected(monkeypatch, frontend):
+    _site(monkeypatch, frontend=frontend, redirect=frontend + "/auth/callback")
+    with pytest.raises(ConfigError):
+        load_settings()
