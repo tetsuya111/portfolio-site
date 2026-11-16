@@ -1,0 +1,143 @@
+"""登録したバックエンドの一覧（services.json）から、docker-compose.yml と nginx の設定を作り直す。
+
+compose・nginx の設定は追記ではなく、正本の services.json から毎回作り直す（重複・消し忘れを防ぐ）。
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass
+from pathlib import Path
+
+from stackgen import StackError
+from stackgen.config import Config
+
+NGINX_IMAGE = "nginx:1.27-alpine"
+_SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+GITIGNORE = """\
+# TLS 証明書（VPS 上で配置する。fullchain.pem・privkey.pem）
+certs/
+# バックエンドの秘密情報（VPS 上で配置する）
+services/*/.env
+"""
+
+
+@dataclass(frozen=True)
+class Service:
+    slug: str
+    port: int
+
+
+def _write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8", newline="\n")
+
+
+def load_services(stack_dir: Path) -> list[Service]:
+    path = stack_dir / "services.json"
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        items = data["services"]
+        services = [Service(i["slug"], i["port"]) for i in items]
+    except (ValueError, KeyError, TypeError) as e:
+        raise StackError(f'services.json の形式が不正です（{{"services": [{{"slug", "port"}}]}} が必要です）: {e}') from e
+    for s in services:
+        # 値は compose・nginx の設定にそのまま書くため、使える文字を限定する
+        if not isinstance(s.slug, str) or not _SLUG.match(s.slug):
+            raise StackError(f"services.json の slug「{s.slug}」が不正です")
+        if not isinstance(s.port, int) or isinstance(s.port, bool) or not 1 <= s.port <= 65535:
+            raise StackError(f"services.json の {s.slug} の port が不正です")
+    return services
+
+
+def upsert_service(stack_dir: Path, svc: Service) -> list[Service]:
+    """svc を登録（同じスラッグは置き換え）して services.json に保存し、スラッグ順の一覧を返す。"""
+    services = {s.slug: s for s in load_services(stack_dir)}
+    services[svc.slug] = svc
+    result = [services[k] for k in sorted(services)]
+    data = {"services": [{"slug": s.slug, "port": s.port} for s in result]}
+    _write(stack_dir / "services.json", json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+    return result
+
+
+def render_compose(services: list[Service], cfg: Config) -> str:
+    lines = [
+        "# backend-compose が services.json から生成したファイル。直接編集せず、add_backend.py で登録してください。",
+        "services:",
+        "  nginx:",
+        f"    image: {NGINX_IMAGE}",
+        "    restart: unless-stopped",
+        "    ports:",
+        '      - "80:80"',
+    ]
+    if cfg.https:
+        lines.append('      - "443:443"')
+    lines += ["    volumes:", "      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro"]
+    if cfg.https:
+        lines.append("      - ./certs:/etc/nginx/certs:ro")
+    if services:
+        lines.append("    depends_on:")
+        lines += [f"      - {s.slug}" for s in services]
+    for s in services:
+        lines += [
+            f"  {s.slug}:",
+            f"    build: ./services/{s.slug}",
+            "    restart: unless-stopped",
+            # バックエンドのポートはホストに公開せず、nginx からだけ届くようにする
+            "    expose:",
+            f'      - "{s.port}"',
+            "    env_file:",
+            f"      - path: ./services/{s.slug}/.env",
+            "        required: false",
+        ]
+    return "\n".join(lines) + "\n"
+
+
+_PROXY_HEADERS = """\
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /{slug};
+"""
+
+
+def _locations(services: list[Service]) -> str:
+    blocks = []
+    for s in services:
+        # 末尾の / で前置き /<スラッグ> を外して転送する（/<スラッグ>/api/x → /api/x）
+        blocks.append(f"    location /{s.slug}/ {{\n"
+                      f"        proxy_pass http://{s.slug}:{s.port}/;\n"
+                      + _PROXY_HEADERS.format(slug=s.slug)
+                      + "    }\n")
+    blocks.append("    location / {\n        return 404;\n    }\n")
+    return "\n".join(blocks)
+
+
+def render_nginx(services: list[Service], cfg: Config) -> str:
+    head = "# backend-compose が services.json から生成したファイル。直接編集せず、add_backend.py で登録してください。\n"
+    if not cfg.https:
+        return (head + "server {\n    listen 80;\n"
+                f"    server_name {cfg.domain};\n\n" + _locations(services) + "}\n")
+    return (
+        head
+        + "server {\n    listen 80;\n"
+        f"    server_name {cfg.domain};\n"
+        "    return 301 https://$host$request_uri;\n}\n\n"
+        "server {\n    listen 443 ssl;\n"
+        f"    server_name {cfg.domain};\n"
+        "    ssl_certificate /etc/nginx/certs/fullchain.pem;\n"
+        "    ssl_certificate_key /etc/nginx/certs/privkey.pem;\n\n"
+        + _locations(services) + "}\n"
+    )
+
+
+def write_stack(stack_dir: Path, services: list[Service], cfg: Config) -> None:
+    _write(stack_dir / "docker-compose.yml", render_compose(services, cfg))
+    _write(stack_dir / "nginx" / "default.conf", render_nginx(services, cfg))
+    if not (stack_dir / ".gitignore").exists():
+        _write(stack_dir / ".gitignore", GITIGNORE)
