@@ -154,3 +154,24 @@ export function buildApps(apps: AppEntry[], { appsDir, distDir, run, mockRuntime
     if (runtime !== undefined) installMock(app.slug, cwd, dest, runtime);
   }
 }
+
+/** ポートフォリオのフロントエンドが、モックの応答で動くか（mock）、実際のバックエンドを呼ぶか（api） */
+export type AppBackendMode = "mock" | "api";
+
+/** apps.json の内容から、スラッグごとの動作（モック／実 API）を返す。不正なら空（ボタンを今の表示にする） */
+export function appBackendModes(data: unknown): Map<string, AppBackendMode> {
+  try {
+    return new Map(validateManifest(data).map((a) => [a.slug, a.mock ? "mock" : "api"] as const));
+  } catch {
+    return new Map();
+  }
+}
+
+/** apps/apps.json（既定は portfolio-site で実行したときの場所）を読んで appBackendModes を返す。読めなければ空 */
+export function readAppBackendModes(path = join(process.cwd(), "apps", "apps.json")): Map<string, AppBackendMode> {
+  try {
+    return appBackendModes(JSON.parse(readFileSync(path, "utf8")));
+  } catch {
+    return new Map();
+  }
+}

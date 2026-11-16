@@ -3,6 +3,7 @@ import { getCollection, render } from "astro:content";
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import TagList from "../../components/TagList.astro";
 import Eyebrow from "../../components/Eyebrow.astro";
+import PortfolioLinkButton from "../../components/PortfolioLinkButton.astro";
 
 export async function getStaticPaths() {
   const items = await getCollection("portfolios");
@@ -21,14 +22,7 @@ const { Content } = await render(entry);
     <div class="mt-4"><TagList tags={entry.data.tags} /></div>
     {
       entry.data.url && (
-        <a
-          href={entry.data.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="btn-accent mt-5 px-4 py-1.5 text-sm"
-        >
-          ポートフォリオのURL ↗
-        </a>
+        <PortfolioLinkButton slug={entry.id} url={entry.data.url} class="mt-5 px-4 py-1.5 text-sm" />
       )
     }
   </header>
