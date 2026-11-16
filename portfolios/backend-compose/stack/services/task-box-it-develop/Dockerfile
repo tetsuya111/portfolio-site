@@ -11,4 +11,5 @@ RUN ln -sf /data/db.sqlite3 /app/db.sqlite3
 USER appuser
 EXPOSE 8000
 # 起動のたびにマイグレーションを適用する（空のボリュームでの初回の起動と、スキーマの更新のため）
-CMD ["sh", "-c", "python manage.py migrate --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:8000"]
+# 続けてエージェント・テンプレの初期データを登録する（対話は AgentConfig の行が必須。seed_agents は既存の行を上書きしない）
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py seed_agents && exec gunicorn config.wsgi:application --bind 0.0.0.0:8000"]
