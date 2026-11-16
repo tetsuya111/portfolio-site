@@ -50,7 +50,9 @@ describe("build output", () => {
     // タイトルが order の順に、見出しの後に並ぶ
     let pos = heading;
     for (const t of titles) {
-      const next = top.indexOf(`>${t}</h3>`, pos);
+      // Astro はテキストの & < > をエスケープして出力する
+      const escaped = t.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+      const next = top.indexOf(`>${escaped}</h3>`, pos);
       expect(next, t).toBeGreaterThan(pos);
       pos = next;
     }
