@@ -192,14 +192,27 @@ DOMAIN={cfg.domain}
 # certbot は live/ を root だけが読める権限で作るため、ホストのユーザーではなくコンテナ（root）で確かめる。
 # docker 自体の失敗（デーモン停止・権限・イメージの取得）は set -e でここで止め、「証明書なし」と取り違えない
 HAVE_CERT=$(docker compose run --rm --no-deps -T --entrypoint sh certbot -c "if [ -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem ]; then echo yes; else echo no; fi")
-if [ "$HAVE_CERT" = no ] || [ "${{DRY_RUN:-}}" = 1 ]; then
-  # メールアドレスは 1 つの引数として渡す
-  if [ -n "${{1:-}}" ]; then set -- --email "$1"; else set -- --register-unsafely-without-email; fi
-  if [ "${{DRY_RUN:-}}" = 1 ]; then set -- "$@" --dry-run; fi
+case "$HAVE_CERT" in yes|no) ;; *)
+  echo "証明書の有無を確かめられませんでした（出力: $HAVE_CERT）" >&2
+  exit 1 ;;
+esac
+# メールアドレスは 1 つの引数として渡す。--cert-name で、別名の系列（<domain>-0001）を作らず nginx が読むパスに取得する
+if [ -n "${{1:-}}" ]; then set -- --email "$1"; else set -- --register-unsafely-without-email; fi
+set -- "$@" -d "$DOMAIN" --cert-name "$DOMAIN" --agree-tos --non-interactive
+if [ "${{DRY_RUN:-}}" = 1 ]; then set -- "$@" --dry-run; fi
+if [ "$HAVE_CERT" = yes ]; then
+  if [ "${{DRY_RUN:-}}" = 1 ]; then
+    # 証明書がある（nginx が動ける）ので、nginx を止めずに webroot で試す
+    docker compose run --rm --no-deps --entrypoint certbot certbot \\
+      certonly --webroot -w /var/www/certbot "$@"
+    echo "取得を試せました（DRY_RUN のため証明書は保存していません）"
+    exit 0
+  fi
+  echo "letsencrypt/live/$DOMAIN/ に証明書があるため、取得は行いません"
+else
   # standalone の certbot が 80 番で答えるため、動いている nginx を止める
   docker compose stop nginx >/dev/null 2>&1 || true
-  if ! docker compose run --rm -p 80:80 --entrypoint certbot certbot \\
-      certonly --standalone -d "$DOMAIN" --agree-tos --non-interactive "$@"; then
+  if ! docker compose run --rm -p 80:80 --entrypoint certbot certbot certonly --standalone "$@"; then
     echo "証明書を取得できませんでした。DNS が VPS を指しているか、80 番が外から届くかを確かめてください" >&2
     # 止めた nginx を動いていた状態に戻す（証明書がまだなければ、nginx も起動に失敗する）
     docker compose start nginx || echo "nginx を起動できませんでした（docker compose logs nginx を確かめてください）" >&2
@@ -210,8 +223,6 @@ if [ "$HAVE_CERT" = no ] || [ "${{DRY_RUN:-}}" = 1 ]; then
     docker compose start nginx || true
     exit 0
   fi
-else
-  echo "letsencrypt/live/$DOMAIN/ に証明書があるため、取得は行いません"
 fi
 docker compose up -d --build
 """

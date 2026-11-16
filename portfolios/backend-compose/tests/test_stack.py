@@ -159,16 +159,25 @@ class InitCertTest(TempDirMixin, unittest.TestCase):
         # docker 自体の失敗（デーモン停止・権限・イメージの取得）は「証明書なし」と区別して止める
         self.assertIn('HAVE_CERT=$(docker compose run --rm --no-deps -T --entrypoint sh certbot -c '
                       '"if [ -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem ]; then echo yes; else echo no; fi")', text)
-        self.assertIn('if [ "$HAVE_CERT" = no ] || [ "${DRY_RUN:-}" = 1 ]; then', text)
+        # yes・no 以外の出力は取り違えずに止める
+        self.assertIn('case "$HAVE_CERT" in yes|no) ;; *)', text)
+        # 別名の系列（<domain>-0001）を作らず、nginx が読むパスに取得する
+        self.assertIn('--cert-name "$DOMAIN"', text)
         # DRY_RUN=1 なら本番の発行回数を使わずに試し、起動はしない
         self.assertIn('if [ "${DRY_RUN:-}" = 1 ]; then set -- "$@" --dry-run; fi', text)
+        # 証明書がある（nginx が動ける）なら、DRY_RUN は nginx を止めずに webroot で試す
+        has_cert = text.split('if [ "$HAVE_CERT" = yes ]; then\n')[1].split("\nelse\n")[0]
+        self.assertIn("certonly --webroot -w /var/www/certbot", has_cert)
+        self.assertNotIn("stop nginx", has_cert)
+        self.assertIn("certonly --standalone", text.split('if [ "$HAVE_CERT" = yes ]; then\n')[1].split("\nelse\n")[1])
         # 80 番を空けてから standalone で取得し、その後に全体を起動する
         stop = text.index("docker compose stop nginx")
         run = text.index("docker compose run --rm -p 80:80 --entrypoint certbot certbot")
         up = text.index("docker compose up -d --build")
         self.assertLess(stop, run)
         self.assertLess(run, up)
-        self.assertIn('certonly --standalone -d "$DOMAIN" --agree-tos --non-interactive "$@"', text)
+        self.assertIn('set -- "$@" -d "$DOMAIN" --cert-name "$DOMAIN" --agree-tos --non-interactive', text)
+        self.assertIn('certonly --standalone "$@"', text)
 
     def test_written_for_https_with_lf(self):
         write_stack(self.tmp, [], HTTPS)

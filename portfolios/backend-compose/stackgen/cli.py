@@ -8,6 +8,7 @@ import json
 import shutil
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from importer import PortfolioError
 from importer.copier import copy_tree, validate_slug
@@ -86,20 +87,27 @@ def _copy_backend(src: Path, dest: Path, project: Path, exclude: list[Path]) -> 
     return True
 
 
-def _stale_env_warnings(repo_root: Path, cfg, slugs: list[str]) -> list[str]:
-    """apps.json の env に、今の設定と違うスキーム（http / https）のバックエンドの URL があれば警告を返す。"""
-    data = load_apps_json(repo_root)
-    if data is None:
+def _stale_env_warnings(apps: dict | None, cfg, slugs: list[str]) -> list[str]:
+    """apps.json の env に、今の設定（スキーム・ドメイン）と違うバックエンドの URL があれば警告を返す。
+
+    パスが /<スラッグ> で始まる http(s) の URL を、そのバックエンドを指す値とみなす。
+    """
+    if apps is None:
         return []
     warnings = []
-    for entry in data["apps"]:
+    for entry in apps["apps"]:
         if not isinstance(entry, dict) or entry.get("slug") not in slugs or not isinstance(entry.get("env"), dict):
             continue
-        url = backend_url(cfg, entry["slug"])
-        other = ("http" if cfg.https else "https") + url[url.index("://"):]
+        slug = entry["slug"]
+        url = backend_url(cfg, slug)
         for name, value in entry["env"].items():
-            if isinstance(value, str) and (value == other or value.startswith(other + "/")):
-                warnings.append(f"apps.json の {entry['slug']} の env.{name}（{value}）のスキームが設定と違います。"
+            if not isinstance(value, str):
+                continue
+            parts = urlsplit(value)
+            points_backend = parts.scheme in ("http", "https") and (
+                parts.path == f"/{slug}" or parts.path.startswith(f"/{slug}/"))
+            if points_backend and not (value == url or value.startswith(url + "/")):
+                warnings.append(f"apps.json の {slug} の env.{name}（{value}）が config.json の設定と違います。"
                                 f"{url} で始まる URL に直してください")
     return warnings
 
@@ -107,9 +115,13 @@ def _stale_env_warnings(repo_root: Path, cfg, slugs: list[str]) -> list[str]:
 def regenerate(repo_root: Path, config_path: Path, stack_dir: Path) -> dict:
     cfg = load_config(config_path)
     services = load_services(stack_dir)
+    apps = load_apps_json(repo_root)  # 不正なら何かを書く前に止める
     write_stack(stack_dir, services, cfg)
     slugs = [s.slug for s in services]
-    return {"services": slugs, "https": cfg.https, "warnings": _stale_env_warnings(repo_root, cfg, slugs)}
+    warnings = [f"stack/services/{s}/ がないため、docker compose up でこのバックエンドのビルドに失敗します。"
+                f"add_backend.py portfolios/{s} で登録し直すか、services.json から外してください"
+                for s in slugs if not (stack_dir / "services" / s).is_dir()]
+    return {"services": slugs, "https": cfg.https, "warnings": warnings + _stale_env_warnings(apps, cfg, slugs)}
 
 
 def run(args: argparse.Namespace, repo_root: Path, config_path: Path, stack_dir: Path) -> dict:
@@ -147,6 +159,8 @@ def run(args: argparse.Namespace, repo_root: Path, config_path: Path, stack_dir:
     url = backend_url(cfg, slug)
     env, w = update_apps_json(repo_root, slug, url, apply=args.enable_api)
     warnings += w
+    # stack/ はすべてのバックエンドを今の config.json で作り直すため、ほかのバックエンドの URL のずれも知らせる
+    warnings += _stale_env_warnings(load_apps_json(repo_root), cfg, [s.slug for s in services if s.slug != slug])
     if not (dest / ".env").exists() and (dest / ".env.example").exists():
         warnings.append(f"バックエンドが使う環境変数は、VPS 上で stack/services/{slug}/.env に書いてください（.env.example を参照）")
     return {
