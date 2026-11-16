@@ -24,6 +24,11 @@
   --theme-focus: #4338ca;
   --theme-hero-from: #e0e7ff;
   --theme-hero-to: #f8fafc;
+  /* 自己紹介ページの色分け（タイムライン・スキル）。文字にも使うため surface・base に 4.5:1 以上 */
+  --theme-spectrum-1: #4f46e5;
+  --theme-spectrum-2: #0e7490;
+  --theme-spectrum-3: #a21caf;
+  --theme-spectrum-4: #047857;
   --theme-font-body:
     system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo,
     sans-serif;
@@ -50,6 +55,10 @@
   --theme-focus: #0d4ea6;
   --theme-hero-from: #dbe8fb;
   --theme-hero-to: #fff6d6;
+  --theme-spectrum-1: #0d4ea6;
+  --theme-spectrum-2: #92400e;
+  --theme-spectrum-3: #be185d;
+  --theme-spectrum-4: #047857;
   --theme-font-body: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "BIZ UDPGothic", "Yu Gothic UI", Meiryo, sans-serif;
   --theme-font-heading:
     "Hiragino Maru Gothic ProN", "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif;
@@ -74,6 +83,10 @@
   --color-focus: var(--theme-focus);
   --color-hero-from: var(--theme-hero-from);
   --color-hero-to: var(--theme-hero-to);
+  --color-spectrum-1: var(--theme-spectrum-1);
+  --color-spectrum-2: var(--theme-spectrum-2);
+  --color-spectrum-3: var(--theme-spectrum-3);
+  --color-spectrum-4: var(--theme-spectrum-4);
   --font-sans: var(--theme-font-body);
   --font-heading: var(--theme-font-heading);
   --font-eyebrow: var(--theme-font-eyebrow);
@@ -120,6 +133,34 @@
       background-color: color-mix(in srgb, var(--theme-accent-soft) 85%, var(--theme-accent));
     }
   }
+}
+
+/* 罫線の色の方眼（自己紹介ページの冒頭のデジタルな背景）。下の色に重ねて使う */
+@utility bg-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--theme-line) 70%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--theme-line) 70%, transparent) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* spectrum-1→4 のグラデーション（横向き・縦向き）。線・帯の飾りに使う */
+@utility bg-spectrum {
+  background-image: linear-gradient(
+    to right,
+    var(--theme-spectrum-1),
+    var(--theme-spectrum-2),
+    var(--theme-spectrum-3),
+    var(--theme-spectrum-4)
+  );
+}
+@utility bg-spectrum-y {
+  background-image: linear-gradient(
+    to bottom,
+    var(--theme-spectrum-1),
+    var(--theme-spectrum-2),
+    var(--theme-spectrum-3),
+    var(--theme-spectrum-4)
+  );
 }
 
 /* 記事・自己紹介の本文（typography プラグイン）の色をテーマに合わせる */

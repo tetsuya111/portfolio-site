@@ -37,10 +37,11 @@ AWS の CodeBuild（[infra/template.yaml](../infra/template.yaml)）には `PUBL
 | `link` | リンク・小見出しの文字 | `text-link` |
 | `focus` | キーボードのフォーカス枠 | `ring-focus` |
 | `hero-from` / `hero-to` | トップ・自己紹介の冒頭のグラデーション | `from-hero-from` `to-hero-to` |
+| `spectrum-1`〜`spectrum-4` | 自己紹介ページの色分け（タイムライン・スキルの文字と、その10%の淡色の背景）。surface・base・淡色の上で 4.5:1 以上 | `text-spectrum-1` `bg-spectrum-2/10`。グラデーションは `bg-spectrum`（横）・`bg-spectrum-y`（縦） |
 | `font-body` / `font-heading` / `font-eyebrow` | 本文 / 見出し / 英大文字の小見出しの書体 | `font-sans` `font-heading` `font-eyebrow` |
 | `radius` | カードの角丸 | `rounded-card` |
 
-記事・自己紹介の本文（typography プラグイン）は `prose prose-themed`、塗りつぶしのボタン型リンクは `btn-accent`、英大文字の小見出しは `components/Eyebrow.astro` で同じ変数を使う。
+記事・自己紹介の本文（typography プラグイン）は `prose prose-themed`、塗りつぶしのボタン型リンクは `btn-accent`、英大文字の小見出しは `components/Eyebrow.astro` で同じ変数を使う。自己紹介ページの冒頭の方眼の背景は `bg-grid`（`line` の色）で描く。
 
 ファビコン（`public/favicon.svg`）はテーマに関係なく同じ色にしている。
 
