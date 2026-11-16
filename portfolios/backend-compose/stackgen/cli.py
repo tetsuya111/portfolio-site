@@ -86,18 +86,37 @@ def _copy_backend(src: Path, dest: Path, project: Path, exclude: list[Path]) -> 
     return True
 
 
-def regenerate(config_path: Path, stack_dir: Path) -> dict:
+def _stale_env_warnings(repo_root: Path, cfg, slugs: list[str]) -> list[str]:
+    """apps.json の env に、今の設定と違うスキーム（http / https）のバックエンドの URL があれば警告を返す。"""
+    data = load_apps_json(repo_root)
+    if data is None:
+        return []
+    warnings = []
+    for entry in data["apps"]:
+        if not isinstance(entry, dict) or entry.get("slug") not in slugs or not isinstance(entry.get("env"), dict):
+            continue
+        url = backend_url(cfg, entry["slug"])
+        other = ("http" if cfg.https else "https") + url[url.index("://"):]
+        for name, value in entry["env"].items():
+            if isinstance(value, str) and (value == other or value.startswith(other + "/")):
+                warnings.append(f"apps.json の {entry['slug']} の env.{name}（{value}）のスキームが設定と違います。"
+                                f"{url} で始まる URL に直してください")
+    return warnings
+
+
+def regenerate(repo_root: Path, config_path: Path, stack_dir: Path) -> dict:
     cfg = load_config(config_path)
     services = load_services(stack_dir)
     write_stack(stack_dir, services, cfg)
-    return {"services": [s.slug for s in services], "https": cfg.https}
+    slugs = [s.slug for s in services]
+    return {"services": slugs, "https": cfg.https, "warnings": _stale_env_warnings(repo_root, cfg, slugs)}
 
 
 def run(args: argparse.Namespace, repo_root: Path, config_path: Path, stack_dir: Path) -> dict:
     if args.regenerate:
-        if args.project is not None:
-            raise StackError("--regenerate にはプロジェクトを指定しないでください")
-        return regenerate(config_path, stack_dir)
+        if args.project is not None or args.enable_api:
+            raise StackError("--regenerate にはプロジェクトも --enable-api も指定しないでください")
+        return regenerate(repo_root, config_path, stack_dir)
     if args.project is None:
         raise StackError("portfolios/<スラッグ> のディレクトリを指定してください")
     cfg = load_config(config_path)  # 設定が不正なら何も書かない

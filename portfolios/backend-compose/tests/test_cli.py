@@ -45,7 +45,7 @@ class CliTest(TempDirMixin, unittest.TestCase):
         write_json(self.stack / "services.json", {"services": [{"slug": "my-app", "port": 8000}]})
         code, out, _ = self.run_args("--regenerate")
         self.assertEqual(code, 0)
-        self.assertEqual(json.loads(out), {"services": ["my-app"], "https": True})
+        self.assertEqual(json.loads(out), {"services": ["my-app"], "https": True, "warnings": []})
         self.assertIn("build: ./services/my-app", (self.stack / "docker-compose.yml").read_text(encoding="utf-8"))
         self.assertTrue((self.stack / "init-cert.sh").exists())
         # ソースのコピーは行わない
@@ -55,6 +55,22 @@ class CliTest(TempDirMixin, unittest.TestCase):
         code, _, err = self.run_args(str(self.project), "--regenerate")
         self.assertEqual(code, 1)
         self.assertIn("--regenerate", err)
+
+    def test_regenerate_rejects_enable_api(self):
+        code, _, err = self.run_args("--regenerate", "--enable-api")
+        self.assertEqual(code, 1)
+        self.assertIn("--enable-api", err)
+
+    def test_regenerate_warns_scheme_mismatch_in_apps_json(self):
+        write_json(self.stack / "services.json", {"services": [{"slug": "my-app", "port": 8000}]})
+        write_json(self.repo / "portfolio-site" / "apps" / "apps.json", {"apps": [
+            {"slug": "my-app", "mock": False, "env": {"VITE_API_URL": "http://api.portfolio.link/my-app/api"}}]})
+        code, out, _ = self.run_args("--regenerate")
+        self.assertEqual(code, 0)
+        warnings = json.loads(out)["warnings"]
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("my-app", warnings[0])
+        self.assertIn("https://api.portfolio.link/my-app", warnings[0])
 
     def test_requires_project_without_regenerate(self):
         code, _, err = self.run_args()

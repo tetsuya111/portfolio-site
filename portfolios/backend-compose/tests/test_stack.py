@@ -147,8 +147,6 @@ class InitCertTest(TempDirMixin, unittest.TestCase):
         self.assertIn("set -eu", text)
         self.assertIn("DOMAIN=api.portfolio.link\n", text)
         # certbot は live/ を root の 0700 で作るため、ホストのユーザーではなくコンテナ（root）で確かめる
-        self.assertIn('if ! docker compose run --rm --no-deps --entrypoint test certbot '
-                      '-f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem"; then', text)
         self.assertNotIn('[ ! -f "letsencrypt/', text)
         # メールアドレスは 1 つの引数として渡す（単語分割で別の引数にしない）
         self.assertIn('set -- --email "$1"', text)
@@ -157,6 +155,13 @@ class InitCertTest(TempDirMixin, unittest.TestCase):
         self.assertNotIn("shellcheck disable", text)
         # 取得に失敗しても nginx を止めたままにしない
         self.assertIn("docker compose start nginx", text)
+        self.assertNotIn("start nginx >/dev/null", text)
+        # docker 自体の失敗（デーモン停止・権限・イメージの取得）は「証明書なし」と区別して止める
+        self.assertIn('HAVE_CERT=$(docker compose run --rm --no-deps -T --entrypoint sh certbot -c '
+                      '"if [ -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem ]; then echo yes; else echo no; fi")', text)
+        self.assertIn('if [ "$HAVE_CERT" = no ] || [ "${DRY_RUN:-}" = 1 ]; then', text)
+        # DRY_RUN=1 なら本番の発行回数を使わずに試し、起動はしない
+        self.assertIn('if [ "${DRY_RUN:-}" = 1 ]; then set -- "$@" --dry-run; fi', text)
         # 80 番を空けてから standalone で取得し、その後に全体を起動する
         stop = text.index("docker compose stop nginx")
         run = text.index("docker compose run --rm -p 80:80 --entrypoint certbot certbot")
