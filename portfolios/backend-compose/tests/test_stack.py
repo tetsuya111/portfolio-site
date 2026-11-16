@@ -24,7 +24,8 @@ class RenderComposeTest(unittest.TestCase):
         text = render_compose([Service("a", 8000), Service("b", 3000)], HTTPS)
         self.assertIn("image: nginx:1.27-alpine", text)
         self.assertIn('- "443:443"', text)
-        self.assertIn("./certs:/etc/nginx/certs:ro", text)
+        self.assertIn("./letsencrypt:/etc/letsencrypt:ro", text)
+        self.assertNotIn("./certs", text)
         self.assertIn("build: ./services/a", text)
         self.assertIn('- "3000"', text)
         self.assertIn("path: ./services/b/.env", text)
@@ -36,6 +37,9 @@ class RenderComposeTest(unittest.TestCase):
         text = render_compose([Service("a", 8000)], HTTP)
         self.assertNotIn("443", text)
         self.assertNotIn("certs", text)
+        self.assertNotIn("certbot", text)
+        self.assertNotIn("letsencrypt", text)
+        self.assertNotIn("command:", text)
 
     def test_no_services(self):
         text = render_compose([], HTTP)
@@ -106,3 +110,27 @@ class Round3Test(TempDirMixin, unittest.TestCase):
     def test_gitignore_has_certbot(self):
         write_stack(self.tmp, [], HTTPS)
         self.assertIn("certbot/", (self.tmp / ".gitignore").read_text(encoding="utf-8"))
+
+
+class CertbotComposeTest(unittest.TestCase):
+    def setUp(self):
+        self.text = render_compose([Service("a", 8000)], HTTPS)
+
+    def test_certbot_service_renews_with_webroot(self):
+        certbot = self.text.split("  certbot:\n")[1].split("\n  a:\n")[0]
+        self.assertIn("image: certbot/certbot:v2.11.0", certbot)
+        self.assertIn("restart: unless-stopped", certbot)
+        self.assertIn("./letsencrypt:/etc/letsencrypt\n", certbot)
+        self.assertIn("./certbot:/var/www/certbot\n", certbot)
+        self.assertIn("certbot renew --webroot -w /var/www/certbot --quiet", certbot)
+        # compose が $${!} を ${!} に戻す（$ を 1 つだけ書くと compose の変数展開になる）
+        self.assertIn("sleep 12h & wait $${!}", certbot)
+        self.assertNotIn("docker.sock", self.text)
+
+    def test_nginx_reloads_periodically(self):
+        nginx = self.text.split("  certbot:\n")[0]
+        self.assertIn("while :; do sleep 21600; nginx -s reload; done & exec nginx -g 'daemon off;'", nginx)
+        self.assertIn("./certbot:/var/www/certbot:ro", nginx)
+
+    def test_only_nginx_publishes_ports(self):
+        self.assertEqual(self.text.count("ports:"), 1)

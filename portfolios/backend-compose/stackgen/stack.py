@@ -15,6 +15,13 @@ from stackgen import StackError
 from stackgen.config import Config
 
 NGINX_IMAGE = "nginx:1.27-alpine"
+CERTBOT_IMAGE = "certbot/certbot:v2.11.0"
+# 6 時間ごとに reload する
+NGINX_COMMAND = ('["/bin/sh", "-c", '
+                 '"while :; do sleep 21600; nginx -s reload; done & exec nginx -g \'daemon off;\'"]')
+# 12 時間ごとに renew する。compose は $$ を $ に戻す。sleep & wait にして停止の TERM ですぐ終わる
+CERTBOT_ENTRYPOINT = ('["/bin/sh", "-c", "trap exit TERM; while :; do '
+                      'certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"]')
 # バックエンドのサービス名（スラッグ）に使えない、compose のサービス名
 RESERVED_SERVICES = {"nginx"}
 
@@ -86,8 +93,20 @@ def render_compose(services: list[Service], cfg: Config) -> str:
         lines.append('      - "443:443"')
     lines += ["    volumes:", "      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro"]
     if cfg.https:
-        # 証明書と、certbot（--webroot）の HTTP-01 チャレンジのファイル置き場
-        lines += ["      - ./certs:/etc/nginx/certs:ro", "      - ./certbot:/var/www/certbot:ro"]
+        # certbot と共有する証明書（live/ はシンボリックリンクのためディレクトリごと共有する）と、
+        # certbot（--webroot）の HTTP-01 チャレンジのファイル置き場
+        lines += ["      - ./letsencrypt:/etc/letsencrypt:ro", "      - ./certbot:/var/www/certbot:ro",
+                  # 更新された証明書を読み込むため、裏で定期的に reload する（certbot から合図するには
+                  # Docker のソケットが要り権限が広がるため使わない）。exec で nginx を PID 1 にし停止の合図を受ける
+                  f"    command: {NGINX_COMMAND}",
+                  "  certbot:",
+                  f"    image: {CERTBOT_IMAGE}",
+                  "    restart: unless-stopped",
+                  "    volumes:",
+                  "      - ./letsencrypt:/etc/letsencrypt",
+                  "      - ./certbot:/var/www/certbot",
+                  # 期限まで 30 日を切った証明書だけを更新する。初回を standalone で取った証明書も webroot で更新する
+                  f"    entrypoint: {CERTBOT_ENTRYPOINT}"]
     # depends_on は書かない（1つのバックエンドの起動失敗で nginx・ほかのバックエンドまで止めないため。
     # 転送先は要求のたびに名前を引くので、起動順に依存しない）
     for s in services:
