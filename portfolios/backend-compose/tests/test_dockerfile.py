@@ -99,6 +99,21 @@ class WriteDockerFilesTest(TempDirMixin, unittest.TestCase):
         _, warnings = self.dockerfile()
         self.assertTrue(any("/data" in w for w in warnings), warnings)
 
+    def test_existing_dockerfile_mentioning_data_without_mkdir_warns(self):
+        # /data を参照するだけで作らなければ、ボリュームは root の持ち物になる
+        write(self.tmp / "Dockerfile", "FROM scratch\n# /data に置く\nENV DB_PATH=/data/app.db\nCMD [\"x\"]\n")
+        _, warnings = self.dockerfile()
+        self.assertTrue(any("/data" in w for w in warnings), warnings)
+
+    def test_existing_django_dockerfile_warning_mentions_link_and_migrate(self):
+        write(self.tmp / "manage.py", "")
+        write(self.tmp / "Dockerfile", "FROM scratch\nCMD [\"x\"]\n")
+        _, warnings = self.dockerfile()
+        data = [w for w in warnings if "/data" in w]
+        self.assertEqual(len(data), 1, warnings)
+        self.assertIn("ln -sf /data/db.sqlite3 /app/db.sqlite3", data[0])
+        self.assertIn("migrate", data[0])
+
     def test_django_without_command_hints_migrate(self):
         write(self.tmp / "requirements.txt", "django\n")
         write(self.tmp / "manage.py", "")

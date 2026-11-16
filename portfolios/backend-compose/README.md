@@ -69,12 +69,12 @@ VPS には Docker Compose v2.24 以降が必要（`env_file` の `required: fals
 
 各バックエンドには名前付きボリューム `<スラッグ>-data`（docker 上の名前は `<プロジェクト名>_<スラッグ>-data`。プロジェクト名は既定で `stack/` のディレクトリ名。`docker volume ls` で確かめる）が `/data` にマウントされ、コンテナを作り直しても（`docker compose up -d --build`・`docker compose down` のあとの `up`）中身が残る。**`docker compose down -v` はボリュームごと全バックエンドの DB を消す**ため使わない。ボリュームは `stack/` の外（Docker の管理領域）にあるため、`stack/` をアップロードし直しても影響しない。
 
-この仕組みより前のイメージで動いていた VPS では、DB はコンテナの中（`/app/db.sqlite3`・`/app/data/app.db`）にあり、新しいイメージで作り直すと引き継がれない（空の DB で起動する）。残したいデータがあれば、更新の前に `docker compose stop <スラッグ>`（止めると WAL の内容が DB に書き戻される）→ `mkdir backup-<スラッグ>` → `docker compose cp <スラッグ>:/app/db.sqlite3 ./backup-<スラッグ>/`（spotify-billboard-playlist は `/app/data/app.db`）で写し、更新のあとに下記の「戻す」手順でボリュームに入れる。
+この仕組みより前のイメージで動いていた VPS では、DB はコンテナの中（`/app/db.sqlite3`・`/app/data/app.db`）にあり、新しいイメージで作り直すと引き継がれない（空の DB で起動する）。残したいデータがあれば、更新の前に `docker compose stop <スラッグ>`（書き込み途中の状態を写さないため。WAL の media-feed は、止めると `-wal` の内容が DB に書き戻される）→ `mkdir backup-<スラッグ>` → `docker compose cp <スラッグ>:/app/db.sqlite3 ./backup-<スラッグ>/`（spotify-billboard-playlist は `/app/data/app.db`）で写し、更新のあとに下記の「戻す」手順でボリュームに入れる。
 
 | バックエンド | DB の置き場所 |
 |---|---|
-| media-feed・task-box-it-develop（Django） | `/data/db.sqlite3`（`/app/db.sqlite3` はそこへのシンボリックリンク。WAL の `-wal`・`-shm` も `/data` に作られる） |
-| spotify-billboard-playlist | `/data/app.db`（Dockerfile の `ENV DB_PATH`） |
+| media-feed・task-box-it-develop（Django） | `/data/db.sqlite3`（`/app/db.sqlite3` はそこへのシンボリックリンク。SQLite の作業ファイル（WAL を使う media-feed の `-wal`・`-shm`、task-box-it-develop の `-journal`）も `/data` に作られる） |
+| spotify-billboard-playlist | `/data/app.db`（Dockerfile の `ENV DB_PATH`。`.env` の `DB_PATH` が優先されるため、`.env.example` の `DB_PATH=data/app.db` は有効にしない。変えるなら `/data` 配下にする） |
 
 - 初めて起動したとき（ボリュームが空）は、Django は起動時の `migrate` で、spotify-billboard-playlist は起動時のテーブルの作成で、空の DB から動く。
 - 新しく登録したバックエンドも `/data` がマウントされるが、DB をそこに置くかはアプリの設定による。生成する Dockerfile は、Django（`manage.py` がある）なら `/app/db.sqlite3` をリンクする（settings の `BASE_DIR` が `/app` で、DB が既定の `BASE_DIR / 'db.sqlite3'` の前提。違う場合は Dockerfile のリンクを直す）。Django 以外は DB のパスを `/data` 配下に向ける設定（環境変数など）を Dockerfile か `.env` に書く。

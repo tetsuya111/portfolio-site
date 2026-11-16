@@ -20,8 +20,8 @@ _UVICORN = re.compile(r"uvicorn\s+([A-Za-z_][\w.]*:[A-Za-z_]\w*)(\s+--factory)?"
 _FASTAPI_ASSIGN = re.compile(r"^([A-Za-z_]\w*)\s*=\s*FastAPI\(", re.MULTILINE)
 _FLASK_ASSIGN = re.compile(r"^([A-Za-z_]\w*)\s*=\s*Flask\(", re.MULTILINE)
 _HAS_CMD = re.compile(r"^\s*(CMD|ENTRYPOINT)\b", re.MULTILINE | re.IGNORECASE)
-# /data そのもの（/app/data・/database などは除く）
-_DATA_DIR = re.compile(r"(?<![\w./-])/data(?![\w.-])")
+# /data を作る RUN mkdir（/app/data・/database などや、/data を参照するだけの行は除く）
+_DATA_DIR = re.compile(r"^\s*RUN\b[^\n]*\bmkdir\b[^\n]*(?<![\w./-])/data(?![\w.-])", re.MULTILINE | re.IGNORECASE)
 _EXPOSE = re.compile(r"^\s*EXPOSE\s+(\d+)", re.MULTILINE | re.IGNORECASE)
 
 # Docker の .dockerignore は、**/ を付けないとビルドコンテキストの直下にしか一致しない。秘密情報・依存・キャッシュは
@@ -208,8 +208,13 @@ def write_docker_files(d: Path, kind: str) -> tuple[Path, list[str]]:
         if not _DATA_DIR.search(existing):
             # compose は /data に DB 用の名前付きボリュームをマウントする。イメージに /data がないと root の持ち物で
             # 作られ、非 root で動くアプリは書き込めない
-            warnings.append("Dockerfile が /data を作っていません。DB を永続化するなら、実行ユーザーの持ち物の /data を作り"
-                            "（例 RUN mkdir /data && chown appuser:appuser /data）、DB をそこに置いてください")
+            msg = ("Dockerfile が /data を作っていません。DB を永続化するなら、実行ユーザーの持ち物の /data を作り"
+                   "（例 RUN mkdir /data && chown appuser:appuser /data）、DB をそこに置いてください")
+            if _is_django(d):
+                # この変更より前に生成した Django の Dockerfile には、DB のリンクも起動時の migrate もない
+                msg += ("。Django なら RUN ln -sf /data/db.sqlite3 /app/db.sqlite3 を足し、"
+                        "起動のたびに python manage.py migrate --noinput を実行してください")
+            warnings.append(msg)
     else:
         text, has_cmd = _python_dockerfile(d) if kind == "python" else _node_dockerfile(d)
         dockerfile.write_text(text, encoding="utf-8", newline="\n")
