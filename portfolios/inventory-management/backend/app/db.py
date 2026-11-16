@@ -11,11 +11,11 @@ class Base(DeclarativeBase):
     pass
 
 
-def make_engine(url: str) -> Engine:
+def make_engine(url: str, **kwargs) -> Engine:
     """エンジンを作る。SQLite では外部キーと busy_timeout を有効にする。"""
     is_sqlite = url.startswith("sqlite")
     connect_args = {"check_same_thread": False, "timeout": 5} if is_sqlite else {}
-    engine = create_engine(url, connect_args=connect_args)
+    engine = create_engine(url, connect_args=connect_args, **kwargs)
     if is_sqlite:
 
         @event.listens_for(engine, "connect")
