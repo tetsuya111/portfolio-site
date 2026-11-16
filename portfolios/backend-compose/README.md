@@ -34,8 +34,8 @@ python portfolios/backend-compose/add_backend.py portfolios/<スラッグ> [--en
 | 順 | 内容 | 作成・変更するもの |
 |---|---|---|
 | 1 | バックエンド（portfolio-importer と同じ検出規則）を、importer と同じ除外規則（`.env`・鍵・DB など）でコピーする。既にあれば、`Dockerfile`・`.dockerignore`・`.env` を残してソースを入れ直す（取り込み元の修正を反映するため） | `stack/services/<スラッグ>/` |
-| 2 | Dockerfile がなければ生成する（FastAPI → uvicorn、Django・Flask → gunicorn、node → `npm start`）。起動コマンドを判定できなければ TODO を書いて警告する。待ち受けポートは `EXPOSE` から決める（なければ Python 8000・node 3000） | `Dockerfile`・`.dockerignore` |
-| 3 | 登録一覧を更新し、compose と nginx の設定を作り直す。ルーティングはパス方式で、`https://<domain>/<スラッグ>/...` を `<スラッグ>` コンテナの `/...` へ転送する。バックエンドのポートはホストに公開しない。`https: true` なら certbot のサービスと初回用の `init-cert.sh` も作る（`false` なら `init-cert.sh` を消す）。`.gitignore` は足りない行だけを追記する | `stack/services.json`・`stack/docker-compose.yml`・`stack/nginx/default.conf`・`stack/init-cert.sh`・`stack/.gitignore` |
+| 2 | Dockerfile がなければ生成する（FastAPI → uvicorn、Django・Flask → gunicorn、node → `npm start`）。DB を置く `/data`（実行ユーザーの持ち物）を作り、Django は `/app/db.sqlite3` を `/data/db.sqlite3` へのシンボリックリンクにして起動のたびに `migrate` する（[DB の永続化](#db-の永続化)）。起動コマンドを判定できなければ TODO を書いて警告する。待ち受けポートは `EXPOSE` から決める（なければ Python 8000・node 3000） | `Dockerfile`・`.dockerignore` |
+| 3 | 登録一覧を更新し、compose と nginx の設定を作り直す。ルーティングはパス方式で、`https://<domain>/<スラッグ>/...` を `<スラッグ>` コンテナの `/...` へ転送する。バックエンドのポートはホストに公開しない。各バックエンドに DB 用の名前付きボリューム `<スラッグ>-data` を `/data` にマウントする。`https: true` なら certbot のサービスと初回用の `init-cert.sh` も作る（`false` なら `init-cert.sh` を消す）。`.gitignore` は足りない行だけを追記する | `stack/services.json`・`stack/docker-compose.yml`・`stack/nginx/default.conf`・`stack/init-cert.sh`・`stack/.gitignore` |
 | 4 | フロントエンドを配信している（`portfolio-site/apps/apps.json` に登録済み）で `--enable-api` を付けたなら、ソースと `.env.example` から URL 用の環境変数名（`VITE_API_URL` など。名前に URL・BASE・ENDPOINT を含むものを優先）を探し、`env` にバックエンドの URL を書いて `mock` を false（実 API）にする。見つからない・HOST・ORIGIN の名前だけ・http・既に別の値がある場合は変更せず警告する | `portfolio-site/apps/apps.json`（[env の書式](../../portfolio-site/docs/apps.md#appsjson-の書式)） |
 
 - `docker-compose.yml`・`nginx/default.conf` は `services.json` から毎回作り直すため、手で編集しない。
@@ -64,6 +64,23 @@ VPS には Docker Compose v2.24 以降が必要（`env_file` の `required: fals
 ### 証明書がないとき
 
 `https: true` で証明書がないまま `docker compose up` すると、nginx は `cannot load certificate "/etc/letsencrypt/live/<domain>/fullchain.pem"` で起動に失敗し、再起動を繰り返す（`docker compose logs nginx` で確かめる）。`sh init-cert.sh` を実行すると取得から起動までを行う。取得に失敗する場合は、DNS と 80 番の開放を確かめる。
+
+### DB の永続化
+
+各バックエンドには名前付きボリューム `<スラッグ>-data`（docker 上の名前は `<プロジェクト名>_<スラッグ>-data`。プロジェクト名は既定で `stack/` のディレクトリ名。`docker volume ls` で確かめる）が `/data` にマウントされ、コンテナを作り直しても（`docker compose up -d --build`・`docker compose down` のあとの `up`）中身が残る。**`docker compose down -v` はボリュームごと全バックエンドの DB を消す**ため使わない。ボリュームは `stack/` の外（Docker の管理領域）にあるため、`stack/` をアップロードし直しても影響しない。
+
+この仕組みより前のイメージで動いていた VPS では、DB はコンテナの中（`/app/db.sqlite3`・`/app/data/app.db`）にあり、新しいイメージで作り直すと引き継がれない（空の DB で起動する）。残したいデータがあれば、更新の前に `docker compose stop <スラッグ>`（書き込み途中の状態を写さないため。WAL の media-feed は、止めると `-wal` の内容が DB に書き戻される）→ `mkdir backup-<スラッグ>` → `docker compose cp <スラッグ>:/app/db.sqlite3 ./backup-<スラッグ>/`（spotify-billboard-playlist は `/app/data/app.db`）で写し、更新のあとに下記の「戻す」手順でボリュームに入れる。
+
+| バックエンド | DB の置き場所 |
+|---|---|
+| media-feed・task-box-it-develop（Django） | `/data/db.sqlite3`（`/app/db.sqlite3` はそこへのシンボリックリンク。SQLite の作業ファイル（WAL を使う media-feed の `-wal`・`-shm`、task-box-it-develop の `-journal`）も `/data` に作られる） |
+| spotify-billboard-playlist | `/data/app.db`（Dockerfile の `ENV DB_PATH`。`.env` の `DB_PATH` が優先されるため、`.env.example` の `DB_PATH=data/app.db` は有効にしない。変えるなら `/data` 配下にする） |
+
+- 初めて起動したとき（ボリュームが空）は、Django は起動時の `migrate` で、spotify-billboard-playlist は起動時のテーブルの作成で、空の DB から動く。task-box-it-develop は対話にエージェントの設定（`AgentConfig` の行）が要るため、`migrate` に続けて `seed_agents` で初期データを登録する（既存の行は上書きしないため、管理画面で編集したプロンプトは残る）。
+- 新しく登録したバックエンドも `/data` がマウントされるが、DB をそこに置くかはアプリの設定による。生成する Dockerfile は、Django（`manage.py` がある）なら `/app/db.sqlite3` をリンクする（settings の `BASE_DIR` が `/app` で、DB が既定の `BASE_DIR / 'db.sqlite3'` の前提。違う場合は Dockerfile のリンクを直す）。Django 以外は DB のパスを `/data` 配下に向ける設定（環境変数など）を Dockerfile か `.env` に書く。
+- 既にあった Dockerfile は上書きしないため、`/data` を作っていなければ登録時に警告する。そのままだと `/data` が root の持ち物になり、非 root のアプリは書き込めないため、実行ユーザーの持ち物の `/data` を作る行を足す。ボリュームの所有者は空のボリュームを初めてマウントしたときにだけイメージから引き継がれるため、既に起動してボリュームができていれば、Dockerfile を直したあとに初期化（下記）するか、`docker compose run --rm --no-deps --user root --entrypoint chown <スラッグ> -R <実行ユーザー> /data` で所有者を直す。
+- バックアップ: `docker compose stop <スラッグ>` → `docker compose cp <スラッグ>:/data/. ./backup-<スラッグ>`（`/data/.` で中身だけを写す。`./backup-<スラッグ>` が既にあっても `data/` の入れ子にならない） → `docker compose start <スラッグ>`（止めてから写すと、書き込み途中の状態を写さない）。戻すときは止めてから `docker compose cp ./backup-<スラッグ>/. <スラッグ>:/data` を実行し、写したファイルの所有者を実行ユーザーに戻してから（`docker compose run --rm --no-deps --user root --entrypoint chown <スラッグ> -R appuser:appuser /data`。node のバックエンドは `node:node`）`docker compose start <スラッグ>` する。
+- 初期化（DB を空にする）: `docker compose rm -sf <スラッグ>` → `docker volume rm <プロジェクト名>_<スラッグ>-data` → `docker compose up -d <スラッグ>`。
 
 ## HTTPS で公開できたあとに戻すもの
 

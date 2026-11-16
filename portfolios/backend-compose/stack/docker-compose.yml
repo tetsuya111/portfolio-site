@@ -26,6 +26,8 @@ services:
     env_file:
       - path: ./services/media-feed/.env
         required: false
+    volumes:
+      - media-feed-data:/data
   spotify-billboard-playlist:
     build: ./services/spotify-billboard-playlist
     restart: unless-stopped
@@ -34,6 +36,8 @@ services:
     env_file:
       - path: ./services/spotify-billboard-playlist/.env
         required: false
+    volumes:
+      - spotify-billboard-playlist-data:/data
   task-box-it-develop:
     build: ./services/task-box-it-develop
     restart: unless-stopped
@@ -42,3 +46,9 @@ services:
     env_file:
       - path: ./services/task-box-it-develop/.env
         required: false
+    volumes:
+      - task-box-it-develop-data:/data
+volumes:
+  media-feed-data:
+  spotify-billboard-playlist-data:
+  task-box-it-develop-data:
