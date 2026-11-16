@@ -22,7 +22,7 @@ python portfolios/backend-compose/add_backend.py portfolios/<スラッグ> [--en
 | 引数 | 内容 |
 |---|---|
 | `portfolios/<スラッグ>` | portfolio-importer で取り込んだプロジェクト。`nginx`（リバースプロキシのサービス名）は使えない |
-| `--enable-api` | フロントエンドを実 API に切り替える（下の表の4）。VPS でバックエンドを起動してから付けて再実行する。付けなければ `apps.json` は変えず、書く内容を `warnings` で案内する |
+| `--enable-api` | フロントエンドを実 API に切り替える（下の表の4）。`/add-portfolio` は登録に成功したら必ず付けて実行し、`apps.json` の `env` でバックエンドの URL を設定する（手順は [SKILL.md](../../.claude/skills/add-portfolio/SKILL.md) の手順5）。付けなければ `apps.json` は変えず、書く内容を `warnings` で案内する |
 
 結果は JSON（`slug`・`service`・`port`・`backendUrl`・`dockerfile`・`frontendEnv`・`warnings`）で標準出力に出る。エラー時は理由を標準エラーに出し、終了コード 1 で終わる（何も書き込まない）。
 
@@ -46,7 +46,7 @@ VPS には Docker Compose v2.24 以降が必要（`env_file` の `required: fals
 2. `https: true` なら、`stack/certs/` に証明書 `fullchain.pem`・`privkey.pem` を置く。初回は nginx を起動する前に `certbot certonly --standalone -d <domain>` で取得してコピーする。更新は nginx を動かしたまま `certbot renew --webroot -w <stack のパス>/certbot` で行い（80 番のチャレンジは nginx が `certbot/` から答える）、`certs/` にコピーして `docker compose exec nginx nginx -s reload` で読み込ませる。
 3. バックエンドが環境変数（API キーなど）を使うなら、`stack/services/<スラッグ>/.env` に書く（`.env.example` を参照）。`certs/`・`certbot/`・`.env` は git で管理しない。
 4. `docker compose up -d --build` を実行する。nginx と全バックエンドのコンテナが作られる（1つのバックエンドが起動しなくても、nginx とほかのバックエンドは動く）。
-5. 動作を確かめたら、ローカルで `add_backend.py portfolios/<スラッグ> --enable-api` を実行し、`apps.json` の変更をデプロイする。
+5. 動作を確かめてから、`apps.json` の `env` を設定した変更をデプロイする（VPS の起動より先にサイトをデプロイすると、フロントエンドは存在しない API を呼んで動かない）。
 
 ## 開発
 
