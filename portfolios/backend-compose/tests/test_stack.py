@@ -2,8 +2,8 @@ import json
 import unittest
 
 from stackgen.config import Config
-from stackgen.stack import Service, render_compose, render_nginx, upsert_service, write_stack
-from tests.helpers import TempDirMixin
+from stackgen.stack import Service, render_compose, render_init_cert, render_nginx, upsert_service, write_stack
+from tests.helpers import TempDirMixin, write
 
 HTTPS = Config("api.portfolio.link", True)
 HTTP = Config("api.portfolio.link", False)
@@ -24,7 +24,8 @@ class RenderComposeTest(unittest.TestCase):
         text = render_compose([Service("a", 8000), Service("b", 3000)], HTTPS)
         self.assertIn("image: nginx:1.27-alpine", text)
         self.assertIn('- "443:443"', text)
-        self.assertIn("./certs:/etc/nginx/certs:ro", text)
+        self.assertIn("./letsencrypt:/etc/letsencrypt:ro", text)
+        self.assertNotIn("./certs", text)
         self.assertIn("build: ./services/a", text)
         self.assertIn('- "3000"', text)
         self.assertIn("path: ./services/b/.env", text)
@@ -36,6 +37,9 @@ class RenderComposeTest(unittest.TestCase):
         text = render_compose([Service("a", 8000)], HTTP)
         self.assertNotIn("443", text)
         self.assertNotIn("certs", text)
+        self.assertNotIn("certbot", text)
+        self.assertNotIn("letsencrypt", text)
+        self.assertNotIn("command:", text)
 
     def test_no_services(self):
         text = render_compose([], HTTP)
@@ -53,8 +57,9 @@ class RenderNginxTest(unittest.TestCase):
         self.assertIn("rewrite ^/a/?(.*)$ /$1 break;", text)
         self.assertIn("proxy_pass $upstream_a;", text)
         self.assertIn("return 301 https://$host$request_uri;", text)
-        self.assertIn("ssl_certificate /etc/nginx/certs/fullchain.pem;", text)
-        self.assertIn("ssl_certificate_key /etc/nginx/certs/privkey.pem;", text)
+        self.assertIn("ssl_certificate /etc/letsencrypt/live/api.portfolio.link/fullchain.pem;", text)
+        self.assertIn("ssl_certificate_key /etc/letsencrypt/live/api.portfolio.link/privkey.pem;", text)
+        self.assertNotIn("/etc/nginx/certs", text)
 
     def test_http(self):
         text = render_nginx([Service("a", 8000)], HTTP)
@@ -72,7 +77,7 @@ class WriteStackTest(TempDirMixin, unittest.TestCase):
         self.assertIn("build: ./services/a", (self.tmp / "docker-compose.yml").read_text(encoding="utf-8"))
         self.assertIn("location ~ ^/a(?:/|$)", (self.tmp / "nginx" / "default.conf").read_text(encoding="utf-8"))
         ignore = (self.tmp / ".gitignore").read_text(encoding="utf-8")
-        self.assertIn("certs/", ignore)
+        self.assertIn("letsencrypt/", ignore)
         self.assertIn("services/*/.env", ignore)
         self.assertNotIn(b"\r\n", (self.tmp / "docker-compose.yml").read_bytes())
 
@@ -84,6 +89,7 @@ class LoadServicesTest(TempDirMixin, unittest.TestCase):
         from tests.helpers import write_json
         for data in ({"services": [{"slug": "a;b", "port": 1}]}, {"services": [{"slug": "a\n", "port": 1}]},
 {"services": [{"slug": "a", "port": "80"}]}, {"services": [{"slug": "nginx", "port": 80}]},
+                     {"services": [{"slug": "certbot", "port": 80}]},
                      {"services": [{"slug": "docs", "port": 80}]}, {}):
             with self.subTest(data=data):
                 write_json(self.tmp / "services.json", data)
@@ -106,3 +112,101 @@ class Round3Test(TempDirMixin, unittest.TestCase):
     def test_gitignore_has_certbot(self):
         write_stack(self.tmp, [], HTTPS)
         self.assertIn("certbot/", (self.tmp / ".gitignore").read_text(encoding="utf-8"))
+
+
+class CertbotComposeTest(unittest.TestCase):
+    def setUp(self):
+        self.text = render_compose([Service("a", 8000)], HTTPS)
+
+    def test_certbot_service_renews_with_webroot(self):
+        certbot = self.text.split("  certbot:\n")[1].split("\n  a:\n")[0]
+        self.assertIn("image: certbot/certbot:v2.11.0", certbot)
+        self.assertIn("restart: unless-stopped", certbot)
+        self.assertIn("./letsencrypt:/etc/letsencrypt\n", certbot)
+        self.assertIn("./certbot:/var/www/certbot\n", certbot)
+        self.assertIn("certbot renew --webroot -w /var/www/certbot --quiet", certbot)
+        # compose が $${!} を ${!} に戻す（$ を 1 つだけ書くと compose の変数展開になる）
+        self.assertIn("sleep 12h & wait $${!}", certbot)
+        self.assertNotIn("docker.sock", self.text)
+
+    def test_nginx_reloads_periodically(self):
+        nginx = self.text.split("  certbot:\n")[0]
+        # 公式イメージの /docker-entrypoint.sh を通して起動する（初期化スクリプトを飛ばさない）
+        self.assertIn("while :; do sleep 21600; nginx -s reload; done & "
+                      "exec /docker-entrypoint.sh nginx -g 'daemon off;'", nginx)
+        self.assertIn("./certbot:/var/www/certbot:ro", nginx)
+
+    def test_only_nginx_publishes_ports(self):
+        self.assertEqual(self.text.count("ports:"), 1)
+
+
+class InitCertTest(TempDirMixin, unittest.TestCase):
+    def test_render(self):
+        text = render_init_cert(HTTPS)
+        self.assertTrue(text.startswith("#!/bin/sh\n"))
+        self.assertIn("set -eu", text)
+        self.assertIn("DOMAIN=api.portfolio.link\n", text)
+        # certbot は live/ を root の 0700 で作るため、ホストのユーザーではなくコンテナ（root）で確かめる
+        self.assertNotIn('[ ! -f "letsencrypt/', text)
+        # メールアドレスは 1 つの引数として渡す（単語分割で別の引数にしない）
+        self.assertIn('set -- --email "$1"', text)
+        self.assertIn("set -- --register-unsafely-without-email", text)
+        self.assertNotIn("$ACCOUNT", text)
+        self.assertNotIn("shellcheck disable", text)
+        # 取得に失敗しても nginx を止めたままにしない
+        self.assertIn("docker compose start nginx", text)
+        self.assertNotIn("start nginx >/dev/null", text)
+        # docker 自体の失敗（デーモン停止・権限・イメージの取得）は「証明書なし」と区別して止める
+        self.assertIn('HAVE_CERT=$(docker compose run --rm --no-deps -T --entrypoint sh certbot -c '
+                      '"if [ -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem ]; then echo yes; else echo no; fi")', text)
+        # yes・no 以外の出力は取り違えずに止める
+        self.assertIn('case "$HAVE_CERT" in yes|no) ;; *)', text)
+        # 別名の系列（<domain>-0001）を作らず、nginx が読むパスに取得する
+        self.assertIn('--cert-name "$DOMAIN"', text)
+        # DRY_RUN=1 なら本番の発行回数を使わずに試し、起動はしない
+        self.assertIn('if [ "${DRY_RUN:-}" = 1 ]; then set -- "$@" --dry-run; fi', text)
+        # 証明書がある（nginx が動ける）なら、DRY_RUN は nginx を止めずに webroot で試す
+        has_cert = text.split('if [ "$HAVE_CERT" = yes ]; then\n')[1].split("\nelse\n")[0]
+        self.assertIn("certonly --webroot -w /var/www/certbot", has_cert)
+        self.assertNotIn("stop nginx", has_cert)
+        self.assertIn("certonly --standalone", text.split('if [ "$HAVE_CERT" = yes ]; then\n')[1].split("\nelse\n")[1])
+        # 80 番を空けてから standalone で取得し、その後に全体を起動する
+        stop = text.index("docker compose stop nginx")
+        run = text.index("docker compose run --rm -p 80:80 --entrypoint certbot certbot")
+        up = text.index("docker compose up -d --build")
+        self.assertLess(stop, run)
+        self.assertLess(run, up)
+        self.assertIn('set -- "$@" -d "$DOMAIN" --cert-name "$DOMAIN" --agree-tos --non-interactive', text)
+        self.assertIn('certonly --standalone "$@"', text)
+
+    def test_written_for_https_with_lf(self):
+        write_stack(self.tmp, [], HTTPS)
+        data = (self.tmp / "init-cert.sh").read_bytes()
+        self.assertIn(b"DOMAIN=api.portfolio.link", data)
+        self.assertNotIn(b"\r\n", data)
+
+    def test_removed_for_http(self):
+        write_stack(self.tmp, [], HTTPS)
+        write_stack(self.tmp, [], HTTP)
+        self.assertFalse((self.tmp / "init-cert.sh").exists())
+        write_stack(self.tmp, [], HTTP)  # なくてもエラーにしない
+
+
+class GitignoreTest(TempDirMixin, unittest.TestCase):
+    def test_new_file_has_all_entries(self):
+        write_stack(self.tmp, [], HTTPS)
+        lines = (self.tmp / ".gitignore").read_text(encoding="utf-8").splitlines()
+        for entry in ("letsencrypt/", "certbot/", "services/*/.env"):
+            self.assertIn(entry, lines)
+
+    def test_appends_missing_entries_once(self):
+        write(self.tmp / ".gitignore", "# 古い設定\ncerts/\ncertbot/")
+        write_stack(self.tmp, [], HTTPS)
+        write_stack(self.tmp, [], HTTPS)
+        text = (self.tmp / ".gitignore").read_text(encoding="utf-8")
+        lines = text.splitlines()
+        self.assertIn("certs/", lines)
+        self.assertEqual(lines.count("certbot/"), 1)
+        self.assertEqual(lines.count("letsencrypt/"), 1)
+        self.assertEqual(lines.count("services/*/.env"), 1)
+        self.assertTrue(text.startswith("# 古い設定\ncerts/\ncertbot/\n"))

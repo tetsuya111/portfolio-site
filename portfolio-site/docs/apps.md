@@ -31,7 +31,7 @@ CloudFormation はリポジトリのファイルを直接読めないため、�
 | `outputDir` | ビルド成果物のディレクトリ（アプリ内の相対パス。`..`・絶対パス不可） |
 | `buildArgs` | `npm run build --` に渡す引数。英数字と `@ . / : = - _` だけ |
 | `mock`（任意） | `true` ならバックエンドのモックを差し込む（[バックエンドのモック](#バックエンドのモック)）。省略時は `false`。ポートフォリオの「ポートフォリオのURL」ボタンは、`true` なら淡色＋「モック」、`false` で `env` があればアクセント色＋「実API」で表示する（それ以外・apps.json にないポートフォリオは文字なしのアクセント色） |
-| `env`（任意） | ビルド時の環境変数（`{"VITE_API_URL": "https://api.example.com/my-app"}` など）。`npm ci`・`npm run build` に渡す。名前は `VITE_`・`PUBLIC_`・`NEXT_PUBLIC_` で始まる英大文字・数字・`_`、値は `https://` で始まり英数字と `. - _ ~ / : %` だけの URL に限る（ビルド環境の挙動を変える変数・シェルの記号を入れさせない）。[backend-compose](../../portfolios/backend-compose/README.md) がバックエンドの URL を書く |
+| `env`（任意） | ビルド時の環境変数（`{"VITE_API_URL": "https://api.example.com/my-app"}` など）。`npm ci`・`npm run build` に渡す。名前は `VITE_`・`PUBLIC_`・`NEXT_PUBLIC_` で始まる英大文字・数字・`_`、値は `https://` で始まり英数字と `. - _ ~ / : %` だけの URL か、英数字と `. - _` だけの URL でない値（OAuth のクライアント ID など）に限る（ビルド環境の挙動を変える変数・シェルの記号を入れさせない）。値はビルドで JS に埋め込まれて公開されるため、秘密情報（API キー・クライアントシークレットなど）は書かない。[backend-compose](../../portfolios/backend-compose/README.md) がバックエンドの URL を書く |
 
 不正な内容があると `npm run build:apps` が失敗し、ビルド（PR のテスト・デプロイとも）が止まる。
 

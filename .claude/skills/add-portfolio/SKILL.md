@@ -60,7 +60,7 @@ disable-model-invocation: true
    - 取り込み先（コピーしたか）、作成・更新したファイル
    - フロントエンド: 配信登録したか。しなかった場合はその理由。登録した場合の配信 URL（`<サイトURL>/apps/<スラッグ>/`）
    - モック: `handlers.js` の場所と、ハンドラーの一覧（404 のままか、データを書いたか）。動かない可能性のある画面（ページ遷移でのログイン・`fetch` 以外の通信など）
-   - バックエンド: compose に登録したか（しなかった場合はその理由）、`backendUrl`、`apps.json` の `env` に設定した名前と URL（設定しなかった場合はその理由）、バックエンドの CORS でサイトのドメインを許可する必要があること、VPS での手順（`stack/` のアップロード、`certs/`・`services/<スラッグ>/.env` の配置、`docker compose up -d --build`）
+   - バックエンド: compose に登録したか（しなかった場合はその理由）、`backendUrl`、`apps.json` の `env` に設定した名前と URL（設定しなかった場合はその理由）、バックエンドの CORS でサイトのドメインを許可する必要があること、VPS での手順（`stack/` のアップロード、`services/<スラッグ>/.env` の配置、`sh init-cert.sh`（`https: false` なら `docker compose up -d --build`））
    - `warnings`（取り込み・compose 登録の両方）の全件と、ユーザーが手で対応すべきこと
 
 ## よくある間違い

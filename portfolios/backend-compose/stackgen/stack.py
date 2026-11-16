@@ -15,17 +15,27 @@ from stackgen import StackError
 from stackgen.config import Config
 
 NGINX_IMAGE = "nginx:1.27-alpine"
+CERTBOT_IMAGE = "certbot/certbot:v2.11.0"
+# 6 時間ごとに reload する
+NGINX_COMMAND = ('["/bin/sh", "-c", '
+                 '"while :; do sleep 21600; nginx -s reload; done & '
+                 'exec /docker-entrypoint.sh nginx -g \'daemon off;\'"]')
+# 12 時間ごとに renew する。compose は $$ を $ に戻す。sleep & wait にして停止の TERM ですぐ終わる
+CERTBOT_ENTRYPOINT = ('["/bin/sh", "-c", "trap exit TERM; while :; do '
+                      'certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"]')
 # バックエンドのサービス名（スラッグ）に使えない、compose のサービス名
-RESERVED_SERVICES = {"nginx"}
+RESERVED_SERVICES = {"nginx", "certbot"}
 
 GITIGNORE = """\
-# TLS 証明書（VPS 上で配置する。fullchain.pem・privkey.pem）
-certs/
+# certbot が取得した TLS 証明書と秘密鍵（VPS 上で作られる）
+letsencrypt/
 # certbot の HTTP-01 チャレンジのファイル（VPS 上で作られる）
 certbot/
 # バックエンドの秘密情報（VPS 上で配置する）
 services/*/.env
 """
+# 既存の .gitignore に足りなければ追記する行（コメント以外）
+_GITIGNORE_ENTRIES = [line for line in GITIGNORE.splitlines() if line and not line.startswith("#")]
 
 
 @dataclass(frozen=True)
@@ -86,8 +96,20 @@ def render_compose(services: list[Service], cfg: Config) -> str:
         lines.append('      - "443:443"')
     lines += ["    volumes:", "      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro"]
     if cfg.https:
-        # 証明書と、certbot（--webroot）の HTTP-01 チャレンジのファイル置き場
-        lines += ["      - ./certs:/etc/nginx/certs:ro", "      - ./certbot:/var/www/certbot:ro"]
+        # certbot と共有する証明書（live/ はシンボリックリンクのためディレクトリごと共有する）と、
+        # certbot（--webroot）の HTTP-01 チャレンジのファイル置き場
+        lines += ["      - ./letsencrypt:/etc/letsencrypt:ro", "      - ./certbot:/var/www/certbot:ro",
+                  # 更新された証明書を読み込むため、裏で定期的に reload する（certbot から合図するには
+                  # Docker のソケットが要り権限が広がるため使わない）。exec で nginx を PID 1 にし停止の合図を受ける
+                  f"    command: {NGINX_COMMAND}",
+                  "  certbot:",
+                  f"    image: {CERTBOT_IMAGE}",
+                  "    restart: unless-stopped",
+                  "    volumes:",
+                  "      - ./letsencrypt:/etc/letsencrypt",
+                  "      - ./certbot:/var/www/certbot",
+                  # 期限まで 30 日を切った証明書だけを更新する。初回を standalone で取った証明書も webroot で更新する
+                  f"    entrypoint: {CERTBOT_ENTRYPOINT}"]
     # depends_on は書かない（1つのバックエンドの起動失敗で nginx・ほかのバックエンドまで止めないため。
     # 転送先は要求のたびに名前を引くので、起動順に依存しない）
     for s in services:
@@ -146,14 +168,87 @@ def render_nginx(services: list[Service], cfg: Config) -> str:
         "    location / {\n        return 301 https://$host$request_uri;\n    }\n}\n\n"
         "server {\n    listen 443 ssl;\n"
         f"    server_name {cfg.domain};\n"
-        "    ssl_certificate /etc/nginx/certs/fullchain.pem;\n"
-        "    ssl_certificate_key /etc/nginx/certs/privkey.pem;\n\n"
+        # certbot が取得した証明書（compose で ./letsencrypt を読み取り専用で共有する）
+        f"    ssl_certificate /etc/letsencrypt/live/{cfg.domain}/fullchain.pem;\n"
+        f"    ssl_certificate_key /etc/letsencrypt/live/{cfg.domain}/privkey.pem;\n\n"
         + _locations(services) + "}\n"
     )
+
+
+def render_init_cert(cfg: Config) -> str:
+    """初回の証明書の取得（certbot の standalone）から compose の起動までを行うスクリプト。
+
+    domain は config.py でホスト名に限っているため、sh にそのまま書いてよい。
+    """
+    return f"""\
+#!/bin/sh
+# backend-compose が生成したファイル。直接編集しないでください。
+# 証明書がなければ certbot の standalone（80 番）で取得し、nginx と全バックエンドを起動する。
+# 使い方: sh init-cert.sh [メールアドレス]（省略するとメールなしで Let's Encrypt に登録する）
+#         DRY_RUN=1 sh init-cert.sh … 本番の発行回数を使わずに取得を試す（証明書は保存せず、起動もしない）
+set -eu
+cd "$(dirname "$0")"
+DOMAIN={cfg.domain}
+# certbot は live/ を root だけが読める権限で作るため、ホストのユーザーではなくコンテナ（root）で確かめる。
+# docker 自体の失敗（デーモン停止・権限・イメージの取得）は set -e でここで止め、「証明書なし」と取り違えない
+HAVE_CERT=$(docker compose run --rm --no-deps -T --entrypoint sh certbot -c "if [ -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem ]; then echo yes; else echo no; fi")
+case "$HAVE_CERT" in yes|no) ;; *)
+  echo "証明書の有無を確かめられませんでした（出力: $HAVE_CERT）" >&2
+  exit 1 ;;
+esac
+# メールアドレスは 1 つの引数として渡す。--cert-name で、別名の系列（<domain>-0001）を作らず nginx が読むパスに取得する
+if [ -n "${{1:-}}" ]; then set -- --email "$1"; else set -- --register-unsafely-without-email; fi
+set -- "$@" -d "$DOMAIN" --cert-name "$DOMAIN" --agree-tos --non-interactive
+if [ "${{DRY_RUN:-}}" = 1 ]; then set -- "$@" --dry-run; fi
+if [ "$HAVE_CERT" = yes ]; then
+  if [ "${{DRY_RUN:-}}" = 1 ]; then
+    # 証明書がある（nginx が動ける）ので、nginx を止めずに webroot で試す
+    docker compose run --rm --no-deps --entrypoint certbot certbot \\
+      certonly --webroot -w /var/www/certbot "$@"
+    echo "取得を試せました（DRY_RUN のため証明書は保存していません）"
+    exit 0
+  fi
+  echo "letsencrypt/live/$DOMAIN/ に証明書があるため、取得は行いません"
+else
+  # standalone の certbot が 80 番で答えるため、動いている nginx を止める
+  docker compose stop nginx >/dev/null 2>&1 || true
+  if ! docker compose run --rm -p 80:80 --entrypoint certbot certbot certonly --standalone "$@"; then
+    echo "証明書を取得できませんでした。DNS が VPS を指しているか、80 番が外から届くかを確かめてください" >&2
+    # 止めた nginx を動いていた状態に戻す（証明書がまだなければ、nginx も起動に失敗する）
+    docker compose start nginx || echo "nginx を起動できませんでした（docker compose logs nginx を確かめてください）" >&2
+    exit 1
+  fi
+  if [ "${{DRY_RUN:-}}" = 1 ]; then
+    echo "取得を試せました（DRY_RUN のため証明書は保存していません）"
+    docker compose start nginx || true
+    exit 0
+  fi
+fi
+docker compose up -d --build
+"""
 
 
 def write_stack(stack_dir: Path, services: list[Service], cfg: Config) -> None:
     _write(stack_dir / "docker-compose.yml", render_compose(services, cfg))
     _write(stack_dir / "nginx" / "default.conf", render_nginx(services, cfg))
-    if not (stack_dir / ".gitignore").exists():
-        _write(stack_dir / ".gitignore", GITIGNORE)
+    init_cert = stack_dir / "init-cert.sh"
+    if cfg.https:
+        _write(init_cert, render_init_cert(cfg))
+    elif init_cert.exists():
+        init_cert.unlink()
+    _update_gitignore(stack_dir / ".gitignore")
+
+
+def _update_gitignore(path: Path) -> None:
+    """なければ全体を書き、あれば足りない行だけを末尾に追記する（手で足した行は残す）。"""
+    if not path.exists():
+        _write(path, GITIGNORE)
+        return
+    text = path.read_text(encoding="utf-8")
+    existing = {line.strip() for line in text.splitlines()}
+    missing = [e for e in _GITIGNORE_ENTRIES if e not in existing]
+    if not missing:
+        return
+    if text and not text.endswith("\n"):
+        text += "\n"
+    _write(path, text + "".join(f"{e}\n" for e in missing))

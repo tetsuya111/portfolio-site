@@ -8,6 +8,7 @@ import json
 import shutil
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from importer import PortfolioError
 from importer.copier import copy_tree, validate_slug
@@ -25,7 +26,10 @@ _KEEP_ON_REFRESH = {"Dockerfile", ".dockerignore", ".env"}
 def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="add_backend.py",
                                 description="取り込んだポートフォリオのバックエンドを docker compose のフォルダに登録する")
-    p.add_argument("project", help="portfolios/<スラッグ>（portfolio-importer で取り込んだプロジェクト）")
+    p.add_argument("project", nargs="?", help="portfolios/<スラッグ>（portfolio-importer で取り込んだプロジェクト）")
+    p.add_argument("--regenerate", action="store_true",
+                   help="バックエンドを登録せず、config.json と services.json から stack/ の設定だけを作り直す"
+                        "（config.json を変えたとき用。ソースのコピーは行わない）")
     p.add_argument("--enable-api", action="store_true",
                    help="フロントエンドを実 API に切り替える（apps.json に env を書き mock を false にする）。"
                         "VPS でバックエンドを起動してから付ける（先に切り替えると、次のデプロイでフロントエンドが壊れる）")
@@ -46,7 +50,7 @@ def _resolve_project(path: Path, repo_root: Path) -> tuple[str, Path]:
     except PortfolioError as e:
         raise StackError(str(e)) from e
     if slug in RESERVED_SERVICES:
-        raise StackError(f"スラッグ「{slug}」は compose のサービス名（リバースプロキシ）と重なるため登録できません")
+        raise StackError(f"スラッグ「{slug}」は compose のサービス名（リバースプロキシ・証明書の更新）と重なるため登録できません")
     return slug, project
 
 
@@ -83,7 +87,50 @@ def _copy_backend(src: Path, dest: Path, project: Path, exclude: list[Path]) -> 
     return True
 
 
+def _stale_env_warnings(apps: dict | None, cfg, slugs: list[str]) -> list[str]:
+    """apps.json の env に、今の設定（スキーム・ドメイン）と違うバックエンドの URL があれば警告を返す。
+
+    パスが /<スラッグ> で始まる http(s) の URL を、そのバックエンドを指す値とみなす。
+    """
+    if apps is None:
+        return []
+    warnings = []
+    for entry in apps["apps"]:
+        if not isinstance(entry, dict) or entry.get("slug") not in slugs or not isinstance(entry.get("env"), dict):
+            continue
+        slug = entry["slug"]
+        url = backend_url(cfg, slug)
+        for name, value in entry["env"].items():
+            if not isinstance(value, str):
+                continue
+            parts = urlsplit(value)
+            points_backend = parts.scheme in ("http", "https") and (
+                parts.path == f"/{slug}" or parts.path.startswith(f"/{slug}/"))
+            if points_backend and not (value == url or value.startswith(url + "/")):
+                warnings.append(f"apps.json の {slug} の env.{name}（{value}）が config.json の設定と違います。"
+                                f"{url} で始まる URL に直してください")
+    return warnings
+
+
+def regenerate(repo_root: Path, config_path: Path, stack_dir: Path) -> dict:
+    cfg = load_config(config_path)
+    services = load_services(stack_dir)
+    apps = load_apps_json(repo_root)  # 不正なら何かを書く前に止める
+    write_stack(stack_dir, services, cfg)
+    slugs = [s.slug for s in services]
+    warnings = [f"stack/services/{s}/ がないため、docker compose up でこのバックエンドのビルドに失敗します。"
+                f"add_backend.py portfolios/{s} で登録し直すか、services.json から外してください"
+                for s in slugs if not (stack_dir / "services" / s).is_dir()]
+    return {"services": slugs, "https": cfg.https, "warnings": warnings + _stale_env_warnings(apps, cfg, slugs)}
+
+
 def run(args: argparse.Namespace, repo_root: Path, config_path: Path, stack_dir: Path) -> dict:
+    if args.regenerate:
+        if args.project is not None or args.enable_api:
+            raise StackError("--regenerate にはプロジェクトも --enable-api も指定しないでください")
+        return regenerate(repo_root, config_path, stack_dir)
+    if args.project is None:
+        raise StackError("portfolios/<スラッグ> のディレクトリを指定してください")
     cfg = load_config(config_path)  # 設定が不正なら何も書かない
     slug, project = _resolve_project(Path(args.project), repo_root)
     frontend = detect_frontend(project, slug)
@@ -112,6 +159,8 @@ def run(args: argparse.Namespace, repo_root: Path, config_path: Path, stack_dir:
     url = backend_url(cfg, slug)
     env, w = update_apps_json(repo_root, slug, url, apply=args.enable_api)
     warnings += w
+    # stack/ はすべてのバックエンドを今の config.json で作り直すため、ほかのバックエンドの URL のずれも知らせる
+    warnings += _stale_env_warnings(load_apps_json(repo_root), cfg, [s.slug for s in services if s.slug != slug])
     if not (dest / ".env").exists() and (dest / ".env.example").exists():
         warnings.append(f"バックエンドが使う環境変数は、VPS 上で stack/services/{slug}/.env に書いてください（.env.example を参照）")
     return {
