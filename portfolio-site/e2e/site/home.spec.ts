@@ -3,6 +3,7 @@ import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "../fixtures";
 import {
   formatDisplayDate,
+  loadAudiences,
   loadPortfolios,
   loadProfile,
   loadPublishedArticles,
@@ -17,6 +18,7 @@ const latest = loadPublishedArticles().slice(0, 3);
 const latestIt = loadPublishedItArticles().slice(0, 3);
 const services = loadServices();
 const skills = loadSkills();
+const audiences = loadAudiences();
 
 /** 見出し（h2）の名前でトップページのセクションを取り出す */
 const section = (page: Page, name: string): Locator =>
@@ -124,9 +126,10 @@ test.describe("相談ボタン", () => {
   });
 });
 
-test("セクションをサービス・ポートフォリオ・スキル・最新の記事・IT ニュースの順に並べる", async ({ page }) => {
+test("セクションをサービス・こんな方とお話ししたい・ポートフォリオ・スキル・最新の記事・IT ニュースの順に並べる", async ({ page }) => {
   await expect(page.locator("main > section:not(:first-child) > div > h2")).toHaveText([
     "サービス",
+    "こんな方とお話ししたい",
     "ポートフォリオ",
     "スキル",
     "最新の記事",
@@ -139,6 +142,14 @@ test("サービスを順にタイルで表示し、注記を添える", async ({
   await expect(s.locator("h3")).toHaveText(services.map((x) => x.data.title));
   for (const x of services) await expect(s.getByText(x.data.description, { exact: true })).toBeVisible();
   await expect(s.getByText("※このサービスは一例です。相談していただければなんでも対応します。")).toBeVisible();
+});
+
+test("こんな方とお話ししたいを順にタイルで表示する", async ({ page }) => {
+  const s = section(page, "こんな方とお話ししたい");
+  await expect(s.locator("article h3")).toHaveText(audiences.map((x) => x.data.title));
+  for (const x of audiences) {
+    if (x.data.description) await expect(s.getByText(x.data.description, { exact: true })).toBeVisible();
+  }
 });
 
 test("スキルを順にタイルで表示し、解説・作れるもの・使われている例を載せる", async ({ page }) => {

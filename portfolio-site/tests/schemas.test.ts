@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { articleSchema, isLinkTarget, portfolioSchema, profileSchema, serviceSchema, skillSchema } from "../src/lib/schemas";
+import { articleSchema, audienceSchema, isLinkTarget, portfolioSchema, profileSchema, serviceSchema, skillSchema } from "../src/lib/schemas";
 
 describe("profileSchema", () => {
   it("requires name and role", () => {
@@ -117,5 +117,21 @@ describe("isLinkTarget", () => {
     expect(isLinkTarget("javascript:alert(1)")).toBe(false);
     expect(isLinkTarget("//evil.example")).toBe(false);
     expect(isLinkTarget("")).toBe(false);
+  });
+});
+
+describe("audienceSchema", () => {
+  it("requires only title and defaults order to 0", () => {
+    const a = audienceSchema.parse({ title: "t" });
+    expect(a.order).toBe(0);
+    expect(a.description).toBeUndefined();
+    expect(audienceSchema.parse({ title: "t", description: "d", order: 2 })).toEqual({ title: "t", description: "d", order: 2 });
+  });
+
+  it("rejects a missing or empty title and a non-integer order", () => {
+    expect(audienceSchema.safeParse({}).success).toBe(false);
+    expect(audienceSchema.safeParse({ title: "" }).success).toBe(false);
+    expect(audienceSchema.safeParse({ title: "t", order: 1.5 }).success).toBe(false);
+    expect(audienceSchema.safeParse({ title: "t", description: "" }).success).toBe(false);
   });
 });

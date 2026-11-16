@@ -43,7 +43,7 @@ npm run dev        # http://localhost:4321/ （管理画面は http://localhost:
 | 自己紹介・経歴 | `src/content/profile/profile.md` を編集、または `npm run dev` 中に管理画面 `/admin/profile/` |
 | ポートフォリオ | `npm run portfolio:new -- --slug my-app --title "My App" --tags "Astro,AWS"`、または md を直接置く（サイト上からは追加できない） |
 | 記事 | `src/content/articles/` に md を置く、または `npm run dev` 中に管理画面 `/admin/articles/new/` |
-| サービス・スキル（トップページ） | `src/content/services/`・`src/content/skills/` の md を編集・追加 |
+| サービス・スキル・こんな方とお話ししたい（トップページ） | `src/content/services/`・`src/content/skills/`・`src/content/audiences/` の md を編集・追加 |
 
 各ファイルの項目・書式・スラッグのルール・管理画面の制限は [docs/content-files.md](docs/content-files.md) にまとめています。
 
