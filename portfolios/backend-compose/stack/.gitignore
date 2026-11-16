@@ -1,0 +1,6 @@
+# TLS 証明書（VPS 上で配置する。fullchain.pem・privkey.pem）
+certs/
+# certbot の HTTP-01 チャレンジのファイル（VPS 上で作られる）
+certbot/
+# バックエンドの秘密情報（VPS 上で配置する）
+services/*/.env
