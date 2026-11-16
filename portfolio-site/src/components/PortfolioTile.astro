@@ -2,8 +2,9 @@
 // タイル全体をクリック可能にしつつ、URL ボタンを入れ子の <a> にしないため
 // タイトルのリンクを疑似要素でタイル全体に広げる（stretched link）。
 // タイトルのリンクにフォーカスしたときはタイル全体に枠を出す（URL ボタンのときはボタンの枠だけ）。
-// 情報の強弱: タイトル（大・太字）＞ URL ボタン（アクセントの塗り）＞ 概要 ＞ タグ（小・淡色。先頭5件＋「+N」）
+// 情報の強弱: タイトル（大・太字）＞ URL ボタン（アクセントの塗り。モックは淡色）＞ 概要 ＞ タグ（小・淡色。先頭5件＋「+N」）
 import TagList from "./TagList.astro";
+import PortfolioLinkButton from "./PortfolioLinkButton.astro";
 import { TILE_TAG_LIMIT } from "../lib/content-query";
 
 interface Props {
@@ -27,15 +28,10 @@ const { slug, title, description, tags, url } = Astro.props;
   <TagList tags={tags} max={TILE_TAG_LIMIT} />
   {
     url && (
-      <a
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        class="btn-accent relative z-10 mt-auto self-start px-3.5 py-1 text-sm"
-      >
+      <PortfolioLinkButton slug={slug} url={url} class="relative z-10 mt-auto self-start px-3.5 py-1 text-sm">
         {/* 読み上げ名は見える文字を含める（WCAG 2.5.3）。どのポートフォリオか・別タブで開くことは読み上げ用に補う */}
-        ポートフォリオのURL ↗<span class="sr-only">（{title}、新しいタブで開く）</span>
-      </a>
+        <span class="sr-only">（{title}、新しいタブで開く）</span>
+      </PortfolioLinkButton>
     )
   }
 </article>

@@ -13,10 +13,36 @@ export interface AppEntry {
   buildArgs: string[];
   /** true なら mock/handlers.js のモックを出力の HTML に差し込み、バックエンドなしで動かす */
   mock: boolean;
+  /** ビルド時の環境変数（バックエンドの URL など。backend-compose が書く）。npm ci・npm run build に渡す */
+  env: Record<string, string>;
 }
 
 /** シェルを経由しても安全な文字だけの引数（Windows では npm をシェル経由で起動するため） */
 const SAFE_ARG = /^[\w@./:=-]+$/;
+/**
+ * env の名前は公開用の接頭辞を持つものだけ（NODE_OPTIONS・PATH などビルドの挙動を変える変数を入れさせない）。
+ * 値は https の URL で、シェルを経由しても安全な文字だけ（サイトは HTTPS のため http の API は呼べない）
+ */
+const ENV_NAME = /^(?:VITE_|PUBLIC_|NEXT_PUBLIC_)[A-Z0-9_]+$/;
+// TODO（テスト用に一時的に無効化）: VPS を https にしたら元に戻す。http の API は HTTPS のサイトからは混在コンテンツで呼べない
+// const ENV_VALUE = /^https:\/\/[A-Za-z0-9.\-_~/:%]+$/;
+const ENV_VALUE = /^https?:\/\/[A-Za-z0-9.\-_~/:%]+$/;
+
+function validateEnv(env: unknown, where: string): Record<string, string> {
+  if (env === undefined) return {};
+  if (typeof env !== "object" || env === null || Array.isArray(env)) {
+    throw new Error(`${where}.env は {"環境変数名": "値"} の形にしてください`);
+  }
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries(env)) {
+    if (!ENV_NAME.test(name)) throw new Error(`${where}.env の名前「${name}」は VITE_・PUBLIC_・NEXT_PUBLIC_ で始まる英大文字・数字・_ にしてください`);
+    if (typeof value !== "string" || !ENV_VALUE.test(value)) {
+      throw new Error(`${where}.env.${name} は https:// で始まる URL（英数字と . - _ ~ / : % だけ）にしてください`);
+    }
+    out[name] = value;
+  }
+  return out;
+}
 
 function isSafeRelativeDir(dir: string): boolean {
   if (dir === "" || isAbsolute(dir) || /^[A-Za-z]:/.test(dir) || dir.includes("\\")) return false;
@@ -43,15 +69,16 @@ export function validateManifest(data: unknown): AppEntry[] {
       throw new Error(`${where}.buildArgs は英数字と @ . / : = - _ だけの文字列の配列にしてください`);
     }
     if (a.mock !== undefined && typeof a.mock !== "boolean") throw new Error(`${where}.mock は true か false にしてください`);
-    return { slug: a.slug, outputDir: a.outputDir, buildArgs: [...a.buildArgs], mock: a.mock ?? false };
+    const env = validateEnv((raw as { env?: unknown }).env, where);
+    return { slug: a.slug, outputDir: a.outputDir, buildArgs: [...a.buildArgs], mock: a.mock ?? false, env };
   });
 }
 
 export interface BuildOptions {
   appsDir: string;
   distDir: string;
-  /** コマンドを実行して終了コードを返す */
-  run: (cmd: string, args: string[], cwd: string) => number;
+  /** コマンドを実行して終了コードを返す。env は実行環境の環境変数に追加して渡す */
+  run: (cmd: string, args: string[], cwd: string, env: Record<string, string>) => number;
   /** モックのランタイム（src/lib/mock-runtime.js）のパス。mock: true のアプリがあるときに必要 */
   mockRuntime?: string;
 }
@@ -115,7 +142,7 @@ export function buildApps(apps: AppEntry[], { appsDir, distDir, run, mockRuntime
     const build = ["run", "build", ...(app.buildArgs.length ? ["--", ...app.buildArgs] : [])];
     // インストールスクリプトは実行しない（乗っ取られた依存のスクリプトにデプロイ用の権限を使わせない）
     for (const args of [["ci", "--ignore-scripts"], build]) {
-      const code = run("npm", args, cwd);
+      const code = run("npm", args, cwd, app.env);
       if (code !== 0) throw new Error(`${app.slug}: npm ${args.join(" ")} が失敗しました（終了コード ${code}）`);
     }
     const out = join(cwd, app.outputDir);
@@ -128,4 +155,54 @@ export function buildApps(apps: AppEntry[], { appsDir, distDir, run, mockRuntime
     cpSync(out, dest, { recursive: true });
     if (runtime !== undefined) installMock(app.slug, cwd, dest, runtime);
   }
+}
+
+/** ポートフォリオのフロントエンドが、モックの応答で動くか（mock）、実際のバックエンドを呼ぶか（api） */
+export type AppBackendMode = "mock" | "api";
+
+/**
+ * apps.json の内容から、スラッグごとの動作を返す。mock: true はモック、env（バックエンドの URL）があれば実 API。
+ * どちらでもない（バックエンドのない静的なフロントエンドなど）は含めない。不正なら空（ボタンを今の表示にする）
+ */
+export function appBackendModes(data: unknown): Map<string, AppBackendMode> {
+  try {
+    const modes = new Map<string, AppBackendMode>();
+    for (const a of validateManifest(data)) {
+      if (a.mock) modes.set(a.slug, "mock");
+      else if (Object.keys(a.env).length > 0) modes.set(a.slug, "api");
+    }
+    return modes;
+  } catch (e) {
+    // ページのビルドは止めない（デプロイでは build:apps の検証が止める）が、表示が消える理由は残す
+    console.warn(`apps.json が不正なため、ポートフォリオの URL ボタンにモック／実API を表示しません: ${e instanceof Error ? e.message : e}`);
+    return new Map();
+  }
+}
+
+const modesCache = new Map<string, { mtimeMs: number; modes: Map<string, AppBackendMode> }>();
+
+/**
+ * apps/apps.json を読んで appBackendModes を返す。ボタンごとに読み直さないよう、ファイルが変わるまで（更新日時で判定）
+ * 前回の結果を使う（astro dev で apps.json を変えたときは反映する）。ファイルがなければ空。
+ * 既定のパスは実行時のカレントディレクトリから決める（astro build・npm run build は portfolio-site で実行する。
+ * ビルド後のコードは dist 側に移るため、import.meta.url からは apps/ を辿れない）
+ */
+export function readAppBackendModes(path = join(process.cwd(), "apps", "apps.json")): Map<string, AppBackendMode> {
+  let mtimeMs: number;
+  try {
+    mtimeMs = statSync(path).mtimeMs;
+  } catch {
+    return new Map();
+  }
+  const cached = modesCache.get(path);
+  if (cached?.mtimeMs === mtimeMs) return cached.modes;
+  let modes: Map<string, AppBackendMode>;
+  try {
+    modes = appBackendModes(JSON.parse(readFileSync(path, "utf8")));
+  } catch (e) {
+    console.warn(`apps.json を読めないため、ポートフォリオの URL ボタンにモック／実API を表示しません: ${e instanceof Error ? e.message : e}`);
+    modes = new Map();
+  }
+  modesCache.set(path, { mtimeMs, modes });
+  return modes;
 }

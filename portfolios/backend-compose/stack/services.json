@@ -1,0 +1,16 @@
+{
+  "services": [
+    {
+      "slug": "media-feed",
+      "port": 8000
+    },
+    {
+      "slug": "spotify-billboard-playlist",
+      "port": 8000
+    },
+    {
+      "slug": "task-box-it-develop",
+      "port": 8000
+    }
+  ]
+}
