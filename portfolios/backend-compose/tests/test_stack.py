@@ -83,7 +83,8 @@ class LoadServicesTest(TempDirMixin, unittest.TestCase):
         from stackgen.stack import load_services
         from tests.helpers import write_json
         for data in ({"services": [{"slug": "a;b", "port": 1}]}, {"services": [{"slug": "a\n", "port": 1}]},
-{"services": [{"slug": "a", "port": "80"}]}, {}):
+{"services": [{"slug": "a", "port": "80"}]}, {"services": [{"slug": "nginx", "port": 80}]},
+                     {"services": [{"slug": "docs", "port": 80}]}, {}):
             with self.subTest(data=data):
                 write_json(self.tmp / "services.json", data)
                 with self.assertRaises(StackError):

@@ -16,11 +16,44 @@ class CliTest(TempDirMixin, unittest.TestCase):
         self.stack = self.repo / "portfolios" / "backend-compose" / "stack"
         self.project = self.repo / "portfolios" / "my-app"
 
-    def run_main(self, path):
+    def run_main(self, path, *extra):
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
-            code = main([str(path)], repo_root=self.repo, config_path=self.config, stack_dir=self.stack)
+            code = main([str(path), *extra], repo_root=self.repo, config_path=self.config, stack_dir=self.stack)
         return code, out.getvalue(), err.getvalue()
+
+    def test_keeps_mock_until_enable_api(self):
+        write(self.project / "backend" / "requirements.txt", "")
+        apps = self.repo / "portfolio-site" / "apps"
+        write_json(apps / "apps.json", {"apps": [{"slug": "my-app", "outputDir": "dist", "buildArgs": [], "mock": True}]})
+        write(apps / "my-app" / "src" / "api.ts", "import.meta.env.VITE_API_URL")
+        before = (apps / "apps.json").read_text(encoding="utf-8")
+        code, out, _ = self.run_main(self.project)
+        self.assertEqual(code, 0)
+        result = json.loads(out)
+        self.assertIsNone(result["frontendEnv"])
+        self.assertTrue(any("--enable-api" in w for w in result["warnings"]))
+        self.assertEqual((apps / "apps.json").read_text(encoding="utf-8"), before)
+
+    def test_rejects_reverse_proxy_name(self):
+        nginx = self.repo / "portfolios" / "nginx"
+        write(nginx / "backend" / "requirements.txt", "")
+        code, _, err = self.run_main(nginx)
+        self.assertEqual(code, 1)
+        self.assertIn("nginx", err)
+        self.assertFalse(self.stack.exists())
+
+    def test_failed_refresh_keeps_previous_source(self):
+        from unittest import mock
+        write(self.project / "backend" / "requirements.txt", "")
+        write(self.project / "backend" / "main.py", "app = FastAPI()\n")
+        self.assertEqual(self.run_main(self.project)[0], 0)
+        service = self.stack / "services" / "my-app"
+        with mock.patch("stackgen.cli.copy_tree", side_effect=OSError("boom")):
+            with self.assertRaises(OSError):
+                self.run_main(self.project)
+        self.assertTrue((service / "main.py").is_file())
+        self.assertFalse((service.parent / ".my-app.staging").exists())
 
     def test_registers_python_backend(self):
         write(self.project / "backend" / "requirements.txt", "fastapi\n")
@@ -30,7 +63,7 @@ class CliTest(TempDirMixin, unittest.TestCase):
         write_json(apps / "apps.json", {"apps": [{"slug": "my-app", "outputDir": "dist", "buildArgs": [], "mock": True}]})
         write(apps / "my-app" / "src" / "api.ts", "import.meta.env.VITE_API_URL")
 
-        code, out, err = self.run_main(self.project)
+        code, out, err = self.run_main(self.project, "--enable-api")
         self.assertEqual(code, 0, err)
         result = json.loads(out)
         self.assertEqual(result["slug"], "my-app")

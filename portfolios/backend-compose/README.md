@@ -16,8 +16,13 @@
 リポジトリのルートで実行する。
 
 ```bash
-python portfolios/backend-compose/add_backend.py portfolios/<スラッグ>
+python portfolios/backend-compose/add_backend.py portfolios/<スラッグ> [--enable-api]
 ```
+
+| 引数 | 内容 |
+|---|---|
+| `portfolios/<スラッグ>` | portfolio-importer で取り込んだプロジェクト。`nginx`（リバースプロキシのサービス名）は使えない |
+| `--enable-api` | フロントエンドを実 API に切り替える（下の表の4）。VPS でバックエンドを起動してから付けて再実行する。付けなければ `apps.json` は変えず、書く内容を `warnings` で案内する |
 
 結果は JSON（`slug`・`service`・`port`・`backendUrl`・`dockerfile`・`frontendEnv`・`warnings`）で標準出力に出る。エラー時は理由を標準エラーに出し、終了コード 1 で終わる（何も書き込まない）。
 
@@ -28,7 +33,7 @@ python portfolios/backend-compose/add_backend.py portfolios/<スラッグ>
 | 1 | バックエンド（portfolio-importer と同じ検出規則）を、importer と同じ除外規則（`.env`・鍵・DB など）でコピーする。既にあれば、`Dockerfile`・`.dockerignore`・`.env` を残してソースを入れ直す（取り込み元の修正を反映するため） | `stack/services/<スラッグ>/` |
 | 2 | Dockerfile がなければ生成する（FastAPI → uvicorn、Django・Flask → gunicorn、node → `npm start`）。起動コマンドを判定できなければ TODO を書いて警告する。待ち受けポートは `EXPOSE` から決める（なければ Python 8000・node 3000） | `Dockerfile`・`.dockerignore` |
 | 3 | 登録一覧を更新し、compose と nginx の設定を作り直す。ルーティングはパス方式で、`https://<domain>/<スラッグ>/...` を `<スラッグ>` コンテナの `/...` へ転送する。バックエンドのポートはホストに公開しない | `stack/services.json`・`stack/docker-compose.yml`・`stack/nginx/default.conf`・`stack/.gitignore` |
-| 4 | フロントエンドを配信している（`portfolio-site/apps/apps.json` に登録済み）なら、ソースと `.env.example` から URL 用の環境変数名（`VITE_API_URL` など）を探し、`env` にバックエンドの URL を書いて `mock` を false（実 API）にする。見つからない・http・既に別の値がある場合は変更せず警告する | `portfolio-site/apps/apps.json`（[env の書式](../../portfolio-site/docs/apps.md#appsjson-の書式)） |
+| 4 | フロントエンドを配信している（`portfolio-site/apps/apps.json` に登録済み）で `--enable-api` を付けたなら、ソースと `.env.example` から URL 用の環境変数名（`VITE_API_URL` など。名前に URL・BASE・ENDPOINT を含むものを優先）を探し、`env` にバックエンドの URL を書いて `mock` を false（実 API）にする。見つからない・HOST・ORIGIN の名前だけ・http・既に別の値がある場合は変更せず警告する | `portfolio-site/apps/apps.json`（[env の書式](../../portfolio-site/docs/apps.md#appsjson-の書式)） |
 
 - `docker-compose.yml`・`nginx/default.conf` は `services.json` から毎回作り直すため、手で編集しない。
 - バックエンドの CORS（サイトのドメインからの呼び出しの許可）は、バックエンド側で設定する。
@@ -39,6 +44,7 @@ python portfolios/backend-compose/add_backend.py portfolios/<スラッグ>
 2. `https: true` なら、`stack/certs/` に証明書 `fullchain.pem`・`privkey.pem` を置く（Let's Encrypt の certbot などで取得する）。
 3. バックエンドが環境変数（API キーなど）を使うなら、`stack/services/<スラッグ>/.env` に書く（`.env.example` を参照）。`certs/` と `.env` は git で管理しない。
 4. `docker compose up -d --build` を実行する。nginx と全バックエンドのコンテナが作られる。
+5. 動作を確かめたら、ローカルで `add_backend.py portfolios/<スラッグ> --enable-api` を実行し、`apps.json` の変更をデプロイする。
 
 ## 開発
 

@@ -114,8 +114,11 @@ def _python_dockerfile(d: Path) -> tuple[str, bool]:
                                          re.MULTILINE):
         steps.append("pip install --no-cache-dir .")
     cmd, gunicorn = _python_command(d)
+    # 起動に使うサーバーは依存に書かれていないことがあるため入れる（既に入っていれば何もしない）
     if gunicorn:
         steps.append("pip install --no-cache-dir gunicorn")
+    elif cmd is not None and cmd[0] == "uvicorn":
+        steps.append("pip install --no-cache-dir uvicorn")
     install = " && ".join(steps) or "true"
     text = (
         _HEADER

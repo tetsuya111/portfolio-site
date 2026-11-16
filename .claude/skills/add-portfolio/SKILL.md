@@ -45,7 +45,8 @@ disable-model-invocation: true
    ```bash
    python portfolios/backend-compose/add_backend.py portfolios/<スラッグ>
    ```
-   - バックエンドを `portfolios/backend-compose/stack/services/<スラッグ>/` にコピーし、Dockerfile（なければ生成）・`docker-compose.yml`・nginx の設定を更新する。フロントエンドが URL 用の環境変数（`VITE_API_URL` など）を読むなら、`apps.json` に `env` を書いて `mock` を false（実 API）にする。
+   - バックエンドを `portfolios/backend-compose/stack/services/<スラッグ>/` にコピーし、Dockerfile（なければ生成）・`docker-compose.yml`・nginx の設定を更新する。フロントエンドは、この時点ではモックのまま（`apps.json` を変えない）。
+   - `--enable-api` は、ユーザーが「VPS でバックエンドを起動した」と伝えたときだけ付けて再実行する。フロントエンドが URL 用の環境変数（`VITE_API_URL` など）を読むなら、`apps.json` に `env` を書いて `mock` を false（実 API）にする（先に切り替えると、次のデプロイでフロントエンドが起動していない API を呼んで壊れる）。
    - 終了コード 1 なら標準エラーの理由を報告し、この手順だけを飛ばして続ける（例: `config.json` の `domain` が例のまま → ユーザーにドメインの設定を依頼する。ドメインを推測して書かない）。
    - 成功なら標準出力の JSON（`service`・`port`・`backendUrl`・`dockerfile`・`frontendEnv`・`warnings`）を読む。生成した Dockerfile に `TODO` があれば、バックエンドの README・コードから起動コマンドを判断して CMD を書く（判断できなければ報告する）。
    - `frontendEnv` が null でなければ、手順3のモックは使われない（実 API で動く）。
@@ -55,7 +56,7 @@ disable-model-invocation: true
    - 取り込み先（コピーしたか）、作成・更新したファイル
    - フロントエンド: 配信登録したか。しなかった場合はその理由。登録した場合の配信 URL（`<サイトURL>/apps/<スラッグ>/`）
    - モック: `handlers.js` の場所と、ハンドラーの一覧（404 のままか、データを書いたか）。動かない可能性のある画面（ページ遷移でのログイン・`fetch` 以外の通信など）
-   - バックエンド: compose に登録したか（しなかった場合はその理由）、`backendUrl`、フロントエンドを実 API にしたか（`frontendEnv`）、VPS での手順（`stack/` のアップロード、`certs/`・`services/<スラッグ>/.env` の配置、`docker compose up -d --build`）
+   - バックエンド: compose に登録したか（しなかった場合はその理由）、`backendUrl`、フロントエンドを実 API にしたか（`frontendEnv`。していなければ、起動後に `--enable-api` で再実行する旨）、バックエンドの CORS でサイトのドメインを許可する必要があること、VPS での手順（`stack/` のアップロード、`certs/`・`services/<スラッグ>/.env` の配置、`docker compose up -d --build`）
    - `warnings`（取り込み・compose 登録の両方）の全件と、ユーザーが手で対応すべきこと
 
 ## よくある間違い

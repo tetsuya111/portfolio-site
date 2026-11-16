@@ -6,15 +6,17 @@ compose・nginx の設定は追記ではなく、正本の services.json から�
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from importer import PortfolioError
+from importer.copier import validate_slug
 from stackgen import StackError
 from stackgen.config import Config
 
 NGINX_IMAGE = "nginx:1.27-alpine"
-_SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+# バックエンドのサービス名（スラッグ）に使えない、compose のサービス名
+RESERVED_SERVICES = {"nginx"}
 
 GITIGNORE = """\
 # TLS 証明書（VPS 上で配置する。fullchain.pem・privkey.pem）
@@ -46,9 +48,14 @@ def load_services(stack_dir: Path) -> list[Service]:
     except (ValueError, KeyError, TypeError) as e:
         raise StackError(f'services.json の形式が不正です（{{"services": [{{"slug", "port"}}]}} が必要です）: {e}') from e
     for s in services:
-        # 値は compose・nginx の設定にそのまま書くため、使える文字を限定する
-        if not isinstance(s.slug, str) or not _SLUG.fullmatch(s.slug):
-            raise StackError(f"services.json の slug「{s.slug}」が不正です")
+        # 値は compose・nginx の設定にそのまま書くため、取り込みと同じ規則で使える文字を限定する
+        try:
+            # validate_slug は末尾の改行を許す（re.match の $）ため、改行は別に拒否する
+            if not isinstance(s.slug, str) or "\n" in s.slug or s.slug in RESERVED_SERVICES:
+                raise PortfolioError("")
+            validate_slug(s.slug)
+        except PortfolioError as e:
+            raise StackError(f"services.json の slug「{s.slug}」が不正です") from e
         if not isinstance(s.port, int) or isinstance(s.port, bool) or not 1 <= s.port <= 65535:
             raise StackError(f"services.json の {s.slug} の port が不正です")
     return services

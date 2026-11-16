@@ -170,27 +170,37 @@ export function appBackendModes(data: unknown): Map<string, AppBackendMode> {
       else if (Object.keys(a.env).length > 0) modes.set(a.slug, "api");
     }
     return modes;
-  } catch {
+  } catch (e) {
+    // ページのビルドは止めない（デプロイでは build:apps の検証が止める）が、表示が消える理由は残す
+    console.warn(`apps.json が不正なため、ポートフォリオの URL ボタンにモック／実API を表示しません: ${e instanceof Error ? e.message : e}`);
     return new Map();
   }
 }
 
-const modesCache = new Map<string, Map<string, AppBackendMode>>();
+const modesCache = new Map<string, { mtimeMs: number; modes: Map<string, AppBackendMode> }>();
 
 /**
- * apps/apps.json を読んで appBackendModes を返す（ボタンごとに読み直さないよう、パスごとに1回だけ読む）。読めなければ空。
+ * apps/apps.json を読んで appBackendModes を返す。ボタンごとに読み直さないよう、ファイルが変わるまで（更新日時で判定）
+ * 前回の結果を使う（astro dev で apps.json を変えたときは反映する）。ファイルがなければ空。
  * 既定のパスは実行時のカレントディレクトリから決める（astro build・npm run build は portfolio-site で実行する。
  * ビルド後のコードは dist 側に移るため、import.meta.url からは apps/ を辿れない）
  */
 export function readAppBackendModes(path = join(process.cwd(), "apps", "apps.json")): Map<string, AppBackendMode> {
-  let modes = modesCache.get(path);
-  if (modes === undefined) {
-    try {
-      modes = appBackendModes(JSON.parse(readFileSync(path, "utf8")));
-    } catch {
-      modes = new Map();
-    }
-    modesCache.set(path, modes);
+  let mtimeMs: number;
+  try {
+    mtimeMs = statSync(path).mtimeMs;
+  } catch {
+    return new Map();
   }
+  const cached = modesCache.get(path);
+  if (cached?.mtimeMs === mtimeMs) return cached.modes;
+  let modes: Map<string, AppBackendMode>;
+  try {
+    modes = appBackendModes(JSON.parse(readFileSync(path, "utf8")));
+  } catch (e) {
+    console.warn(`apps.json を読めないため、ポートフォリオの URL ボタンにモック／実API を表示しません: ${e instanceof Error ? e.message : e}`);
+    modes = new Map();
+  }
+  modesCache.set(path, { mtimeMs, modes });
   return modes;
 }

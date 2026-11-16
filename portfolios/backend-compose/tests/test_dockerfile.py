@@ -15,6 +15,8 @@ class WriteDockerFilesTest(TempDirMixin, unittest.TestCase):
         text, warnings = self.dockerfile()
         self.assertIn('CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]', text)
         self.assertIn("pip install --no-cache-dir -r requirements.txt", text)
+        # 依存に uvicorn がなくても起動できるよう入れる
+        self.assertIn("pip install --no-cache-dir uvicorn", text)
         self.assertEqual(warnings, [])
         self.assertTrue((self.tmp / ".dockerignore").is_file())
 

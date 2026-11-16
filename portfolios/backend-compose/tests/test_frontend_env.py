@@ -86,3 +86,21 @@ class UpdateAppsJsonTest(TempDirMixin, unittest.TestCase):
         self.assertEqual(update_apps_json(self.tmp, "zzz", self.URL), (None, []))
         self.manifest.unlink()
         self.assertEqual(update_apps_json(self.tmp, "a", self.URL), (None, []))
+
+
+class UpdateAppsJsonGuardsTest(UpdateAppsJsonTest):
+    def test_host_only_names_are_not_written(self):
+        write(self.apps / "a" / "src" / "x.ts", "import.meta.env.VITE_API_HOST")
+        before = self.manifest.read_text(encoding="utf-8")
+        env, warnings = update_apps_json(self.tmp, "a", self.URL)
+        self.assertIsNone(env)
+        self.assertTrue(any("VITE_API_HOST" in w for w in warnings))
+        self.assertEqual(self.manifest.read_text(encoding="utf-8"), before)
+
+    def test_apply_false_only_suggests(self):
+        write(self.apps / "a" / "src" / "x.ts", "import.meta.env.VITE_API_URL")
+        before = self.manifest.read_text(encoding="utf-8")
+        env, warnings = update_apps_json(self.tmp, "a", self.URL, apply=False)
+        self.assertIsNone(env)
+        self.assertTrue(any("VITE_API_URL" in w and "--enable-api" in w for w in warnings))
+        self.assertEqual(self.manifest.read_text(encoding="utf-8"), before)

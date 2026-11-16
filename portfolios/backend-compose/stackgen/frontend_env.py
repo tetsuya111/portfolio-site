@@ -59,10 +59,11 @@ def load_apps_json(repo_root: Path) -> dict | None:
     return data
 
 
-def update_apps_json(repo_root: Path, slug: str, url: str) -> tuple[dict | None, list[str]]:
+def update_apps_json(repo_root: Path, slug: str, url: str, apply: bool = True) -> tuple[dict | None, list[str]]:
     """apps.json の slug の項目に env を書いて mock を false にする。書いた env と警告を返す。
 
     apps.json がない・slug が登録されていなければ何もしない（フロントエンドを配信していない）。
+    apply=False なら書かず、書く内容を警告で案内する（バックエンドを VPS で起動する前に実 API へ切り替えないため）。
     """
     apps = repo_root / "portfolio-site" / "apps"
     manifest = apps / "apps.json"
@@ -81,7 +82,16 @@ def update_apps_json(repo_root: Path, slug: str, url: str) -> tuple[dict | None,
         return None, ["フロントエンドのソースからバックエンドの URL を読む環境変数（VITE_API_URL など）が見つからないため、"
                       f'モックのままにしました。使う場合は apps.json の {slug} に "env": {{"<名前>": "{url}"}}'
                       ' と "mock": false を書いてください']
-    name, others = names[0], names[1:]
+    # HOST・ORIGIN だけの名前は、ホスト名やパスなしのオリジンを期待していることがあるため自動では書かない
+    full = [n for n in names if _priority(n)[0] < _URL_PRIORITY.index("ORIGIN")]
+    if not full:
+        return None, [f"見つかった環境変数（{', '.join(names)}）はホスト・オリジンだけを期待する名前のため、モックのままにしました。"
+                      f'フロントエンドのコードを確かめ、apps.json の {slug} に "env" と "mock": false を書いてください'
+                      f"（バックエンドの URL: {url}）"]
+    name, others = full[0], [n for n in names if n != full[0]]
+    if not apply:
+        return None, [f"フロントエンドはモックのままにしました。VPS でバックエンドを起動してから --enable-api を付けて"
+                      f"再実行すると、apps.json の {slug} に env.{name}={url} を書き、実 API に切り替えます"]
     warnings = []
     if others:
         warnings.append(f"環境変数の候補が複数あるため {name} に URL を設定しました。ほかの候補: {', '.join(others)}")

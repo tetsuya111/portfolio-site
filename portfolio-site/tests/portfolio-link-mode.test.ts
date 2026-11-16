@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -30,7 +30,7 @@ describe("appBackendModes", () => {
 });
 
 describe("readAppBackendModes", () => {
-  it("reads apps.json once and tolerates a missing or broken file", () => {
+  it("reads apps.json until it changes and tolerates a missing or broken file", () => {
     const dir = mkdtempSync(join(tmpdir(), "modes-"));
     try {
       expect(readAppBackendModes(join(dir, "missing.json")).size).toBe(0);
@@ -40,9 +40,12 @@ describe("readAppBackendModes", () => {
       const file = join(dir, "apps.json");
       writeFileSync(file, JSON.stringify({ apps: [app({ mock: true })] }));
       expect(readAppBackendModes(file).get("a")).toBe("mock");
-      // 2回目以降は読み直さない（ボタンごとにファイルを読まない）
+      // ファイルが変わらなければ読み直さない（ボタンごとにファイルを読まない）
+      expect(readAppBackendModes(file)).toBe(readAppBackendModes(file));
+      // 変わったら読み直す（astro dev で apps.json を変えたとき）
       writeFileSync(file, JSON.stringify({ apps: [] }));
-      expect(readAppBackendModes(file).get("a")).toBe("mock");
+      utimesSync(file, new Date(), new Date(Date.now() + 60_000));
+      expect(readAppBackendModes(file).size).toBe(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
