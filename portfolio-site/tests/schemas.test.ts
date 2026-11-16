@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { articleSchema, portfolioSchema, profileSchema } from "../src/lib/schemas";
+import { articleSchema, audienceSchema, isLinkTarget, portfolioSchema, profileSchema, serviceSchema, skillSchema } from "../src/lib/schemas";
 
 describe("profileSchema", () => {
   it("requires name and role", () => {
@@ -74,5 +74,64 @@ describe("articleSchema", () => {
     expect(a.draft).toBe(false);
     expect(a.date).toBeInstanceOf(Date);
     expect(a.tags).toEqual([]);
+  });
+});
+
+describe("portfolioSchema description", () => {
+  it("accepts an optional description", () => {
+    expect(portfolioSchema.parse({ title: "t", description: "概要" }).description).toBe("概要");
+    expect(portfolioSchema.parse({ title: "t" }).description).toBeUndefined();
+  });
+});
+
+describe("serviceSchema", () => {
+  it("requires title and description and defaults order to 0", () => {
+    expect(serviceSchema.parse({ title: "t", description: "d" }).order).toBe(0);
+    expect(serviceSchema.safeParse({ title: "t" }).success).toBe(false);
+    expect(serviceSchema.safeParse({ description: "d" }).success).toBe(false);
+  });
+});
+
+describe("skillSchema", () => {
+  it("defaults examples, famous and order", () => {
+    const s = skillSchema.parse({ name: "Python", category: "言語", description: "d" });
+    expect(s.examples).toEqual([]);
+    expect(s.famous).toEqual([]);
+    expect(s.order).toBe(0);
+  });
+
+  it("requires name, category and description", () => {
+    expect(skillSchema.safeParse({ category: "c", description: "d" }).success).toBe(false);
+    expect(skillSchema.safeParse({ name: "n", description: "d" }).success).toBe(false);
+    expect(skillSchema.safeParse({ name: "n", category: "c" }).success).toBe(false);
+  });
+});
+
+describe("isLinkTarget", () => {
+  it("accepts http(s) urls and site paths", () => {
+    expect(isLinkTarget("/apps/x/")).toBe(true);
+    expect(isLinkTarget("https://a.example")).toBe(true);
+  });
+
+  it("rejects script urls and other hosts written as paths", () => {
+    expect(isLinkTarget("javascript:alert(1)")).toBe(false);
+    expect(isLinkTarget("//evil.example")).toBe(false);
+    expect(isLinkTarget("")).toBe(false);
+  });
+});
+
+describe("audienceSchema", () => {
+  it("requires only title and defaults order to 0", () => {
+    const a = audienceSchema.parse({ title: "t" });
+    expect(a.order).toBe(0);
+    expect(a.description).toBeUndefined();
+    expect(audienceSchema.parse({ title: "t", description: "d", order: 2 })).toEqual({ title: "t", description: "d", order: 2 });
+  });
+
+  it("rejects a missing or empty title and a non-integer order", () => {
+    expect(audienceSchema.safeParse({}).success).toBe(false);
+    expect(audienceSchema.safeParse({ title: "" }).success).toBe(false);
+    expect(audienceSchema.safeParse({ title: "t", order: 1.5 }).success).toBe(false);
+    expect(audienceSchema.safeParse({ title: "t", description: "" }).success).toBe(false);
   });
 });

@@ -1,5 +1,6 @@
 ---
 title: "IT ニュース自動作成"
+description: "最新の IT ニュースを AI（Perplexity）が毎日自動で集めて重要度で選び、出典リンクと用語解説つきの記事にして、このサイトの「IT ニュース」に掲載する仕組み。サイト内の小さな機能として動いている。"
 tags:
   - "Python"
   - "Perplexity API"

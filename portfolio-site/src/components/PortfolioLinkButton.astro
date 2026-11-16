@@ -1,0 +1,27 @@
+---
+// 「ポートフォリオのURL」ボタン。apps/apps.json の項目から、フロントエンドがモックの応答で動くか（淡色＋「モック」）
+// 実際のバックエンドを呼ぶか（アクセント色＋「実API」）を表示する。apps.json にないポートフォリオは今の表示のまま。
+// 色だけで区別しないよう、文字でも示す（WCAG 1.4.1）。
+import { readAppBackendModes } from "../lib/apps-manifest";
+
+interface Props {
+  slug: string;
+  url: string;
+  /** 大きさ・配置のクラス（余白・文字サイズなど） */
+  class?: string;
+}
+
+const { slug, url, class: className = "" } = Astro.props;
+const mode = readAppBackendModes().get(slug);
+const color = mode === "mock" ? "btn-accent-soft" : "btn-accent";
+---
+
+<a href={url} target="_blank" rel="noopener noreferrer" class:list={[color, className]} data-backend-mode={mode}>
+  ポートフォリオのURL ↗{
+    mode && (
+      <span class="ml-1.5 rounded-full border border-current px-1.5 text-xs font-semibold">
+        {mode === "mock" ? "モック" : "実API"}
+      </span>
+    )
+  }<slot />
+</a>

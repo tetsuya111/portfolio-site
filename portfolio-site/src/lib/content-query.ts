@@ -33,3 +33,17 @@ export function publishedArticles<T extends { data: { date: Date; draft: boolean
     .filter((i) => !i.data.draft)
     .sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
 }
+
+/** サービス・スキル・こんな方とお話ししたいを order の昇順に並べる。同じ order は title（なければ name）の日本語順。 */
+export function sortByOrder<T extends { data: { order: number; title?: string; name?: string } }>(items: T[]): T[] {
+  const label = (i: T) => i.data.title ?? i.data.name ?? "";
+  return [...items].sort((a, b) => a.data.order - b.data.order || label(a).localeCompare(label(b), "ja"));
+}
+
+/** ポートフォリオのタイルに出すタグの最大件数 */
+export const TILE_TAG_LIMIT = 5;
+
+/** タイルに出すタグを先頭 max 件に絞り、残りの件数を返す（「+N」の表示用）。 */
+export function limitTags(tags: string[], max = TILE_TAG_LIMIT): { shown: string[]; rest: number } {
+  return { shown: tags.slice(0, max), rest: Math.max(0, tags.length - max) };
+}

@@ -1,0 +1,6 @@
+# certbot が取得した TLS 証明書と秘密鍵（VPS 上で作られる）
+letsencrypt/
+# certbot の HTTP-01 チャレンジのファイル（VPS 上で作られる）
+certbot/
+# バックエンドの秘密情報（VPS 上で配置する）
+services/*/.env

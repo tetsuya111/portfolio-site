@@ -9,9 +9,9 @@ import { buildApps, validateManifest } from "../src/lib/apps-manifest.ts";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const appsDir = join(root, "apps");
 
-// Windows の npm は npm.cmd のためシェル経由で起動する（引数は validateManifest で安全な文字に限定済み）
-const run = (cmd, args, cwd) => {
-  const r = spawnSync(cmd, args, { cwd, stdio: "inherit", shell: process.platform === "win32" });
+// Windows の npm は npm.cmd のためシェル経由で起動する（引数・env は validateManifest で安全な文字に限定済み）
+const run = (cmd, args, cwd, env) => {
+  const r = spawnSync(cmd, args, { cwd, stdio: "inherit", shell: process.platform === "win32", env: { ...process.env, ...env } });
   if (r.error) console.error(r.error.message);
   return r.status ?? 1;
 };

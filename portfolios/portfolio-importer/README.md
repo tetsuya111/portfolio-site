@@ -13,7 +13,7 @@ python portfolios/portfolio-importer/add_portfolio.py <プロジェクトのパ�
 | 引数 | 内容 |
 |---|---|
 | `<プロジェクトのパス>` | 取り込むディレクトリ。`portfolios/` 配下ならコピーせずそのまま使う |
-| `--slug` | スラッグ（省略時はディレクトリ名から作る）。英小文字・数字・ハイフン。`docs`・`docker-images`・`portfolio-importer`・`skillsheet-profile` は使えない |
+| `--slug` | スラッグ（省略時はディレクトリ名から作る）。英小文字・数字・ハイフン。`docs`・`docker-images`・`portfolio-importer`・`skillsheet-profile`・`backend-compose`・`batch` は使えない |
 | `--site-url` | 任意。フロントエンドを配信登録したとき、掲載 md の `url` を絶対 URL `<URL>/apps/<スラッグ>/` にする。省略時はサイト内のパス `/apps/<スラッグ>/` にする（本番・dev のどちらのサイトでも、表示中のドメインのアプリが開く）。配信登録しなかったときは、`portfolios/docs/<スラッグ>.md` の http(s) の `url` を使う |
 
 結果は JSON で標準出力に出る。エラー時は理由を標準エラーに出し、終了コード 1 で終わる。
@@ -29,7 +29,7 @@ python portfolios/portfolio-importer/add_portfolio.py <プロジェクトのパ�
 
 - 既にあるファイル（コピー先以外）は上書きせず、`warnings` に出す。コピー先 `portfolios/<スラッグ>/` が既にあるとエラー。
 - リポジトリ外には書き込まない。
-- バックエンドは配信しない（S3 で完結させるため、Dockerfile の生成やイメージの作成は行わない）。フロントエンドはモックの応答で動く。
+- バックエンドは配信しない（S3 で完結させるため、Dockerfile の生成やイメージの作成は行わない）。フロントエンドはモックの応答で動く。VPS でバックエンドを動かす場合は、取り込み後に [backend-compose](../backend-compose/README.md) で docker compose に登録する。
 
 ## 出力（JSON）
 

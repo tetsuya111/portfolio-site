@@ -1,6 +1,6 @@
 ---
 name: add-portfolio
-description: 指定したプロジェクトを portfolios/ に取り込み、フロントエンドの S3 配信登録・バックエンドのモック作成・portfolio-site への掲載までを行う。/add-portfolio <プロジェクトのパス> で明示起動のみ。
+description: 指定したプロジェクトを portfolios/ に取り込み、フロントエンドの S3 配信登録・バックエンドのモック作成・docker compose への登録・portfolio-site への掲載までを行う。/add-portfolio <プロジェクトのパス> で明示起動のみ。
 disable-model-invocation: true
 ---
 
@@ -41,19 +41,34 @@ disable-model-invocation: true
    - プロジェクト内への相対リンク・画像（`./docs/x.md` など）は、サイト上で開けないため、文章に置き換えるか削除する。
    - 見出しが `#` から始まっていれば `##` 以下に下げる。
    - 本文が雛形（「ここにポートフォリオの説明を書く」）のままなら、プロジェクトの README・コードから概要・主な機能・技術構成を書く。
-5. **検証**: `portfolio-site/` で `npm test` と `npm run lint` を実行し、出力は失敗箇所だけを確認する（例: `| tail -30`）。失敗したら原因を直す（掲載 md の frontmatter など）。依存が未インストールで実行できない場合は、確認ルールに従う。
-6. **作業ログ**: CLAUDE.md の規則に従い `logs/<yyyymmdd_hhMMss>_content_add-portfolio-<スラッグ>.md` に、何を・なぜ取り込んだかを書く。
-7. **報告**: 次を箇条書きで示す。コミットはしない（ユーザーに任せる）。
+5. **バックエンドの compose 登録**: 取り込み結果の `backend` が null でなければ、次を実行する（処理の本体は [portfolios/backend-compose](../../../portfolios/backend-compose/README.md)）。
+   ```bash
+   python portfolios/backend-compose/add_backend.py portfolios/<スラッグ> --enable-api
+   ```
+   - バックエンドを `portfolios/backend-compose/stack/services/<スラッグ>/` にコピーし、Dockerfile（なければ生成）・`docker-compose.yml`・nginx の設定を更新する。`--enable-api` により、フロントエンドが URL 用の環境変数（`VITE_API_URL` など）を読むなら、`portfolio-site/apps/apps.json` の項目に `env` を書いて `mock` を false（実 API）にする。
+   - 終了コード 1 なら標準エラーの理由を報告し、この手順だけを飛ばして続ける（例: `config.json` の `domain` が例のまま → ユーザーにドメインの設定を依頼する。ドメインを推測して書かない）。
+   - 成功なら標準出力の JSON（`service`・`port`・`backendUrl`・`dockerfile`・`frontendEnv`・`warnings`）を読む。生成した Dockerfile に `TODO` があれば、バックエンドの README・コードから起動コマンドを判断して CMD を書く（判断できなければ報告する）。
+   - **登録に成功したら、必ず `portfolio-site/apps/apps.json` の `env` でバックエンドの URL を設定する**（フロントエンドを配信登録している場合。`apps.json` に項目がなければ不要）。
+     - `frontendEnv` が null でなければ、コマンドが書いた値を、フロントエンドの API クライアント（`lib/api.ts` など）の使い方と照らして確かめる。コードが URL の後ろに `/api` を付けない（環境変数に `/api` まで含める想定の）場合は、値の末尾に `/api` を足す（例: media-feed は `NEXT_PUBLIC_API_URL=<backendUrl>/api`、task-box-it-develop は `NEXT_PUBLIC_API_BASE_URL=<backendUrl>`）。
+     - `frontendEnv` が null なら、`warnings` の理由を確かめる。フロントエンドが環境変数で URL を受け取るのにコマンドが書けなかった場合（HOST・ORIGIN の名前だけ・既に別の値がある など）は、コードを読んで正しい名前と値を判断し、`apps.json` の項目に `"env": {"<名前>": "<URL>"}` と `"mock": false` を手で書く。
+     - フロントエンドが環境変数で URL を受け取らない場合（`/api/...` を相対パスで呼ぶ など）は、`env` を書いても効かないため `mock: true` のままにし、その旨を報告する。
+     - 名前は `VITE_`・`PUBLIC_`・`NEXT_PUBLIC_` で始まるもの、値は URL だけが書ける（`portfolio-site/src/lib/apps-manifest.ts` の検証。合わないとデプロイのビルドが止まる）。
+     - 書いたら手順3のモックは使われない（実 API で動く）。VPS でバックエンドを起動する前にサイトをデプロイすると、フロントエンドは存在しない API を呼んで動かないため、報告で順番（VPS の起動 → サイトのデプロイ）を伝える。
+6. **検証**: `portfolio-site/` で `npm test` と `npm run lint` を実行し、出力は失敗箇所だけを確認する（例: `| tail -30`）。失敗したら原因を直す（掲載 md の frontmatter など）。依存が未インストールで実行できない場合は、確認ルールに従う。
+7. **作業ログ**: CLAUDE.md の規則に従い `logs/<yyyymmdd_hhMMss>_content_add-portfolio-<スラッグ>.md` に、何を・なぜ取り込んだかを書く。
+8. **報告**: 次を箇条書きで示す。コミットはしない（ユーザーに任せる）。
    - 取り込み先（コピーしたか）、作成・更新したファイル
    - フロントエンド: 配信登録したか。しなかった場合はその理由。登録した場合の配信 URL（`<サイトURL>/apps/<スラッグ>/`）
    - モック: `handlers.js` の場所と、ハンドラーの一覧（404 のままか、データを書いたか）。動かない可能性のある画面（ページ遷移でのログイン・`fetch` 以外の通信など）
-   - `warnings` の全件と、ユーザーが手で対応すべきこと
+   - バックエンド: compose に登録したか（しなかった場合はその理由）、`backendUrl`、`apps.json` の `env` に設定した名前と URL（設定しなかった場合はその理由）、バックエンドの CORS でサイトのドメインを許可する必要があること、VPS での手順（`stack/` のアップロード、`services/<スラッグ>/.env` の配置、`sh init-cert.sh`（`https: false` なら `docker compose up -d --build`））
+   - `warnings`（取り込み・compose 登録の両方）の全件と、ユーザーが手で対応すべきこと
 
 ## よくある間違い
 
 | 間違い | 正しい扱い |
 |---|---|
-| バックエンドを動かすため Dockerfile を書く・サーバーを立てる | 書かない。S3 だけで動かすため、モックの応答で置き換える |
+| バックエンドの Dockerfile を取り込み先（`portfolios/<スラッグ>/`）に書く・サーバーを立てる・`docker` を実行する | 書かない・実行しない。Dockerfile は `add_backend.py` が `stack/services/<スラッグ>/` に作り、イメージは VPS 上の `docker compose` が作る |
+| `stack/docker-compose.yml`・`stack/nginx/default.conf` を手で編集する | 編集しない（次の登録で作り直される）。`add_backend.py` で登録する |
 | 雛形のハンドラーすべてに、バックエンドを再現する応答データ・処理を書く（膨大なモックを作る） | 書かない。404 のまま残し、404 で画面が表示できない箇所だけ最小のデータを書く |
 | コピー先が既にあるエラーで `portfolios/<スラッグ>` を削除して再実行する | 削除しない。取り込み済みなら `portfolios/<スラッグ>` を指定して再実行する |
 | 静的出力できないフロントエンドを `apps.json` に手で登録する | 登録しない（デプロイ全体が止まる）。理由を報告する |

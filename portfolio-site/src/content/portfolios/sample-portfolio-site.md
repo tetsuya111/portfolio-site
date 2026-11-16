@@ -1,5 +1,6 @@
 ---
 title: このポートフォリオサイト
+description: "自己紹介・ポートフォリオ・記事をまとめて公開している、このサイトそのものです。コンテンツはすべて Markdown ファイルで管理し、Astro でビルドした静的 HTML を S3 + CloudFront から配信しています。インフラは CloudFormation のテンプレート1つで構築し、CodeBuild による CI/CD でテストからデプロイまでを自動化しています。"
 tags:
   - Astro
   - TypeScript

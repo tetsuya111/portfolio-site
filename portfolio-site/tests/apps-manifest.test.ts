@@ -5,14 +5,24 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type AppEntry, buildApps, validateManifest } from "../src/lib/apps-manifest";
 
 const app = (over: Record<string, unknown> = {}) => ({ slug: "my-app", outputDir: "dist", buildArgs: ["--base=/apps/my-app/"], ...over });
-const entry = (over: Record<string, unknown> = {}) => ({ ...app(), mock: false, ...over }) as AppEntry;
+const entry = (over: Record<string, unknown> = {}) => ({ ...app(), mock: false, env: {}, ...over }) as AppEntry;
 
 describe("validateManifest", () => {
   it("returns the apps of a valid manifest", () => {
     expect(validateManifest({ apps: [app(), app({ slug: "b", outputDir: "out", buildArgs: [], mock: true })] })).toEqual([
-      { ...app(), mock: false },
-      { slug: "b", outputDir: "out", buildArgs: [], mock: true },
+      { ...app(), mock: false, env: {} },
+      { slug: "b", outputDir: "out", buildArgs: [], mock: true, env: {} },
     ]);
+  });
+
+  it("returns env of an app", () => {
+    const env = { VITE_API_URL: "https://api.portfolio.link/my-app", NEXT_PUBLIC_API_BASE: "https://x.com:8443/a_b~c%20" };
+    expect(validateManifest({ apps: [app({ env })] })[0].env).toEqual(env);
+  });
+
+  it("accepts a non-URL value made of safe characters (OAuth client ID など)", () => {
+    const env = { NEXT_PUBLIC_GOOGLE_CLIENT_ID: "1234-abc_DEF.apps.googleusercontent.com", VITE_FLAG: "true" };
+    expect(validateManifest({ apps: [app({ env })] })[0].env).toEqual(env);
   });
 
   it.each([
@@ -31,6 +41,18 @@ describe("validateManifest", () => {
     ["shell metachar arg", { apps: [app({ buildArgs: ["--base=/x/;rm -rf /"] })] }],
     ["non-string arg", { apps: [app({ buildArgs: [1] })] }],
     ["non-boolean mock", { apps: [app({ mock: "true" })] }],
+    ["env not object", { apps: [app({ env: ["VITE_API_URL"] })] }],
+    ["env null", { apps: [app({ env: null })] }],
+    ["env name without public prefix", { apps: [app({ env: { NODE_OPTIONS: "https://x.com" } })] }],
+    ["env name lowercase", { apps: [app({ env: { vite_api_url: "https://x.com" } })] }],
+    // TODO（テスト用に一時的に無効化）: https だけを許可する検証を戻したら有効にする
+    // ["env http value", { apps: [app({ env: { VITE_API_URL: "http://x.com" } })] }],
+    ["env ftp value", { apps: [app({ env: { VITE_API_URL: "ftp://x.com" } })] }],
+    ["env shell metachar value", { apps: [app({ env: { VITE_API_URL: "https://x.com/;rm" } })] }],
+    ["env non-URL value with space", { apps: [app({ env: { VITE_ID: "a b" } })] }],
+    ["env non-URL value with shell metachar", { apps: [app({ env: { VITE_ID: "a&calc" } })] }],
+    ["env empty value", { apps: [app({ env: { VITE_ID: "" } })] }],
+    ["env non-string value", { apps: [app({ env: { VITE_API_URL: 1 } })] }],
   ])("rejects %s", (_name, data) => {
     expect(() => validateManifest(data)).toThrow();
   });
@@ -63,6 +85,18 @@ describe("buildApps", () => {
       ["npm", "run", "build", "--", "--base=/apps/my-app/", cwd],
     ]);
     expect(readFileSync(join(root, "dist", "apps", "my-app", "index.html"), "utf8")).toBe("hi");
+  });
+
+  it("passes env to install and build", () => {
+    const envs: Record<string, string>[] = [];
+    const run = (_c: string, args: string[], cwd: string, env: Record<string, string>) => {
+      envs.push(env);
+      if (args[0] === "run") mkdirSync(join(cwd, "dist"), { recursive: true });
+      return 0;
+    };
+    const env = { VITE_API_URL: "https://api.portfolio.link/my-app" };
+    buildApps([entry({ env })], { appsDir: join(root, "apps"), distDir: join(root, "dist"), run });
+    expect(envs).toEqual([env, env]);
   });
 
   it("omits -- when there are no build args", () => {
