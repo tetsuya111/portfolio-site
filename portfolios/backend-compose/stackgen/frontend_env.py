@@ -74,9 +74,10 @@ def update_apps_json(repo_root: Path, slug: str, url: str, apply: bool = True) -
     if entry is None:
         return None, []
 
-    if not ENV_VALUE.fullmatch(url):
-        return None, [f"バックエンドの URL {url} が https ではないため、フロントエンドはモックのままにしました"
-                      "（サイトは HTTPS のため http の API は呼べません）。config.json の https を true にしてください"]
+    # TODO（テスト用に一時的に無効化）: VPS を https にしたら元に戻す（http の URL も apps.json に書く）
+    # if not ENV_VALUE.fullmatch(url):
+    #     return None, [f"バックエンドの URL {url} が https ではないため、フロントエンドはモックのままにしました"
+    #                   "（サイトは HTTPS のため http の API は呼べません）。config.json の https を true にしてください"]
     names = find_env_names(apps / slug)
     if not names:
         return None, ["フロントエンドのソースからバックエンドの URL を読む環境変数（VITE_API_URL など）が見つからないため、"

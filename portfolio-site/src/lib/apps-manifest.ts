@@ -24,7 +24,9 @@ const SAFE_ARG = /^[\w@./:=-]+$/;
  * 値は https の URL で、シェルを経由しても安全な文字だけ（サイトは HTTPS のため http の API は呼べない）
  */
 const ENV_NAME = /^(?:VITE_|PUBLIC_|NEXT_PUBLIC_)[A-Z0-9_]+$/;
-const ENV_VALUE = /^https:\/\/[A-Za-z0-9.\-_~/:%]+$/;
+// TODO（テスト用に一時的に無効化）: VPS を https にしたら元に戻す。http の API は HTTPS のサイトからは混在コンテンツで呼べない
+// const ENV_VALUE = /^https:\/\/[A-Za-z0-9.\-_~/:%]+$/;
+const ENV_VALUE = /^https?:\/\/[A-Za-z0-9.\-_~/:%]+$/;
 
 function validateEnv(env: unknown, where: string): Record<string, string> {
   if (env === undefined) return {};
