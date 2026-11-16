@@ -57,8 +57,9 @@ class RenderNginxTest(unittest.TestCase):
         self.assertIn("rewrite ^/a/?(.*)$ /$1 break;", text)
         self.assertIn("proxy_pass $upstream_a;", text)
         self.assertIn("return 301 https://$host$request_uri;", text)
-        self.assertIn("ssl_certificate /etc/nginx/certs/fullchain.pem;", text)
-        self.assertIn("ssl_certificate_key /etc/nginx/certs/privkey.pem;", text)
+        self.assertIn("ssl_certificate /etc/letsencrypt/live/api.portfolio.link/fullchain.pem;", text)
+        self.assertIn("ssl_certificate_key /etc/letsencrypt/live/api.portfolio.link/privkey.pem;", text)
+        self.assertNotIn("/etc/nginx/certs", text)
 
     def test_http(self):
         text = render_nginx([Service("a", 8000)], HTTP)

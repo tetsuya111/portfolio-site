@@ -165,8 +165,9 @@ def render_nginx(services: list[Service], cfg: Config) -> str:
         "    location / {\n        return 301 https://$host$request_uri;\n    }\n}\n\n"
         "server {\n    listen 443 ssl;\n"
         f"    server_name {cfg.domain};\n"
-        "    ssl_certificate /etc/nginx/certs/fullchain.pem;\n"
-        "    ssl_certificate_key /etc/nginx/certs/privkey.pem;\n\n"
+        # certbot が取得した証明書（compose で ./letsencrypt を読み取り専用で共有する）
+        f"    ssl_certificate /etc/letsencrypt/live/{cfg.domain}/fullchain.pem;\n"
+        f"    ssl_certificate_key /etc/letsencrypt/live/{cfg.domain}/privkey.pem;\n\n"
         + _locations(services) + "}\n"
     )
 
