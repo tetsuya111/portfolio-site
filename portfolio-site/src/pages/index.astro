@@ -76,7 +76,8 @@ const grid = "grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3";
     audiences.length > 0 && (
       <section class="mb-16">
         <SectionHeading eyebrow="For You" title="こんな方とお話ししたい" class="mb-6" />
-        <div class={grid}>
+        {/* 4件前後を想定し、3列にせず2列で並べる（最後の1件だけが次の行に残らないように） */}
+        <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
           {audiences.map((a) => (
             <AudienceTile title={a.data.title} description={a.data.description} />
           ))}
