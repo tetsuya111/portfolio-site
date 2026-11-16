@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import Settings, get_settings
 from app.db import make_engine, make_session_factory
-from app.routers import auth, users
+from app.routers import auth, products, users
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -35,4 +35,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(auth.router)
     app.include_router(users.router)
+    app.include_router(products.router)
     return app
