@@ -3,6 +3,9 @@
 export type Role = "admin" | "staff";
 export type MovementType = "in" | "out";
 
+/** 1回の入出庫の数量の上限（backend/app/schemas.py の MAX_QUANTITY と同じ値）。 */
+export const MAX_QUANTITY = 1_000_000;
+
 export interface User {
   id: number;
   username: string;
@@ -21,6 +24,7 @@ export interface Product {
   reorder_point: number;
   stock: number;
   description: string | null;
+  is_deleted: boolean;
   created_at: string;
   updated_at: string;
 }

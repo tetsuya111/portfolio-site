@@ -88,7 +88,7 @@ erDiagram
 | POST /auth/register | admin | USR-1〜4 | 201 UserOut | 401・403・409・422 |
 | GET /users/me | ログイン | AUTH-4 | 200 UserOut | 401 |
 | GET /users | admin | USR-5 | 200 UserOut[] | 401・403 |
-| GET /products?q= | ログイン | PRD-4・5 | 200 ProductOut[] | 401 |
+| GET /products?q=&include_deleted= | ログイン | PRD-4・5・HIS-5 | 200 ProductOut[] | 401 |
 | POST /products | ログイン | PRD-1〜3 | 201 ProductOut | 409・422 |
 | GET /products/{id} | ログイン | PRD-6・10 | 200 ProductOut | 404 |
 | PUT /products/{id} | ログイン | PRD-7・2・3・10 | 200 ProductOut | 404・409・422 |
@@ -99,9 +99,9 @@ erDiagram
 | GET /inventory/summary | ログイン | SUM-1〜4 | 200 `{items, total_products, total_stock, low_stock_count}` | 401 |
 
 - **ログイン**は `application/x-www-form-urlencoded`（`OAuth2PasswordRequestForm`）で受け取る。Swagger UI の「Authorize」でそのまま試せるようにするため。
-- **UserOut**: `id, username, role, is_active, created_at`。**ProductOut**: 全列から `is_deleted` を除いたもの。**MovementOut**: `id, product_id, product_sku, product_name, type, quantity, stock_after, note, user_id, username, created_at`。
+- **UserOut**: `id, username, role, is_active, created_at`。**ProductOut**: 全列（`is_deleted` を含む。一覧は既定で削除済みを除き、`include_deleted=true` で含める）。**MovementOut**: `id, product_id, product_sku, product_name, type, quantity, stock_after, note, user_id, username, created_at`。
 - **MovementCreate**: `product_id: int`、`quantity: int (1〜1,000,000)`、`note: str | None (〜500文字)`。Pydantic の `strict` な int にし、`1.5` や `"3"` を 422 にする。
-- **history のクエリ**: `product_id`、`type`（in/out）、`date_from`・`date_to`（`YYYY-MM-DD`、両端を含む。UTC の日付として扱う）、`limit`（1〜100、既定20）、`offset`（0以上、既定0）。並びは `created_at DESC, id DESC`。
+- **history のクエリ**: `product_id`、`type`（in/out）、`date_from`・`date_to`（`YYYY-MM-DD`、両端を含む）、`utc_offset_minutes`（-840〜840、既定0。日付を利用者のタイムゾーンの0時〜24時として解釈する。画面はブラウザのタイムゾーンを渡す）、`limit`（1〜100、既定20）、`offset`（0以上、既定0）。並びは `created_at DESC, id DESC`。
 - **summary の items**: `product_id, sku, name, unit, stock, reorder_point, is_low`（`stock <= reorder_point`）。商品コード順。
 - `PUT /products/{id}` は全項目の置き換え（`stock` は受け取らない。送られても無視する）。
 
@@ -129,7 +129,7 @@ record_movement(db, *, user, product_id, type, quantity, note) -> StockMovement
 - JWT: PyJWT、HS256、クレームは `sub`（ユーザー ID の文字列）・`role`・`iat`・`exp`。有効期限は `ACCESS_TOKEN_EXPIRE_MINUTES`（既定60）。
 - `get_current_user`: トークンを検証し、DB からユーザーを引く。ユーザーが存在しない・無効化されていれば 401（権限は DB の値を正とし、トークンの `role` は表示用）。
 - `require_admin`: `role != "admin"` なら 403。
-- フロントエンド: トークンを `localStorage` に保存する。React の自動エスケープに任せ、`dangerouslySetInnerHTML` を使わないことで XSS の面を小さくする。API が 401 を返したらトークンを捨ててログイン画面へ移る。
+- フロントエンド: トークンを `localStorage` に保存する（使えない環境ではタブのメモリーに保持）。起動時のユーザー取得が 401 ならトークンを捨て、通信エラー・5xx ならトークンを残してエラーを表示する。React の自動エスケープに任せ、`dangerouslySetInnerHTML` を使わないことで XSS の面を小さくする。API が 401 を返したらトークンを捨ててログイン画面へ移る。
 
 ## 設定（NFR-ENV・SEC）
 
@@ -137,7 +137,7 @@ record_movement(db, *, user, product_id, type, quantity, note) -> StockMovement
 
 | 環境変数 | 既定 | 備考 |
 |---|---|---|
-| APP_ENV | `development` | `production` で厳格チェック |
+| APP_ENV | `development` | `development`・`test` 以外（表記揺れを含む）は本番とみなして厳格チェック |
 | DATABASE_URL | `sqlite:///./inventory.db` | |
 | JWT_SECRET | 開発用の固定値 | production で未設定・32文字未満なら起動時に例外 |
 | ACCESS_TOKEN_EXPIRE_MINUTES | 60 | |

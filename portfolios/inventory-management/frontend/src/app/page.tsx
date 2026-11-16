@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import { BarChart } from "@/components/BarChart";
+import { SummaryStats } from "@/components/SummaryStats";
 import { ApiError, apiFetch, toQuery } from "@/lib/api";
 import { lowStockItems, topStocked } from "@/lib/dashboard";
 import { formatDateTime, formatNumber, movementTypeLabel } from "@/lib/format";
@@ -37,20 +38,7 @@ function Dashboard() {
 
   return (
     <div className="grid">
-      <section className="grid cols-3" aria-label="集計">
-        <div className="card">
-          <div className="stat-label">商品数</div>
-          <div className="stat-value">{formatNumber(summary.total_products)}</div>
-        </div>
-        <div className="card">
-          <div className="stat-label">総在庫数</div>
-          <div className="stat-value">{formatNumber(summary.total_stock)}</div>
-        </div>
-        <div className="card">
-          <div className="stat-label">在庫が少ない商品</div>
-          <div className="stat-value">{formatNumber(summary.low_stock_count)}</div>
-        </div>
-      </section>
+      <SummaryStats summary={summary} />
 
       <div className="grid cols-2">
         <section className="card">

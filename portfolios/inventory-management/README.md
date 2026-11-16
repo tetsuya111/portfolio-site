@@ -53,7 +53,8 @@ python -m venv .venv
 .venv/bin/pip install -e ".[dev]"        # Windows は .venv\Scripts\pip
 cd ..
 npm run db:migrate                        # DB（backend/inventory.db）を作成
-node scripts/run-backend.mjs -m app.cli create-admin --username admin --password '<8文字以上>'
+node scripts/run-backend.mjs -m app.cli create-admin --username admin   # パスワードは入力を求められる
+# 対話できない環境では環境変数で渡す: INVENTORY_ADMIN_PASSWORD='<8文字以上>' node scripts/run-backend.mjs -m app.cli create-admin --username admin
 
 # フロントエンド
 npm --prefix frontend install
@@ -97,7 +98,7 @@ npm run build     # frontend を静的出力（frontend/out/）
 
 | 変数 | 既定 | 説明 |
 |---|---|---|
-| `APP_ENV` | `development` | `production` で JWT の秘密鍵の強度を起動時に確認する |
+| `APP_ENV` | `development` | `development`・`test` 以外は本番とみなし、JWT の秘密鍵の強度を起動時に確認する |
 | `DATABASE_URL` | `sqlite:///./inventory.db` | SQLAlchemy の接続文字列 |
 | `JWT_SECRET` | 開発用の固定値 | 本番では32文字以上のランダムな値を必ず指定する |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | アクセストークンの有効期限（分） |
@@ -115,14 +116,14 @@ npm run build     # frontend を静的出力（frontend/out/）
 | `POST /auth/register` | 管理者 | ユーザー登録 |
 | `GET /users/me` | ログイン | ログインユーザー情報 |
 | `GET /users` | 管理者 | ユーザー一覧 |
-| `GET /products?q=` | ログイン | 商品一覧（検索） |
+| `GET /products?q=&include_deleted=` | ログイン | 商品一覧（検索。`include_deleted=true` で削除済みも） |
 | `POST /products` | ログイン | 商品登録 |
 | `GET /products/{id}` | ログイン | 商品詳細 |
 | `PUT /products/{id}` | ログイン | 商品更新（在庫数は変えない） |
 | `DELETE /products/{id}` | 管理者 | 商品削除（論理削除） |
 | `POST /inventory/in` | ログイン | 入庫の記録 |
 | `POST /inventory/out` | ログイン | 出庫の記録（在庫不足は 409） |
-| `GET /inventory/history` | ログイン | 入出庫履歴（`product_id`・`type`・`date_from`・`date_to`・`limit`・`offset`） |
+| `GET /inventory/history` | ログイン | 入出庫履歴（`product_id`・`type`・`date_from`・`date_to`・`utc_offset_minutes`・`limit`・`offset`） |
 | `GET /inventory/summary` | ログイン | 在庫数の集計 |
 
 ## 設計資料

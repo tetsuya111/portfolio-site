@@ -3,7 +3,10 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 
+import { clearToken } from "./src/lib/api";
+
 afterEach(() => {
   cleanup();
+  clearToken(); // localStorage とメモリーのトークンを消す
   localStorage.clear();
 });

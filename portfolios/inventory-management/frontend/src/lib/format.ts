@@ -1,6 +1,8 @@
 // 画面表示用の整形。
 
-import type { MovementType } from "./types";
+import type { MovementType, Role } from "./types";
+
+export const ROLE_LABEL: Record<Role, string> = { admin: "管理者", staff: "一般" };
 
 const numberFormat = new Intl.NumberFormat("ja-JP");
 const dateTimeFormat = new Intl.DateTimeFormat("ja-JP", {

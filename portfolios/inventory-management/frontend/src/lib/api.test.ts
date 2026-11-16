@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, apiFetch, getToken, login, setToken, setUnauthorizedHandler } from "./api";
+import {
+  ApiError,
+  apiFetch,
+  clearToken,
+  getToken,
+  login,
+  setToken,
+  setUnauthorizedHandler,
+} from "./api";
 
 function mockFetch(status: number, body?: unknown) {
   const fn = vi.fn().mockResolvedValue(
@@ -69,6 +77,19 @@ describe("apiFetch", () => {
     mockFetch(401, { detail: "認証が必要です" });
     await expect(apiFetch("/users/me")).rejects.toBeInstanceOf(ApiError);
     expect(handler).toHaveBeenCalledOnce();
+  });
+});
+
+describe("token storage", () => {
+  it("keeps the token in memory when localStorage is unavailable", () => {
+    const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("blocked", "SecurityError");
+    });
+    setToken("memory-token");
+    expect(getToken()).toBe("memory-token");
+    spy.mockRestore();
+    clearToken();
+    expect(getToken()).toBeNull();
   });
 });
 

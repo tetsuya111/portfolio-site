@@ -84,6 +84,7 @@ class ProductOut(BaseModel):
     reorder_point: int
     stock: int
     description: str | None
+    is_deleted: bool
     created_at: datetime
     updated_at: datetime
 

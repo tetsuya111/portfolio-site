@@ -4,10 +4,8 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import { ApiError, apiFetch } from "@/lib/api";
-import { formatDateTime } from "@/lib/format";
+import { ROLE_LABEL, formatDateTime } from "@/lib/format";
 import type { Role, User } from "@/lib/types";
-
-const ROLE_LABEL: Record<Role, string> = { admin: "管理者", staff: "一般" };
 
 function Users() {
   const [users, setUsers] = useState<User[] | null>(null);

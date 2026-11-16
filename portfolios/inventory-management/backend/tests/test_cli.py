@@ -42,3 +42,15 @@ def test_cli_seed_demo_idempotent(settings, db_session):
         db_session.scalar(select(func.count(Product.id))),
         db_session.scalar(select(func.count(StockMovement.id))),
     )
+
+
+def test_cli_create_admin_reads_password_from_env(settings, db_session, monkeypatch):
+    monkeypatch.setenv("INVENTORY_ADMIN_PASSWORD", "password123")
+    assert cli.main(["create-admin", "--username", "envadmin"], settings=settings) == 0
+    assert db_session.scalar(select(User).where(User.username == "envadmin")).role == "admin"
+
+
+def test_cli_create_admin_prompts_when_no_password(settings, monkeypatch):
+    monkeypatch.delenv("INVENTORY_ADMIN_PASSWORD", raising=False)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt: "password123")
+    assert cli.main(["create-admin", "--username", "prompted"], settings=settings) == 0

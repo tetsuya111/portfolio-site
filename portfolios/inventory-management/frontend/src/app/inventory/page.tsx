@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
+import { SummaryStats } from "@/components/SummaryStats";
 import { ApiError, apiFetch } from "@/lib/api";
 import { formatNumber } from "@/lib/format";
 import { sortSummaryItems, type SortOrder } from "@/lib/sort";
@@ -39,19 +40,8 @@ function StockList() {
   if (!summary) return <p className="muted">読み込み中…</p>;
   return (
     <>
-      <div className="grid cols-3" style={{ marginBottom: "1rem" }}>
-        <div className="card">
-          <div className="stat-label">商品数</div>
-          <div className="stat-value">{formatNumber(summary.total_products)}</div>
-        </div>
-        <div className="card">
-          <div className="stat-label">総在庫数</div>
-          <div className="stat-value">{formatNumber(summary.total_stock)}</div>
-        </div>
-        <div className="card">
-          <div className="stat-label">在庫が少ない商品</div>
-          <div className="stat-value">{formatNumber(summary.low_stock_count)}</div>
-        </div>
+      <div style={{ marginBottom: "1rem" }}>
+        <SummaryStats summary={summary} />
       </div>
       <div className="toolbar">
         <label className="field">

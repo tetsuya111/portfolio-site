@@ -5,9 +5,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { AppShell } from "@/components/AppShell";
 import { ApiError, apiFetch, movementPath } from "@/lib/api";
 import { formatNumber, movementTypeLabel } from "@/lib/format";
-import type { Movement, MovementType, Product } from "@/lib/types";
-
-const MAX_QUANTITY = 1_000_000;
+import { MAX_QUANTITY, type Movement, type MovementType, type Product } from "@/lib/types";
 
 function RecordForm() {
   const [products, setProducts] = useState<Product[] | null>(null);
@@ -18,14 +16,14 @@ function RecordForm() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Movement | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
+  // 登録のたび（成功・失敗とも）に読み直し、他の利用者の入出庫を在庫数の表示に反映する。
   useEffect(() => {
     apiFetch<Product[]>("/products")
       .then(setProducts)
       .catch((e) => setError(e instanceof ApiError ? e.message : "読み込みに失敗しました。"));
-  }, []);
-
-  const selected = products?.find((p) => String(p.id) === productId);
+  }, [reloadKey]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -38,16 +36,13 @@ function RecordForm() {
         json: { product_id: Number(productId), quantity: Number(quantity), note: note.trim() || null },
       });
       setResult(movement);
-      setProducts((prev) =>
-        prev?.map((p) => (p.id === movement.product_id ? { ...p, stock: movement.stock_after } : p)) ??
-        prev,
-      );
       setQuantity("1");
       setNote("");
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "登録に失敗しました。");
     } finally {
       setSubmitting(false);
+      setReloadKey((k) => k + 1);
     }
   }
 
@@ -80,7 +75,7 @@ function RecordForm() {
           <input
             type="number"
             min={1}
-            max={type === "out" && selected ? Math.min(selected.stock, MAX_QUANTITY) : MAX_QUANTITY}
+            max={MAX_QUANTITY}
             step={1}
             inputMode="numeric"
             value={quantity}

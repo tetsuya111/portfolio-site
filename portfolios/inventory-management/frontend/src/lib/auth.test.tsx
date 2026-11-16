@@ -78,6 +78,23 @@ describe("AuthProvider", () => {
   });
 });
 
+describe("AuthProvider when the server is unreachable", () => {
+  it("keeps the token and shows an error instead of logging out", async () => {
+    setToken("still-valid");
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    render(
+      <AuthProvider>
+        <RequireAuth>
+          <p>secret</p>
+        </RequireAuth>
+      </AuthProvider>,
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent("サーバーに接続できません");
+    expect(getToken()).toBe("still-valid");
+    expect(replace).not.toHaveBeenCalled();
+  });
+});
+
 describe("RequireAuth", () => {
   it("redirects to login when there is no token", async () => {
     stubFetch({});

@@ -59,7 +59,7 @@
 - REQ-USR-3: IF 既に使われているユーザー名で登録した THEN THE SYSTEM SHALL 409 を返す。
 - REQ-USR-4: IF ユーザー名が3〜50文字の英数字・`_`・`-` でない、またはパスワードが8文字未満である THEN THE SYSTEM SHALL 422 を返す。
 - REQ-USR-5: WHEN 管理者がユーザー一覧を開いた THE SYSTEM SHALL 登録済みユーザーのユーザー名・権限区分・作成日時を表示する。
-- REQ-USR-6: THE SYSTEM SHALL 初期の管理者ユーザーをコマンドで作成する手段を持つ。
+- REQ-USR-6: THE SYSTEM SHALL 初期の管理者ユーザーをコマンドで作成する手段を持ち、パスワードをコマンドライン引数に書かずに（入力または環境変数で）指定できる。
 - REQ-USR-7: THE SYSTEM SHALL パスワードをハッシュ化して保存する。
 
 ### 商品マスタ（REQ-PRD）— US-3
@@ -88,7 +88,8 @@
 ### 入出庫履歴（REQ-HIS）— US-5
 
 - REQ-HIS-1: WHEN 履歴を取得した THE SYSTEM SHALL 記録を新しい順に、商品コード・商品名・区分・数量・登録後の在庫数・操作したユーザー名・日時・備考とともに返す。
-- REQ-HIS-2: WHEN 商品・区分・期間（開始日・終了日）を指定した THE SYSTEM SHALL すべての条件に合う記録だけを返す。
+- REQ-HIS-2: WHEN 商品・区分・期間（開始日・終了日）を指定した THE SYSTEM SHALL すべての条件に合う記録だけを返す。期間は利用者のタイムゾーンの日付（0時〜24時）として扱う。
+- REQ-HIS-5: WHEN 履歴を商品で絞り込む THE SYSTEM SHALL 削除済みの商品も選べるようにする。
 - REQ-HIS-3: WHEN 件数と開始位置を指定した THE SYSTEM SHALL その範囲の記録と、条件に合う全件数を返す（既定20件、最大100件）。
 - REQ-HIS-4: THE SYSTEM SHALL 削除済みの商品の記録も履歴に含める。
 
@@ -112,7 +113,7 @@
 ## 非機能要件
 
 - NFR-SEC-1: THE SYSTEM SHALL JWT を HS256 で署名し、秘密鍵を環境変数から読み込む。
-- NFR-SEC-2: IF 本番環境（`APP_ENV=production`）で秘密鍵が未設定または32文字未満である THEN THE SYSTEM SHALL 起動を中止する。
+- NFR-SEC-2: IF `APP_ENV` が `development`・`test` 以外（本番とみなす）で秘密鍵が未設定または32文字未満である THEN THE SYSTEM SHALL 起動を中止する。
 - NFR-SEC-3: THE SYSTEM SHALL CORS で許可するオリジンを環境変数で指定したものに限定する。
 - NFR-SEC-4: THE SYSTEM SHALL 秘密情報（秘密鍵・DB ファイル・`.env`）をリポジトリに含めない。
 - NFR-ENV-1: THE SYSTEM SHALL DB の接続先・秘密鍵・トークン有効期限・CORS・API の URL を環境変数で切り替え、開発用と本番用の設定を分けられる。

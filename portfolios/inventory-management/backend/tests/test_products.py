@@ -27,7 +27,7 @@ def test_create_product_stock_zero(client, staff):
     assert body["sku"] == "A-001"
     assert body["unit_price"] == 120
     assert body["reorder_point"] == 10
-    assert "is_deleted" not in body
+    assert body["is_deleted"] is False
 
 
 def test_create_ignores_stock_in_body(client, staff):
@@ -155,3 +155,10 @@ def test_products_require_auth_401(client, db_session):
     assert client.get(f"/products/{product.id}").status_code == 401
     assert client.put(f"/products/{product.id}", json=payload()).status_code == 401
     assert client.delete(f"/products/{product.id}").status_code == 401
+
+
+def test_list_include_deleted(client, db_session, staff):
+    create_product(db_session, sku="A-001")
+    create_product(db_session, sku="A-002", is_deleted=True)
+    res = client.get("/products", params={"include_deleted": "true"}, headers=staff).json()
+    assert [(p["sku"], p["is_deleted"]) for p in res] == [("A-001", False), ("A-002", True)]

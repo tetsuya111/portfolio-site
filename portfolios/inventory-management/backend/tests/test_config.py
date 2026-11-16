@@ -33,3 +33,14 @@ def test_empty_secret_is_treated_as_unset():
 def test_create_app_refuses_weak_production_secret():
     with pytest.raises(ValueError):
         create_app(Settings(app_env="production", jwt_secret="short"))
+
+
+@pytest.mark.parametrize("env", ["Production", "prod", "production ", "staging", ""])
+def test_unknown_env_is_checked_like_production(env):
+    with pytest.raises(ValueError):
+        Settings(app_env=env).validate_for_env()
+
+
+@pytest.mark.parametrize("env", ["development", "test", "Development "])
+def test_dev_and_test_allow_default_secret(env):
+    Settings(app_env=env).validate_for_env()

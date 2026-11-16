@@ -42,8 +42,19 @@ def _escape_like(text: str) -> str:
 
 
 @router.get("", response_model=list[ProductOut], summary="商品一覧の取得")
-def list_products(db: DbSession, _user: CurrentUser, q: str | None = None) -> list[Product]:
-    query = select(Product).where(Product.is_deleted.is_(False)).order_by(Product.sku)
+def list_products(
+    db: DbSession,
+    _user: CurrentUser,
+    q: str | None = None,
+    include_deleted: bool = False,
+) -> list[Product]:
+    """削除されていない商品を商品コード順に返す。
+
+    include_deleted を指定すると削除済みも含める（履歴の絞り込み用）。
+    """
+    query = select(Product).order_by(Product.sku)
+    if not include_deleted:
+        query = query.where(Product.is_deleted.is_(False))
     if q and q.strip():
         pattern = f"%{_escape_like(q.strip())}%"
         query = query.where(

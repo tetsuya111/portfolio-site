@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { RequireAuth, useAuth } from "@/lib/auth";
+import { ROLE_LABEL } from "@/lib/format";
 
 interface NavItem {
   href: string;
@@ -22,8 +23,6 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/inventory/history/", label: "履歴" },
   { href: "/users/", label: "ユーザー", adminOnly: true },
 ];
-
-const ROLE_LABEL = { admin: "管理者", staff: "一般" } as const;
 
 function isActive(pathname: string, href: string): boolean {
   const normalize = (p: string) => (p.endsWith("/") ? p : `${p}/`);

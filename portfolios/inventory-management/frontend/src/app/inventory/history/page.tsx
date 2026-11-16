@@ -27,7 +27,8 @@ function History() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    apiFetch<Product[]>("/products")
+    // 削除済みの商品の記録も絞り込めるよう、削除済みを含めて取得する
+    apiFetch<Product[]>(`/products${toQuery({ include_deleted: "true" })}`)
       .then(setProducts)
       .catch(() => setProducts([]));
   }, []);
@@ -35,7 +36,13 @@ function History() {
   useEffect(() => {
     let cancelled = false;
     apiFetch<HistoryPage>(
-      `/inventory/history${toQuery({ ...filters, limit: PAGE_SIZE, offset })}`,
+      `/inventory/history${toQuery({
+        ...filters,
+        limit: PAGE_SIZE,
+        offset,
+        // 日付はブラウザのタイムゾーンの0時〜24時で絞り込む（JST なら 540）
+        utc_offset_minutes: -new Date().getTimezoneOffset(),
+      })}`,
     )
       .then((p) => {
         if (cancelled) return;
@@ -79,6 +86,7 @@ function History() {
             {products.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.sku} {p.name}
+                {p.is_deleted ? "（削除済み）" : ""}
               </option>
             ))}
           </select>
@@ -106,7 +114,6 @@ function History() {
           クリア
         </button>
       </form>
-      <p className="muted">日付は UTC の日付で絞り込みます。</p>
       {error && (
         <p className="alert" role="alert">
           {error}

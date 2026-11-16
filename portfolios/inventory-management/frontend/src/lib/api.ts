@@ -18,25 +18,29 @@ export class ApiError extends Error {
   }
 }
 
-// ---- トークン（localStorage。使えない環境では保存しない） ----
+// ---- トークン（localStorage。使えない環境ではこのタブのメモリーにだけ保持する） ----
+
+let memoryToken: string | null = null;
 
 export function getToken(): string | null {
   try {
-    return localStorage.getItem(TOKEN_KEY);
+    return localStorage.getItem(TOKEN_KEY) ?? memoryToken;
   } catch {
-    return null;
+    return memoryToken;
   }
 }
 
 export function setToken(token: string): void {
+  memoryToken = token;
   try {
     localStorage.setItem(TOKEN_KEY, token);
   } catch {
-    // プライベートブラウズなどで保存できない場合は、このタブの間だけログイン状態を保つ
+    // プライベートブラウズなどで保存できない場合は、メモリーの値でこのタブの間だけログイン状態を保つ
   }
 }
 
 export function clearToken(): void {
+  memoryToken = null;
   try {
     localStorage.removeItem(TOKEN_KEY);
   } catch {

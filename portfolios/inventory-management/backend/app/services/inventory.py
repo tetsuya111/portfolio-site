@@ -117,17 +117,23 @@ def list_history(
     date_to: date | None = None,
     limit: int = 20,
     offset: int = 0,
+    utc_offset_minutes: int = 0,
 ) -> tuple[list[StockMovement], int]:
-    """入出庫の記録を新しい順に返す。期間は UTC の日付で両端を含む。"""
+    """入出庫の記録を新しい順に返す。
+
+    期間は利用者のローカル日付（UTC からの差 ``utc_offset_minutes`` 分）で両端を含む。
+    """
     conditions = []
     if product_id is not None:
         conditions.append(StockMovement.product_id == product_id)
     if movement_type is not None:
         conditions.append(StockMovement.type == movement_type)
     if date_from is not None:
-        conditions.append(StockMovement.created_at >= _start_of_day(date_from))
+        start = _start_of_day(date_from, utc_offset_minutes)
+        conditions.append(StockMovement.created_at >= start)
     if date_to is not None:
-        conditions.append(StockMovement.created_at < _start_of_day(date_to + timedelta(days=1)))
+        end = _start_of_day(date_to + timedelta(days=1), utc_offset_minutes)
+        conditions.append(StockMovement.created_at < end)
 
     total = db.scalar(select(func.count(StockMovement.id)).where(*conditions)) or 0
     items = db.scalars(
@@ -140,8 +146,9 @@ def list_history(
     return list(items), total
 
 
-def _start_of_day(day: date) -> datetime:
-    return datetime.combine(day, time.min, tzinfo=UTC)
+def _start_of_day(day: date, utc_offset_minutes: int) -> datetime:
+    """ローカル日付 day の0時を UTC の日時で返す。"""
+    return datetime.combine(day, time.min, tzinfo=UTC) - timedelta(minutes=utc_offset_minutes)
 
 
 def get_summary(db: Session) -> Summary:

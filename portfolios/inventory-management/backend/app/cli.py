@@ -5,6 +5,8 @@ python -m app.cli seed-demo   # デモ用のユーザー・商品・入出庫（
 """
 
 import argparse
+import getpass
+import os
 import sys
 from collections.abc import Sequence
 
@@ -19,6 +21,7 @@ from app.schemas import UserCreate
 from app.services.inventory import record_movement
 from app.services.users import UsernameTaken, create_user
 
+ADMIN_PASSWORD_ENV = "INVENTORY_ADMIN_PASSWORD"  # noqa: S105  (環境変数名)
 DEMO_PASSWORD = "demo-password"  # noqa: S105  (公開デモ用。README に記載)
 DEMO_USERS = [("demo-admin", "admin"), ("demo-staff", "staff")]
 DEMO_PRODUCTS = [
@@ -44,6 +47,15 @@ DEMO_MOVEMENTS = [
     ("OA-002", MOVEMENT_OUT, 4),
     ("DR-001", MOVEMENT_OUT, 60),
 ]
+
+
+def _admin_password(cli_value: str | None) -> str:
+    if cli_value:
+        return cli_value
+    from_env = os.environ.get(ADMIN_PASSWORD_ENV)
+    if from_env:
+        return from_env
+    return getpass.getpass("管理者のパスワード（8文字以上）: ")
 
 
 def _create_admin(db: Session, username: str, password: str) -> int:
@@ -102,7 +114,13 @@ def main(argv: Sequence[str] | None = None, settings: Settings | None = None) ->
     sub = parser.add_subparsers(dest="command", required=True)
     admin = sub.add_parser("create-admin", help="管理者ユーザーを作成する")
     admin.add_argument("--username", required=True)
-    admin.add_argument("--password", required=True)
+    admin.add_argument(
+        "--password",
+        help=(
+            "非推奨（シェルの履歴に残る）。"
+            f"省略時は環境変数 {ADMIN_PASSWORD_ENV}、なければ入力を求める"
+        ),
+    )
     sub.add_parser("seed-demo", help="デモ用のユーザー・商品・入出庫を作成する")
     args = parser.parse_args(argv)
 
@@ -111,7 +129,7 @@ def main(argv: Sequence[str] | None = None, settings: Settings | None = None) ->
     try:
         with make_session_factory(engine)() as db:
             if args.command == "create-admin":
-                return _create_admin(db, args.username, args.password)
+                return _create_admin(db, args.username, _admin_password(args.password))
             return _seed_demo(db)
     finally:
         engine.dispose()

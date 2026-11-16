@@ -59,8 +59,16 @@ def history(
     _user: CurrentUser,
     product_id: int | None = None,
     type: MovementType | None = None,  # noqa: A002  (API のクエリ名)
-    date_from: Annotated[date | None, Query(description="開始日（UTC、この日を含む）")] = None,
-    date_to: Annotated[date | None, Query(description="終了日（UTC、この日を含む）")] = None,
+    date_from: Annotated[date | None, Query(description="開始日（この日を含む）")] = None,
+    date_to: Annotated[date | None, Query(description="終了日（この日を含む）")] = None,
+    utc_offset_minutes: Annotated[
+        int,
+        Query(
+            ge=-840,
+            le=840,
+            description="日付を解釈するタイムゾーンの UTC からの差（分）。JST は 540。既定は UTC",
+        ),
+    ] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> HistoryPage:
@@ -77,6 +85,7 @@ def history(
         date_to=date_to,
         limit=limit,
         offset=offset,
+        utc_offset_minutes=utc_offset_minutes,
     )
     return HistoryPage(
         items=[movement_to_out(m) for m in items], total=total, limit=limit, offset=offset

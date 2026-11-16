@@ -6,9 +6,12 @@ from typing import Annotated
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
-# 開発・テスト専用の秘密鍵。本番（APP_ENV=production）では使えない。
+# 開発・テスト専用の秘密鍵。APP_ENV が development・test 以外では使えない。
 DEV_JWT_SECRET = "dev-only-insecure-secret-change-me"  # noqa: S105
 MIN_PRODUCTION_SECRET_LENGTH = 32
+# 開発用の秘密鍵を許す環境名。これ以外（production・prod・staging・表記揺れなど）は
+# 本番として検査する。
+RELAXED_ENVS = frozenset({"development", "test"})
 
 
 class Settings(BaseSettings):
@@ -37,10 +40,11 @@ class Settings(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        return self.app_env == "production"
+        """開発・テストと明示されていなければ本番として扱う（表記揺れで検査を外さない）。"""
+        return self.app_env.strip().lower() not in RELAXED_ENVS
 
     def validate_for_env(self) -> None:
-        """本番環境で安全でない設定なら ValueError を送出する。"""
+        """本番（development・test 以外）で安全でない設定なら ValueError を送出する。"""
         if not self.is_production:
             return
         if self.jwt_secret == DEV_JWT_SECRET:

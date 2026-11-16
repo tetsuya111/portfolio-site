@@ -108,3 +108,24 @@ def test_history_includes_deleted_product(client, db_session, setup):
 
 def test_history_requires_auth_401(client):
     assert client.get("/inventory/history").status_code == 401
+
+
+def test_history_date_range_uses_utc_offset(client, db_session, setup):
+    """JST（UTC+9）の利用者が選んだ日付は、JST の0時〜24時で絞り込む。"""
+    user, headers = setup
+    p = create_product(db_session)
+    # JST 01-10 08:00（UTC 01-09 23:00）は含み、JST 01-11 08:30（UTC 01-10 23:30）は含まない
+    add_movement(db_session, user, p, "in", 1, datetime(2026, 1, 9, 14, 59, tzinfo=UTC))
+    add_movement(db_session, user, p, "in", 2, datetime(2026, 1, 9, 23, 0, tzinfo=UTC))
+    add_movement(db_session, user, p, "in", 3, datetime(2026, 1, 10, 14, 59, tzinfo=UTC))
+    add_movement(db_session, user, p, "in", 4, datetime(2026, 1, 10, 23, 30, tzinfo=UTC))
+    body = history(
+        client, headers, date_from="2026-01-10", date_to="2026-01-10", utc_offset_minutes=540
+    ).json()
+    assert sorted(i["quantity"] for i in body["items"]) == [2, 3]
+
+
+@pytest.mark.parametrize("offset", [-841, 841])
+def test_history_utc_offset_out_of_range_422(client, setup, offset):
+    _, headers = setup
+    assert history(client, headers, utc_offset_minutes=offset).status_code == 422

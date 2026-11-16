@@ -13,12 +13,22 @@ import {
   type ReactNode,
 } from "react";
 
-import { apiFetch, clearToken, getToken, login, setToken, setUnauthorizedHandler } from "./api";
+import {
+  ApiError,
+  apiFetch,
+  clearToken,
+  getToken,
+  login,
+  setToken,
+  setUnauthorizedHandler,
+} from "./api";
 import type { User } from "./types";
 
 interface AuthState {
   user: User | null;
   loading: boolean;
+  /** 起動時にユーザー情報を取得できなかった理由（401 以外。サーバー停止など） */
+  error: string | null;
   signIn: (username: string, password: string) => Promise<void>;
   signOut: () => void;
 }
@@ -29,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const signOut = useCallback(() => {
     clearToken();
@@ -48,8 +59,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .then((me) => {
             if (!cancelled) setUser(me);
           })
-          .catch(() => {
-            clearToken();
+          .catch((e) => {
+            // トークンが無効（401）のときだけ捨てる。通信エラー・5xx ではトークンを残す。
+            if (e instanceof ApiError && e.status === 401) {
+              clearToken();
+            } else if (!cancelled) {
+              setError(e instanceof ApiError ? e.message : "ユーザー情報を取得できませんでした。");
+            }
           })
       : Promise.resolve();
     load.finally(() => {
@@ -65,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(token.access_token);
     try {
       setUser(await apiFetch<User>("/users/me"));
+      setError(null);
     } catch (error) {
       clearToken();
       throw error;
@@ -72,8 +89,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, signIn, signOut }),
-    [user, loading, signIn, signOut],
+    () => ({ user, loading, error, signIn, signOut }),
+    [user, loading, error, signIn, signOut],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
@@ -86,13 +103,23 @@ export function useAuth(): AuthState {
 
 /** ログインしていなければログイン画面へ移す。adminOnly なら管理者以外にはメッセージを出す。 */
 export function RequireAuth({ children, adminOnly = false }: { children: ReactNode; adminOnly?: boolean }) {
-  const { user, loading } = useAuth();
+  const { user, loading, error } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) router.replace("/login");
-  }, [loading, user, router]);
+    if (!loading && !user && !error) router.replace("/login");
+  }, [loading, user, error, router]);
 
+  if (!loading && !user && error) {
+    return (
+      <div className="alert" role="alert">
+        <p>{error}</p>
+        <button type="button" className="button secondary small" onClick={() => window.location.reload()}>
+          再読み込み
+        </button>
+      </div>
+    );
+  }
   if (loading || !user) return <p className="muted">読み込み中…</p>;
   if (adminOnly && user.role !== "admin") {
     return <p className="alert">この画面は管理者のみ利用できます。</p>;
