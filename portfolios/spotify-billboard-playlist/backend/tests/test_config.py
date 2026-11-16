@@ -80,3 +80,45 @@ def test_unsupported_scheme_rejected(monkeypatch):
 def test_http_loopback_allowed(monkeypatch, url):
     monkeypatch.setenv("FRONTEND_URL", url)
     assert load_settings().frontend_url == url
+
+
+SITE_FRONTEND = "https://site.example/apps/spotify-billboard-playlist"
+
+
+def _site(monkeypatch, frontend=SITE_FRONTEND, redirect=SITE_FRONTEND + "/auth/callback"):
+    monkeypatch.setenv("FRONTEND_URL", frontend)
+    monkeypatch.setenv("SPOTIFY_REDIRECT_URI", redirect)
+
+
+def test_public_path_from_frontend_url(monkeypatch):
+    _site(monkeypatch, frontend=SITE_FRONTEND + "/")
+    assert load_settings().public_path == "/apps/spotify-billboard-playlist"
+
+
+def test_public_path_empty_without_path(monkeypatch):
+    _https(monkeypatch)
+    assert load_settings().public_path == ""
+    monkeypatch.delenv("FRONTEND_URL")
+    monkeypatch.delenv("SPOTIFY_REDIRECT_URI")
+    assert load_settings().public_path == ""
+
+
+@pytest.mark.parametrize("suffix", ["?a=1", "#top"])
+def test_frontend_url_with_query_or_fragment_rejected(monkeypatch, suffix):
+    _site(monkeypatch, frontend=SITE_FRONTEND + suffix)
+    with pytest.raises(ConfigError):
+        load_settings()
+
+
+def test_redirect_uri_mismatch_warns(monkeypatch, caplog):
+    _site(monkeypatch, redirect="https://site.example/auth/callback")
+    with caplog.at_level("WARNING", logger="app.config"):
+        load_settings()
+    assert "SPOTIFY_REDIRECT_URI" in caplog.text
+
+
+def test_redirect_uri_match_does_not_warn(monkeypatch, caplog):
+    _site(monkeypatch)
+    with caplog.at_level("WARNING", logger="app.config"):
+        load_settings()
+    assert caplog.text == ""
