@@ -107,6 +107,21 @@
   }
 }
 
+/* アクセントの淡色のボタン型のリンク（モックで動くポートフォリオの URL）。大きさは使う側で指定する */
+@utility btn-accent-soft {
+  display: inline-block;
+  border-radius: calc(infinity * 1px);
+  border: 1px solid var(--theme-accent);
+  background-color: var(--theme-accent-soft);
+  color: var(--theme-on-accent-soft);
+  font-weight: 600;
+  @media (hover: hover) {
+    &:hover {
+      background-color: color-mix(in srgb, var(--theme-accent-soft) 85%, var(--theme-accent));
+    }
+  }
+}
+
 /* 記事・自己紹介の本文（typography プラグイン）の色をテーマに合わせる */
 @utility prose-themed {
   --tw-prose-body: var(--theme-fg);

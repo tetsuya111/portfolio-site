@@ -32,6 +32,7 @@ pnpm-debug.log*
 # ===== 環境変数・秘密情報 =====
 .env
 .env.*
+**/.env
 !.env.example
 *.pem
 *.key
@@ -75,3 +76,5 @@ logs/*
 **/logs/*
 docs/specs/*
 memo/*
+
+portfolios/backend-compose/stack.zip

@@ -1,0 +1,33 @@
+# backend-compose が services.json から生成したファイル。直接編集せず、add_backend.py で登録してください。
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+  media-feed:
+    build: ./services/media-feed
+    restart: unless-stopped
+    expose:
+      - "8000"
+    env_file:
+      - path: ./services/media-feed/.env
+        required: false
+  spotify-billboard-playlist:
+    build: ./services/spotify-billboard-playlist
+    restart: unless-stopped
+    expose:
+      - "8000"
+    env_file:
+      - path: ./services/spotify-billboard-playlist/.env
+        required: false
+  task-box-it-develop:
+    build: ./services/task-box-it-develop
+    restart: unless-stopped
+    expose:
+      - "8000"
+    env_file:
+      - path: ./services/task-box-it-develop/.env
+        required: false
