@@ -66,4 +66,10 @@ describe("loadGoogleMaps", () => {
     (win.gm_authFailure as () => void)();
     expect(onAuthFailure).toHaveBeenCalledOnce();
   });
+
+  test("2回目の呼び出しは script を重複して追加せずに reject する", async () => {
+    void loadGoogleMaps({ apiKey: "k" });
+    await expect(loadGoogleMaps({ apiKey: "k" })).rejects.toThrow("既に");
+    expect(document.querySelectorAll(`#${SCRIPT_ID}`)).toHaveLength(1);
+  });
 });

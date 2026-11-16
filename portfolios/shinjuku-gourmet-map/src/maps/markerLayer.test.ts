@@ -148,4 +148,14 @@ describe("createMarkerLayer", () => {
     layer.clear();
     expect(FakeMarker.created.every((m) => m.map === null)).toBe(true);
   });
+
+  test("複数件でもほぼ同じ場所に集まっていれば、1件と同じく寄るだけにする（最大ズームを避ける）", () => {
+    const { map, layer } = setup();
+    layer.show([shop("a", 35.69, 139.7), shop("b", 35.69001, 139.70001)], () => {});
+    expect(map.fitBounds).not.toHaveBeenCalled();
+    const [center] = map.panTo.mock.calls[0] as [{ lat: number; lng: number }];
+    expect(center.lat).toBeCloseTo(35.690005, 6);
+    expect(center.lng).toBeCloseTo(139.700005, 6);
+    expect(map.setZoom).toHaveBeenCalledWith(SINGLE_SHOP_ZOOM);
+  });
 });

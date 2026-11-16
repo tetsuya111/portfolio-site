@@ -148,6 +148,20 @@ describe("createApp", () => {
     expect(deps.status.error).toHaveBeenCalledWith(
       "ラーメンのお店を読み込めませんでした。時間をおいてもう一度お試しください。",
     );
+    // 途中まで描かれたピンを残さない
+    expect(deps.layer.clear).toHaveBeenCalledTimes(2);
+  });
+
+  test("ピンを消してから詳細を閉じる（消えるピンにフォーカスを戻さないため）", async () => {
+    const { deps, app } = setup();
+    await app.selectGenre(ramen);
+    expect(deps.layer.clear.mock.invocationCallOrder[0]).toBeLessThan(
+      deps.detail.hide.mock.invocationCallOrder[0],
+    );
+    app.disable();
+    expect(deps.layer.clear.mock.invocationCallOrder[1]).toBeLessThan(
+      deps.detail.hide.mock.invocationCallOrder[1],
+    );
   });
 
   test("disable 後は検索中の結果も新しい操作も反映しない", async () => {

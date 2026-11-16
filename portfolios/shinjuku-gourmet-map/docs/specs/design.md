@@ -121,7 +121,7 @@ Places API の `Place` から `toShop()` で変換する。`location` がない�
 1. `parseMapConfig(json)` — 失敗時は `statusView` に問題一覧を出して終了（FR-4.2）。
 2. ジャンルバーを描画（FR-1.1）。地図が使えない場合もジャンル構成は見えるようにする。
 3. `readApiSettings(import.meta.env)` — キーが空なら案内文を表示して終了（FR-5.3）。
-4. `loadGoogleMaps(settings)` で Maps JS API を読み込み、`maps`・`marker`・`places` ライブラリを取得。失敗・認証失敗（`window.gm_authFailure`）時はメッセージ表示（FR-5.4）。
+4. `loadGoogleMaps(settings)` で Maps JS API を読み込み（ページで1回だけ）、`core`・`maps`・`marker`・`places` ライブラリを取得。script の読み込み失敗・30秒のタイムアウト（`LOAD_TIMEOUT_MS`）・認証失敗（`window.gm_authFailure`）時はメッセージを表示し、ジャンルボタンを無効にする。最初に表示した原因は後続のエラーで上書きしない（FR-5.4）。
 5. `new Map(el, { center, zoom, mapId })` を1回だけ生成し（FR-2.3）、`createApp(...)` に渡して先頭ジャンルを選択（FR-1.2）。
 
 ### ジャンル選択（app.ts の `selectGenre`）
@@ -173,7 +173,7 @@ Place.searchByText({
 
 - `AdvancedMarkerElement` の `content` に自前の `<div class="pin">` を渡す。選択中は `pin--selected` クラスを付ける（色・サイズで区別）。
 - `gmpClickable: true`、`title` に店名を設定し、キーボードでも選択できるようにする。
-- 表示後、全ピンを含む `LatLngBounds` で `map.fitBounds()`。1件だけなら中心移動のみ。
+- 表示後、全ピンを含む `LatLngBounds` で `map.fitBounds()`。1件、または全店舗が約50m以内に集まっている場合は中心へ移動してズーム17（設定の初期ズームの方が大きければそちら）にする。0件ならエリアの初期表示に戻す。
 - Advanced Marker には Map ID が必要なため、`.env` の `VITE_GOOGLE_MAPS_MAP_ID` を使い、未設定なら Google 公式のデモ用ID `DEMO_MAP_ID` を使う。
 
 ### 詳細パネル（shopDetail.ts、FR-3）

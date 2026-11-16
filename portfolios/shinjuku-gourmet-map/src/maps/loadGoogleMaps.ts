@@ -3,7 +3,7 @@ import type { GoogleLibraries } from "./googleTypes";
 export const SCRIPT_ID = "google-maps-js";
 export const CALLBACK_NAME = "__shinjukuGourmetMapInit";
 /** この時間内に読み込みが終わらなければ失敗とみなす（通信の停止・ブロック対策） */
-export const LOAD_TIMEOUT_MS = 15_000;
+export const LOAD_TIMEOUT_MS = 30_000;
 
 const SCRIPT_URL = "https://maps.googleapis.com/maps/api/js";
 
@@ -19,8 +19,12 @@ interface GoogleGlobal {
   [CALLBACK_NAME]?: () => void;
 }
 
-/** Maps JavaScript API を読み込み、このアプリが使うライブラリを返す（ページで1回だけ呼ぶ） */
+/** Maps JavaScript API を読み込み、このアプリが使うライブラリを返す（ページで1回だけ呼べる） */
 export async function loadGoogleMaps({ apiKey, onAuthFailure }: LoadOptions): Promise<GoogleLibraries> {
+  // 2回読み込むと Google の動作が不安定になり、コールバックも上書きされるため禁止する
+  if (document.getElementById(SCRIPT_ID)) {
+    throw new Error("Google マップの読み込みは既に開始しています。");
+  }
   const global = window as unknown as GoogleGlobal;
   if (onAuthFailure) global.gm_authFailure = onAuthFailure;
 

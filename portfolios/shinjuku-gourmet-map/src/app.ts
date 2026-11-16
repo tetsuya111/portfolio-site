@@ -44,8 +44,9 @@ export function createApp(deps: AppDependencies): App {
     if (disabled) return;
     const request = ++latestRequest;
     const isStale = () => request !== latestRequest;
-    detail.hide();
+    // 先にピンを消す（詳細を閉じるときに、消えるピンへフォーカスを戻さないため）
     layer.clear();
+    detail.hide();
     setActiveGenre(genre.id);
     status.loading(genre);
 
@@ -57,6 +58,7 @@ export function createApp(deps: AppDependencies): App {
     } catch (error) {
       if (isStale()) return;
       console.error(`「${genre.query}」の表示に失敗しました`, error);
+      layer.clear(); // 途中まで描かれたピンを残さない
       status.error(loadErrorMessage(genre));
     }
   };
@@ -73,8 +75,8 @@ export function createApp(deps: AppDependencies): App {
     disable() {
       disabled = true;
       latestRequest++; // 検索中の結果を捨てる
-      detail.hide();
       layer.clear();
+      detail.hide();
     },
   };
 }

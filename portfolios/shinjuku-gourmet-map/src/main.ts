@@ -96,7 +96,7 @@ async function main(): Promise<void> {
     });
   } catch (error) {
     console.error(error);
-    markMapUnavailable("地図を作成できませんでした。Map ID の設定を確認してください。");
+    markMapUnavailable("地図を作成できませんでした。詳しい原因はブラウザの開発者ツールのコンソールを確認してください。");
     return;
   }
 
