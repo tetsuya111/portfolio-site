@@ -7,10 +7,11 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.deps import AppSettings, DbSession
+from app.deps import AdminUser, AppSettings, DbSession
 from app.models import User
-from app.schemas import Token
+from app.schemas import Token, UserCreate, UserOut
 from app.security import create_access_token, verify_dummy_password, verify_password
+from app.services.users import UsernameTaken, create_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -44,3 +45,19 @@ def login(
         access_token=create_access_token(user, settings),
         expires_in=settings.access_token_expire_minutes * 60,
     )
+
+
+@router.post(
+    "/register",
+    response_model=UserOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="ユーザー登録（管理者のみ）",
+)
+def register(data: UserCreate, db: DbSession, _admin: AdminUser) -> UserOut:
+    try:
+        user = create_user(db, data)
+    except UsernameTaken:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="このユーザー名は既に使われています。"
+        ) from None
+    return UserOut.model_validate(user)
