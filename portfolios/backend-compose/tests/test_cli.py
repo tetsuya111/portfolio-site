@@ -1,0 +1,81 @@
+import io
+import json
+import unittest
+from contextlib import redirect_stderr, redirect_stdout
+
+from stackgen.cli import main
+from tests.helpers import TempDirMixin, write, write_json
+
+
+class CliTest(TempDirMixin, unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        self.repo = self.tmp / "repo"
+        self.config = write_json(self.repo / "portfolios" / "backend-compose" / "config.json",
+                                 {"domain": "api.portfolio.link", "https": True})
+        self.stack = self.repo / "portfolios" / "backend-compose" / "stack"
+        self.project = self.repo / "portfolios" / "my-app"
+
+    def run_main(self, path):
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            code = main([str(path)], repo_root=self.repo, config_path=self.config, stack_dir=self.stack)
+        return code, out.getvalue(), err.getvalue()
+
+    def test_registers_python_backend(self):
+        write(self.project / "backend" / "requirements.txt", "fastapi\n")
+        write(self.project / "backend" / "main.py", "app = FastAPI()\n")
+        write(self.project / "backend" / ".env", "SECRET=x\n")
+        apps = self.repo / "portfolio-site" / "apps"
+        write_json(apps / "apps.json", {"apps": [{"slug": "my-app", "outputDir": "dist", "buildArgs": [], "mock": True}]})
+        write(apps / "my-app" / "src" / "api.ts", "import.meta.env.VITE_API_URL")
+
+        code, out, err = self.run_main(self.project)
+        self.assertEqual(code, 0, err)
+        result = json.loads(out)
+        self.assertEqual(result["slug"], "my-app")
+        self.assertEqual(result["service"], "portfolios/backend-compose/stack/services/my-app")
+        self.assertEqual(result["port"], 8000)
+        self.assertEqual(result["backendUrl"], "https://api.portfolio.link/my-app")
+        self.assertEqual(result["dockerfile"], "portfolios/backend-compose/stack/services/my-app/Dockerfile")
+        self.assertEqual(result["frontendEnv"], {"VITE_API_URL": "https://api.portfolio.link/my-app"})
+        service = self.stack / "services" / "my-app"
+        self.assertTrue((service / "main.py").is_file())
+        self.assertFalse((service / ".env").exists())
+        self.assertIn("build: ./services/my-app", (self.stack / "docker-compose.yml").read_text(encoding="utf-8"))
+        self.assertIn("location /my-app/", (self.stack / "nginx" / "default.conf").read_text(encoding="utf-8"))
+
+    def test_root_backend_excludes_frontend(self):
+        write(self.project / "requirements.txt", "flask\n")
+        write(self.project / "app.py", "app = Flask(__name__)\n")
+        write_json(self.project / "frontend" / "package.json", {"scripts": {"build": "vite build"},
+                                                               "devDependencies": {"vite": "1"}})
+        code, _, err = self.run_main(self.project)
+        self.assertEqual(code, 0, err)
+        service = self.stack / "services" / "my-app"
+        self.assertTrue((service / "app.py").is_file())
+        self.assertFalse((service / "frontend").exists())
+
+    def test_rerun_skips_copy(self):
+        write(self.project / "backend" / "requirements.txt", "")
+        write(self.project / "backend" / "main.py", "app = FastAPI()\n")
+        self.assertEqual(self.run_main(self.project)[0], 0)
+        code, out, _ = self.run_main(self.project)
+        self.assertEqual(code, 0)
+        self.assertTrue(any("コピーしませんでした" in w for w in json.loads(out)["warnings"]))
+        services = json.loads((self.stack / "services.json").read_text(encoding="utf-8"))["services"]
+        self.assertEqual(len(services), 1)
+
+    def test_errors_write_nothing(self):
+        write(self.project / "README.md", "no backend")
+        outside = write(self.tmp / "elsewhere" / "backend" / "requirements.txt", "").parent.parent
+        nested = write(self.project / "sub" / "backend" / "requirements.txt", "").parent.parent
+        for path in (self.project, outside, nested, self.repo / "portfolios" / "backend-compose"):
+            with self.subTest(path=path):
+                code, _, err = self.run_main(path)
+                self.assertEqual(code, 1)
+                self.assertIn("エラー", err)
+        write(self.project / "backend" / "requirements.txt", "")
+        write_json(self.config, {"domain": "api.example.com"})
+        self.assertEqual(self.run_main(self.project)[0], 1)
+        self.assertFalse(self.stack.exists())
