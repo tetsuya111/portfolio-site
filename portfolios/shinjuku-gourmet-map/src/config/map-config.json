@@ -1,0 +1,15 @@
+{
+  "area": {
+    "name": "新宿",
+    "center": { "lat": 35.6896, "lng": 139.7006 },
+    "radiusMeters": 1500,
+    "zoom": 15
+  },
+  "genres": [
+    { "id": "ramen", "label": "ラーメン", "query": "新宿 ラーメン", "icon": "🍜" },
+    { "id": "cafe", "label": "カフェ", "query": "新宿 カフェ", "icon": "☕" },
+    { "id": "izakaya", "label": "居酒屋", "query": "新宿 居酒屋", "icon": "🍺" },
+    { "id": "sushi", "label": "寿司", "query": "新宿 寿司", "icon": "🍣" },
+    { "id": "curry", "label": "カレー", "query": "新宿 カレー", "icon": "🍛" }
+  ]
+}
