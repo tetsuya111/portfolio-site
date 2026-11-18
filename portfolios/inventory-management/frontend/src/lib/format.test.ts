@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { formatDateTime, formatNumber, movementTypeLabel } from "./format";
+import { formatDateTime, formatNumber, movementTypeLabel, ROLE_LABEL } from "./format";
 
 describe("format", () => {
   it("formatNumber adds separators", () => {
     expect(formatNumber(0)).toBe("0");
     expect(formatNumber(1234567)).toBe("1,234,567");
+  });
+
+  it("ROLE_LABEL shows visitor as 閲覧者", () => {
+    expect(ROLE_LABEL.visitor).toBe("閲覧者");
   });
 
   it("movementTypeLabel", () => {
