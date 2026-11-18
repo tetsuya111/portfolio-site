@@ -32,12 +32,23 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     engine = make_engine(_db_url(), poolclass=pool.NullPool)
+    is_sqlite = engine.dialect.name == "sqlite"
     with engine.connect() as connection:
+        if is_sqlite:
+            # SQLite の batch（表の作り直し）は参照されている表を DROP するため、外部キーを
+            # 有効にしたままだと失敗する。PRAGMA はトランザクション外でしか効かないため先に確定する。
+            connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+            connection.commit()
         context.configure(
             connection=connection, target_metadata=target_metadata, render_as_batch=True
         )
         with context.begin_transaction():
             context.run_migrations()
+        if is_sqlite:
+            violations = connection.exec_driver_sql("PRAGMA foreign_key_check").all()
+            connection.commit()
+            if violations:
+                raise RuntimeError(f"マイグレーション後に外部キーの不整合があります: {violations}")
     engine.dispose()
 
 
