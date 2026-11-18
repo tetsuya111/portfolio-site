@@ -18,6 +18,7 @@ from app.db import Base
 
 ROLE_ADMIN = "admin"
 ROLE_STAFF = "staff"
+ROLE_VISITOR = "visitor"  # 閲覧のみ（作成・更新・削除はできない）
 MOVEMENT_IN = "in"
 MOVEMENT_OUT = "out"
 
@@ -50,7 +51,9 @@ class UTCDateTime(TypeDecorator):
 
 class User(Base):
     __tablename__ = "users"
-    __table_args__ = (CheckConstraint("role IN ('admin', 'staff')", name="ck_users_role"),)
+    __table_args__ = (
+        CheckConstraint("role IN ('admin', 'staff', 'visitor')", name="ck_users_role"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)

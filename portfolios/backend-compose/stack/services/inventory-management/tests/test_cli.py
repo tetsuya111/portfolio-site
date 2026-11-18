@@ -57,6 +57,19 @@ def test_cli_create_admin_prompts_when_no_password(settings, monkeypatch):
     assert cli.main(["create-admin", "--username", "prompted"], settings=settings) == 0
 
 
+def test_cli_create_visitor_reads_password_from_env(settings, db_session, monkeypatch):
+    monkeypatch.delenv("INVENTORY_ADMIN_PASSWORD", raising=False)
+    monkeypatch.setenv("INVENTORY_VISITOR_PASSWORD", "12345678")
+    assert cli.main(["create-visitor", "--username", "visitor"], settings=settings) == 0
+    assert db_session.scalar(select(User).where(User.username == "visitor")).role == "visitor"
+
+
+def test_cli_create_visitor_duplicate_exits_1(settings):
+    args = ["create-visitor", "--username", "visitor", "--password", "12345678"]
+    assert cli.main(args, settings=settings) == 0
+    assert cli.main(args, settings=settings) == 1
+
+
 def test_cli_seed_demo_refuses_existing_demo_sku(settings, db_session):
     db_session.add(Product(sku="ST-001", name="本物の商品", stock=7))
     db_session.commit()
@@ -78,3 +91,46 @@ def test_cli_seed_demo_refused_in_production(tmp_path, engine):
     prod = Settings(app_env="production", database_url=str(engine.url), jwt_secret="x" * 40)
     assert cli.main(["seed-demo"], settings=prod) == 1
     assert cli.main(["seed-demo", "--allow-production"], settings=prod) == 0
+
+
+def test_cli_seed_demo_creates_visitor(settings, db_session):
+    assert cli.main(["seed-demo"], settings=settings) == 0
+    visitor = db_session.scalar(select(User).where(User.username == "demo-visitor"))
+    assert visitor.role == "visitor"
+    movement_users = set(db_session.scalars(select(StockMovement.user_id)).all())
+    assert movement_users
+    assert visitor.id not in movement_users
+
+
+def test_cli_seed_demo_adds_visitor_when_already_seeded(settings, db_session):
+    from tests.factories import create_user
+
+    create_user(db_session, username="demo-staff")
+    assert cli.main(["seed-demo"], settings=settings) == 0
+    db_session.expire_all()
+    visitor = db_session.scalar(select(User).where(User.username == "demo-visitor"))
+    assert visitor.role == "visitor"
+    assert db_session.scalar(select(func.count(Product.id))) == 0
+    assert cli.main(["seed-demo"], settings=settings) == 0
+    db_session.expire_all()
+    assert db_session.scalar(select(func.count(User.id))) == 2
+
+
+def test_cli_seed_demo_rejects_demo_visitor_with_other_role(settings, db_session):
+    from tests.factories import create_user
+
+    create_user(db_session, username="demo-visitor", role="staff")
+    assert cli.main(["seed-demo"], settings=settings) == 1
+    db_session.expire_all()
+    assert db_session.scalar(select(User.role).where(User.username == "demo-visitor")) == "staff"
+    assert db_session.scalar(select(func.count(Product.id))) == 0
+
+
+def test_cli_seed_demo_seeds_when_only_visitor_exists(settings, db_session):
+    from tests.factories import create_user
+
+    create_user(db_session, username="demo-visitor", role="visitor")
+    assert cli.main(["seed-demo"], settings=settings) == 0
+    db_session.expire_all()
+    assert db_session.scalar(select(User.id).where(User.username == "demo-admin")) is not None
+    assert db_session.scalar(select(func.count(Product.id))) > 0

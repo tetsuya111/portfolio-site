@@ -45,3 +45,8 @@ def test_defaults(db_session):
     assert product.reorder_point == 0
     assert product.is_deleted is False
     assert product.created_at is not None
+
+
+def test_visitor_role_is_allowed(db_session):
+    db_session.add(User(username="viewer", password_hash="x", role="visitor"))
+    db_session.commit()
