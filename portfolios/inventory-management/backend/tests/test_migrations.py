@@ -81,3 +81,19 @@ def test_visitor_migration_keeps_existing_movements(tmp_path):
         assert conn.execute(text("SELECT count(*) FROM stock_movements")).scalar() == 1
         assert conn.execute(text("PRAGMA foreign_key_check")).all() == []
     engine.dispose()
+
+
+def test_visitor_downgrade_refuses_while_visitors_exist(tmp_path):
+    """閲覧者が残っていれば表を作り直す前に止め、閲覧者の削除後に再実行できる。"""
+    url = f"sqlite:///{tmp_path / 'mig.db'}"
+    cfg = _config(url)
+    command.upgrade(cfg, "head")
+    engine = create_engine(url)
+    _insert_user(engine, "visitor")
+    with pytest.raises(RuntimeError, match="閲覧者"):
+        command.downgrade(cfg, "0001")
+    assert "_alembic_tmp_users" not in inspect(engine).get_table_names()
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM users WHERE role = 'visitor'"))
+    command.downgrade(cfg, "0001")
+    engine.dispose()

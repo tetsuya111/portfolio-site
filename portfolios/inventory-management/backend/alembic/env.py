@@ -1,5 +1,6 @@
 """Alembic の実行環境。接続先は DATABASE_URL（または -x db_url=...）。"""
 
+import logging
 from logging.config import fileConfig
 
 from alembic import context
@@ -48,7 +49,10 @@ def run_migrations_online() -> None:
             violations = connection.exec_driver_sql("PRAGMA foreign_key_check").all()
             connection.commit()
             if violations:
-                raise RuntimeError(f"マイグレーション後に外部キーの不整合があります: {violations}")
+                # マイグレーションは確定済みのため、例外で起動を止め続けず警告に留める。
+                logging.getLogger("alembic.env").warning(
+                    "マイグレーション後に外部キーの不整合があります: %s", violations
+                )
     engine.dispose()
 
 

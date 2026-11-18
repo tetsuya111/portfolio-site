@@ -11,6 +11,7 @@ downgrade の前に閲覧者を削除すること（残っていると制約違�
 
 from collections.abc import Sequence
 
+import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0002"
@@ -31,4 +32,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # 表の作り直しが途中で失敗すると一時表が残り再実行できなくなるため、先に確認する。
+    visitors = (
+        op.get_bind().execute(sa.text("SELECT count(*) FROM users WHERE role = 'visitor'")).scalar()
+    )
+    if visitors:
+        raise RuntimeError(f"閲覧者が {visitors} 人残っています。削除してから戻してください。")
     _replace_role_constraint("role IN ('admin', 'staff')")
