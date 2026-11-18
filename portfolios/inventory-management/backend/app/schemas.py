@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, StringConstraints,
 
 from app.security import BCRYPT_MAX_BYTES
 
-Role = Literal["admin", "staff"]
+Role = Literal["admin", "staff", "visitor"]
 MovementType = Literal["in", "out"]
 
 USERNAME_PATTERN = r"^[A-Za-z0-9_-]+$"

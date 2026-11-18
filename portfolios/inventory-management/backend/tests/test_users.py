@@ -71,3 +71,9 @@ def test_list_users_admin_only(client, db_session, admin_headers):
     assert res.status_code == 200
     assert [u["username"] for u in res.json()] == ["admin", "staff1"]
     assert client.get("/users", headers=auth_headers(client, "staff1")).status_code == 403
+
+
+def test_register_visitor(client, admin_headers):
+    res = register(client, admin_headers, role="visitor")
+    assert res.status_code == 201
+    assert res.json()["role"] == "visitor"
