@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from app.models import Product, StockMovement
 from tests.factories import auth_headers, create_product, create_user
 
+# 仕様（issue #87）の文言そのものを検証するため、app.deps の定数は使わずリテラルで書く。
 VISITOR_FORBIDDEN = "閲覧者は操作できません"
 PRODUCT_BODY = {"sku": "NEW-001", "name": "新しい商品"}
 

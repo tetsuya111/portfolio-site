@@ -23,8 +23,8 @@ from app.services.users import UsernameTaken, create_user
 
 ADMIN_PASSWORD_ENV = "INVENTORY_ADMIN_PASSWORD"  # noqa: S105  (環境変数名)
 DEMO_PASSWORD = "demo-password"  # noqa: S105  (公開デモ用。README に記載)
-DEMO_VISITOR = "demo-visitor"
-DEMO_USERS = [("demo-admin", "admin"), ("demo-staff", "staff"), (DEMO_VISITOR, ROLE_VISITOR)]
+DEMO_VISITOR = "demo-visitor"  # 閲覧者。入出庫できないため DEMO_USERS とは分ける
+DEMO_USERS = [("demo-admin", "admin"), ("demo-staff", "staff")]  # 入出庫記録の担当者にもなる
 DEMO_PRODUCTS = [
     # sku, name, category, unit, unit_price, reorder_point
     ("ST-001", "ボールペン（黒）", "文具", "本", 120, 50),
@@ -90,8 +90,8 @@ def _seed_demo(db: Session) -> int:
             file=sys.stderr,
         )
         return 1
-    editor_names = [name for name, role in DEMO_USERS if role != ROLE_VISITOR]
-    if db.scalar(select(User.id).where(User.username.in_(editor_names))) is not None:
+    demo_names = [name for name, _ in DEMO_USERS]
+    if db.scalar(select(User.id).where(User.username.in_(demo_names))) is not None:
         print("デモデータは作成済みです。")
         # 閲覧者の追加前に作成済みのデモ環境へ、閲覧者だけを足す（商品・入出庫は作らない）。
         if visitor is None:
@@ -106,11 +106,9 @@ def _seed_demo(db: Session) -> int:
             file=sys.stderr,
         )
         return 1
-    # 閲覧者は入出庫できないため、入出庫記録の担当者（users）に含めない。
     users = [
         create_user(db, UserCreate(username=name, password=DEMO_PASSWORD, role=role))
         for name, role in DEMO_USERS
-        if role != ROLE_VISITOR
     ]
     if visitor is None:
         _add_demo_visitor(db)
