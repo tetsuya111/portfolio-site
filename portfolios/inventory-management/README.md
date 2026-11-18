@@ -66,7 +66,7 @@ npm --prefix frontend install
 node scripts/run-backend.mjs -m app.cli seed-demo
 ```
 
-デモ用のアカウントは `demo-admin`（管理者）・`demo-staff`（一般）・`demo-visitor`（閲覧者）で、パスワードはすべて `demo-password` です。閲覧者の追加前にデモデータを作成済みの環境でも、`seed-demo` を再実行すると `demo-visitor` だけが追加されます。本番環境（`APP_ENV` が `development`・`test` 以外）では、`--allow-production` を付けない限り作成しません。**公開デモとして作る場合は、管理者の権限が誰にでも使える点に注意してください。閲覧者（`demo-visitor`）だけを共有すると、データを変更されずに公開できます（管理者・一般のパスワードは変更してください）。**
+デモ用のアカウントは `demo-admin`（管理者）・`demo-staff`（一般）・`demo-visitor`（閲覧者）で、パスワードはすべて `demo-password` です。閲覧者の追加前にデモデータを作成済みの環境でも、`seed-demo` を再実行すると `demo-visitor` だけが追加されます。本番環境（`APP_ENV` が `development`・`test` 以外）では、`--allow-production` を付けない限り作成しません。**公開デモとして作る場合は、管理者の権限が誰にでも使える点に注意してください。`seed-demo` が作る `demo-admin`・`demo-staff` のパスワードも README で公開されており、変更する機能はないため、閲覧者だけを共有しても管理者としてログインできてしまいます。** データを変更されずに公開する場合は、`seed-demo` を使わず `create-admin` で非公開のパスワードの管理者を作り、ユーザー管理画面から閲覧者（権限「閲覧者」）を登録して、その閲覧者のアカウントだけを共有してください。
 
 ## 起動
 
