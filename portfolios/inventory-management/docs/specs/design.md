@@ -2,7 +2,7 @@
 
 ## TL;DR
 
-FastAPI（SQLAlchemy 2.0 + Alembic + SQLite）の REST API と、静的出力した Next.js（App Router + TypeScript）の SPA で在庫管理システムを作る。認証は Bearer の JWT アクセストークン、権限は admin／staff／visitor（閲覧のみ。後から追加）の3区分。在庫数は商品テーブルに持ち、**条件付き UPDATE（`stock = stock - q WHERE stock >= q`）と入出庫記録の INSERT を1トランザクションで行う**ことで、並行出庫でも在庫がマイナスにならないことを DB レベルで保証する。
+FastAPI（SQLAlchemy 2.0 + Alembic + SQLite）の REST API と、静的出力した Next.js（App Router + TypeScript）の SPA で在庫管理システムを作る。認証は Bearer の JWT アクセストークン、権限は admin／staff の2区分。在庫数は商品テーブルに持ち、**条件付き UPDATE（`stock = stock - q WHERE stock >= q`）と入出庫記録の INSERT を1トランザクションで行う**ことで、並行出庫でも在庫がマイナスにならないことを DB レベルで保証する。
 
 ## 対応する要件
 
@@ -89,12 +89,12 @@ erDiagram
 | GET /users/me | ログイン | AUTH-4 | 200 UserOut | 401 |
 | GET /users | admin | USR-5 | 200 UserOut[] | 401・403 |
 | GET /products?q=&include_deleted= | ログイン | PRD-4・5・HIS-5 | 200 ProductOut[] | 401 |
-| POST /products | 管理者・一般（閲覧者は 403） | PRD-1〜3 | 201 ProductOut | 409・422 |
+| POST /products | ログイン | PRD-1〜3 | 201 ProductOut | 409・422 |
 | GET /products/{id} | ログイン | PRD-6・10 | 200 ProductOut | 404 |
-| PUT /products/{id} | 管理者・一般（閲覧者は 403） | PRD-7・2・3・10 | 200 ProductOut | 404・409・422 |
+| PUT /products/{id} | ログイン | PRD-7・2・3・10 | 200 ProductOut | 404・409・422 |
 | DELETE /products/{id} | admin | PRD-8〜10 | 204 | 403・404 |
-| POST /inventory/in | 管理者・一般（閲覧者は 403） | INV-1・4・5・7 | 201 MovementOut | 404・422 |
-| POST /inventory/out | 管理者・一般（閲覧者は 403） | INV-2〜7 | 201 MovementOut | 404・409・422 |
+| POST /inventory/in | ログイン | INV-1・4・5・7 | 201 MovementOut | 404・422 |
+| POST /inventory/out | ログイン | INV-2〜7 | 201 MovementOut | 404・409・422 |
 | GET /inventory/history | ログイン | HIS-1〜4 | 200 `{items, total, limit, offset}` | 422 |
 | GET /inventory/summary | ログイン | SUM-1〜4 | 200 `{items, total_products, total_stock, low_stock_count}` | 401 |
 

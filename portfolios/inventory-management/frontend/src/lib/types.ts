@@ -1,6 +1,6 @@
 // バックエンド（backend/app/schemas.py）の入出力に対応する型。
 
-export type Role = "admin" | "staff" | "visitor";
+export type Role = "admin" | "staff";
 export type MovementType = "in" | "out";
 
 /** 1回の入出庫の数量の上限（backend/app/schemas.py の MAX_QUANTITY と同じ値）。 */

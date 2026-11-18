@@ -121,7 +121,6 @@ function Users() {
             <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
               <option value="staff">一般（商品の削除・ユーザー登録以外）</option>
               <option value="admin">管理者（すべての操作）</option>
-              <option value="visitor">閲覧者（閲覧のみ）</option>
             </select>
           </label>
           {error && (

@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.deps import CurrentUser, DbSession, EditorUser
+from app.deps import CurrentUser, DbSession
 from app.models import MOVEMENT_IN, MOVEMENT_OUT
 from app.schemas import HistoryPage, MovementCreate, MovementOut, MovementType, Summary
 from app.services.inventory import (
@@ -42,14 +42,14 @@ def _record(db, user, data: MovementCreate, movement_type: str) -> MovementOut:
 @router.post(
     "/in", response_model=MovementOut, status_code=status.HTTP_201_CREATED, summary="入庫の記録"
 )
-def stock_in(data: MovementCreate, db: DbSession, user: EditorUser) -> MovementOut:
+def stock_in(data: MovementCreate, db: DbSession, user: CurrentUser) -> MovementOut:
     return _record(db, user, data, MOVEMENT_IN)
 
 
 @router.post(
     "/out", response_model=MovementOut, status_code=status.HTTP_201_CREATED, summary="出庫の記録"
 )
-def stock_out(data: MovementCreate, db: DbSession, user: EditorUser) -> MovementOut:
+def stock_out(data: MovementCreate, db: DbSession, user: CurrentUser) -> MovementOut:
     return _record(db, user, data, MOVEMENT_OUT)
 
 

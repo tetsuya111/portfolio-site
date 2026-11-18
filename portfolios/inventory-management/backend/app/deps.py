@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.db import get_db
-from app.models import ROLE_ADMIN, ROLE_VISITOR, User
+from app.models import ROLE_ADMIN, User
 from app.security import decode_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
@@ -60,15 +60,3 @@ def require_admin(user: CurrentUser) -> User:
 
 
 AdminUser = Annotated[User, Depends(require_admin)]
-
-VISITOR_FORBIDDEN = "閲覧者は操作できません"
-
-
-def require_no_visitor(user: CurrentUser) -> User:
-    """閲覧者を拒否する。データを作成・更新するエンドポイントには必ず付けること。"""
-    if user.role == ROLE_VISITOR:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=VISITOR_FORBIDDEN)
-    return user
-
-
-EditorUser = Annotated[User, Depends(require_no_visitor)]

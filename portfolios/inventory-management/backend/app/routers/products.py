@@ -5,7 +5,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.deps import AdminUser, CurrentUser, DbSession, EditorUser
+from app.deps import AdminUser, CurrentUser, DbSession
 from app.models import Product
 from app.schemas import ProductIn, ProductOut
 
@@ -66,7 +66,7 @@ def list_products(
 @router.post(
     "", response_model=ProductOut, status_code=status.HTTP_201_CREATED, summary="商品の登録"
 )
-def create_product(data: ProductIn, db: DbSession, _user: EditorUser) -> Product:
+def create_product(data: ProductIn, db: DbSession, _user: CurrentUser) -> Product:
     if _sku_taken(db, data.sku):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=SKU_TAKEN)
     product = Product(**data.model_dump())
@@ -81,7 +81,7 @@ def read_product(product_id: int, db: DbSession, _user: CurrentUser) -> Product:
 
 
 @router.put("/{product_id}", response_model=ProductOut, summary="商品情報の更新")
-def update_product(product_id: int, data: ProductIn, db: DbSession, _user: EditorUser) -> Product:
+def update_product(product_id: int, data: ProductIn, db: DbSession, _user: CurrentUser) -> Product:
     product = get_active_product(db, product_id)
     if _sku_taken(db, data.sku, exclude_id=product.id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=SKU_TAKEN)

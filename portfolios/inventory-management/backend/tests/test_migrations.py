@@ -1,10 +1,8 @@
 from pathlib import Path
 
-import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import create_engine, inspect
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -25,75 +23,4 @@ def test_migration_creates_and_drops_tables(tmp_path):
     assert {"users", "products", "stock_movements"} <= tables
     command.downgrade(cfg, "base")
     assert not {"users", "products", "stock_movements"} & set(inspect(engine).get_table_names())
-    engine.dispose()
-
-
-def _insert_user(engine, role: str) -> None:
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                "INSERT INTO users (username, password_hash, role, is_active, created_at) "
-                "VALUES (:u, 'x', :r, 1, '2026-01-01 00:00:00')"
-            ),
-            {"u": f"user-{role}", "r": role},
-        )
-
-
-def test_migration_allows_visitor_role(tmp_path):
-    url = f"sqlite:///{tmp_path / 'mig.db'}"
-    cfg = _config(url)
-    command.upgrade(cfg, "head")
-    engine = create_engine(url)
-    _insert_user(engine, "visitor")
-    with engine.begin() as conn:
-        conn.execute(text("DELETE FROM users"))
-    command.downgrade(cfg, "0001")
-    with pytest.raises(IntegrityError):
-        _insert_user(engine, "visitor")
-    engine.dispose()
-
-
-def test_visitor_migration_keeps_existing_movements(tmp_path):
-    """入出庫記録（users を参照する外部キー）がある DB でも users の作り直しが成功する。"""
-    url = f"sqlite:///{tmp_path / 'mig.db'}"
-    cfg = _config(url)
-    command.upgrade(cfg, "0001")
-    engine = create_engine(url)
-    _insert_user(engine, "staff")
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                "INSERT INTO products (sku, name, unit, reorder_point, stock, is_deleted, "
-                "created_at, updated_at) VALUES ('A-1', '商品', '個', 0, 1, 0, "
-                "'2026-01-01 00:00:00', '2026-01-01 00:00:00')"
-            )
-        )
-        conn.execute(
-            text(
-                "INSERT INTO stock_movements (product_id, user_id, type, quantity, stock_after, "
-                "created_at) VALUES (1, 1, 'in', 1, 1, '2026-01-01 00:00:00')"
-            )
-        )
-    command.upgrade(cfg, "head")
-    command.downgrade(cfg, "0001")
-    with engine.connect() as conn:
-        assert conn.execute(text("SELECT count(*) FROM users")).scalar() == 1
-        assert conn.execute(text("SELECT count(*) FROM stock_movements")).scalar() == 1
-        assert conn.execute(text("PRAGMA foreign_key_check")).all() == []
-    engine.dispose()
-
-
-def test_visitor_downgrade_refuses_while_visitors_exist(tmp_path):
-    """閲覧者が残っていれば表を作り直す前に止め、閲覧者の削除後に再実行できる。"""
-    url = f"sqlite:///{tmp_path / 'mig.db'}"
-    cfg = _config(url)
-    command.upgrade(cfg, "head")
-    engine = create_engine(url)
-    _insert_user(engine, "visitor")
-    with pytest.raises(RuntimeError, match="閲覧者"):
-        command.downgrade(cfg, "0001")
-    assert "_alembic_tmp_users" not in inspect(engine).get_table_names()
-    with engine.begin() as conn:
-        conn.execute(text("DELETE FROM users WHERE role = 'visitor'"))
-    command.downgrade(cfg, "0001")
     engine.dispose()
