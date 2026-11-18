@@ -100,3 +100,20 @@ def test_staff_can_still_write(client, product, staff_headers):
         "/inventory/in", json={"product_id": product.id, "quantity": 1}, headers=staff_headers
     )
     assert res.status_code == 201
+
+
+def test_every_write_endpoint_rejects_visitor(client, visitor_headers):
+    """書き込み系のエンドポイントを追加したとき、閲覧者の拒否の付け忘れを検出する。"""
+    public = {("POST", "/auth/login")}
+    spec = client.get("/openapi.json").json()
+    checked = 0
+    for path, ops in spec["paths"].items():
+        for method in ops:
+            method = method.upper()
+            if method == "GET" or (method, path) in public:
+                continue
+            url = path.replace("{product_id}", "1")
+            res = client.request(method, url, json={}, headers=visitor_headers)
+            assert res.status_code == 403, f"{method} {path} -> {res.status_code}"
+            checked += 1
+    assert checked >= 6

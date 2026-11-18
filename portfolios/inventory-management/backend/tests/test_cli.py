@@ -101,3 +101,23 @@ def test_cli_seed_demo_adds_visitor_when_already_seeded(settings, db_session):
     assert cli.main(["seed-demo"], settings=settings) == 0
     db_session.expire_all()
     assert db_session.scalar(select(func.count(User.id))) == 2
+
+
+def test_cli_seed_demo_rejects_demo_visitor_with_other_role(settings, db_session):
+    from tests.factories import create_user
+
+    create_user(db_session, username="demo-visitor", role="staff")
+    assert cli.main(["seed-demo"], settings=settings) == 1
+    db_session.expire_all()
+    assert db_session.scalar(select(User.role).where(User.username == "demo-visitor")) == "staff"
+    assert db_session.scalar(select(func.count(Product.id))) == 0
+
+
+def test_cli_seed_demo_seeds_when_only_visitor_exists(settings, db_session):
+    from tests.factories import create_user
+
+    create_user(db_session, username="demo-visitor", role="visitor")
+    assert cli.main(["seed-demo"], settings=settings) == 0
+    db_session.expire_all()
+    assert db_session.scalar(select(User.id).where(User.username == "demo-admin")) is not None
+    assert db_session.scalar(select(func.count(Product.id))) > 0

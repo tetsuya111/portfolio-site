@@ -72,21 +72,31 @@ def _create_admin(db: Session, username: str, password: str) -> int:
     return 0
 
 
-def _add_missing_demo_visitor(db: Session) -> int:
-    """閲覧者の追加前に作成済みのデモ環境へ、閲覧者だけを足す（商品・入出庫は作らない）。"""
-    if db.scalar(select(User.id).where(User.username == DEMO_VISITOR)) is not None:
-        return 0
-    create_user(db, UserCreate(username=DEMO_VISITOR, password=DEMO_PASSWORD, role=ROLE_VISITOR))
+def _add_demo_visitor(db: Session) -> User:
+    user = create_user(
+        db, UserCreate(username=DEMO_VISITOR, password=DEMO_PASSWORD, role=ROLE_VISITOR)
+    )
     print(f"閲覧者 {DEMO_VISITOR} を追加しました。")
-    return 0
+    return user
 
 
 def _seed_demo(db: Session) -> int:
     """デモデータを作る。書き込む前にすべての前提を確認し、途中で失敗して半端に残らないようにする。"""
-    demo_names = [name for name, _ in DEMO_USERS]
-    if db.scalar(select(User.id).where(User.username.in_(demo_names))) is not None:
+    visitor = db.scalar(select(User).where(User.username == DEMO_VISITOR))
+    if visitor is not None and visitor.role != ROLE_VISITOR:
+        # 公開してよい閲覧者のつもりで、書き込みできるアカウントを共有させないため。
+        print(
+            f"ユーザー {DEMO_VISITOR} が閲覧者以外の権限で存在するため作成しません。",
+            file=sys.stderr,
+        )
+        return 1
+    editor_names = [name for name, role in DEMO_USERS if role != ROLE_VISITOR]
+    if db.scalar(select(User.id).where(User.username.in_(editor_names))) is not None:
         print("デモデータは作成済みです。")
-        return _add_missing_demo_visitor(db)
+        # 閲覧者の追加前に作成済みのデモ環境へ、閲覧者だけを足す（商品・入出庫は作らない）。
+        if visitor is None:
+            _add_demo_visitor(db)
+        return 0
     demo_skus = [sku for sku, *_ in DEMO_PRODUCTS]
     taken = db.scalars(select(Product.sku).where(Product.sku.in_(demo_skus))).all()
     if taken:
@@ -96,10 +106,14 @@ def _seed_demo(db: Session) -> int:
             file=sys.stderr,
         )
         return 1
+    # 閲覧者は入出庫できないため、入出庫記録の担当者（users）に含めない。
     users = [
         create_user(db, UserCreate(username=name, password=DEMO_PASSWORD, role=role))
         for name, role in DEMO_USERS
+        if role != ROLE_VISITOR
     ]
+    if visitor is None:
+        _add_demo_visitor(db)
     products: dict[str, Product] = {}
     for sku, name, category, unit, price, reorder in DEMO_PRODUCTS:
         product = Product(
@@ -113,12 +127,10 @@ def _seed_demo(db: Session) -> int:
         db.add(product)
         products[sku] = product
     db.commit()
-    # 閲覧者は入出庫できないため、記録の担当者にしない。
-    editors = [user for user in users if user.role != ROLE_VISITOR]
     for i, (sku, kind, qty) in enumerate(DEMO_MOVEMENTS):
         record_movement(
             db,
-            user=editors[i % len(editors)],
+            user=users[i % len(users)],
             product_id=products[sku].id,
             movement_type=kind,
             quantity=qty,
