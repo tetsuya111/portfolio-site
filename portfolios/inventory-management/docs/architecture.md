@@ -32,7 +32,7 @@ erDiagram
     int id PK
     string username UK "3〜50文字"
     string password_hash "bcrypt"
-    string role "admin / staff"
+    string role "admin / staff / visitor"
     bool is_active
     datetime created_at
   }

@@ -4,7 +4,7 @@
 
 - **フロントエンド**: Next.js 16（App Router・静的出力）/ React 19 / TypeScript
 - **バックエンド**: FastAPI / SQLAlchemy 2.0 / Alembic / Pydantic v2 / SQLite
-- **認証**: JWT（HS256 のアクセストークン、Bearer）。権限は管理者（admin）と一般（staff）の2区分
+- **認証**: JWT（HS256 のアクセストークン、Bearer）。権限は管理者（admin）・一般（staff）・閲覧者（visitor。参照のみ）の3区分
 - **テスト**: pytest（API の結合テスト・並行出庫のテスト）/ Vitest + Testing Library
 
 ## 主な機能
@@ -66,7 +66,7 @@ npm --prefix frontend install
 node scripts/run-backend.mjs -m app.cli seed-demo
 ```
 
-デモ用のアカウントは `demo-admin`（管理者）・`demo-staff`（一般）で、パスワードはどちらも `demo-password` です。本番環境（`APP_ENV` が `development`・`test` 以外）では、`--allow-production` を付けない限り作成しません。**公開デモとして作る場合は、管理者の権限が誰にでも使える点に注意してください。**
+デモ用のアカウントは `demo-admin`（管理者）・`demo-staff`（一般）・`demo-visitor`（閲覧者）で、パスワードはすべて `demo-password` です。閲覧者の追加前にデモデータを作成済みの環境でも、`seed-demo` を再実行すると `demo-visitor` だけが追加されます。本番環境（`APP_ENV` が `development`・`test` 以外）では、`--allow-production` を付けない限り作成しません。**公開デモとして作る場合は、管理者の権限が誰にでも使える点に注意してください。閲覧者（`demo-visitor`）だけを共有すると、データを変更されずに公開できます（管理者・一般のパスワードは変更してください）。**
 
 ## 起動
 
@@ -118,12 +118,12 @@ npm run build     # frontend を静的出力（frontend/out/）
 | `GET /users/me` | ログイン | ログインユーザー情報 |
 | `GET /users` | 管理者 | ユーザー一覧 |
 | `GET /products?q=&include_deleted=` | ログイン | 商品一覧（検索。`include_deleted=true` で削除済みも） |
-| `POST /products` | ログイン | 商品登録 |
+| `POST /products` | 管理者・一般 | 商品登録 |
 | `GET /products/{id}` | ログイン | 商品詳細 |
-| `PUT /products/{id}` | ログイン | 商品更新（在庫数は変えない） |
+| `PUT /products/{id}` | 管理者・一般 | 商品更新（在庫数は変えない） |
 | `DELETE /products/{id}` | 管理者 | 商品削除（論理削除） |
-| `POST /inventory/in` | ログイン | 入庫の記録 |
-| `POST /inventory/out` | ログイン | 出庫の記録（在庫不足は 409） |
+| `POST /inventory/in` | 管理者・一般 | 入庫の記録 |
+| `POST /inventory/out` | 管理者・一般 | 出庫の記録（在庫不足は 409） |
 | `GET /inventory/history` | ログイン | 入出庫履歴（`product_id`・`type`・`date_from`・`date_to`・`utc_offset_minutes`・`limit`・`offset`） |
 | `GET /inventory/summary` | ログイン | 在庫数の集計 |
 
