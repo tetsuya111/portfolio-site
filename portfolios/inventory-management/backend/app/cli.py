@@ -16,14 +16,15 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.db import make_engine, make_session_factory
-from app.models import MOVEMENT_IN, MOVEMENT_OUT, Product, User
+from app.models import MOVEMENT_IN, MOVEMENT_OUT, ROLE_VISITOR, Product, User
 from app.schemas import UserCreate
 from app.services.inventory import record_movement
 from app.services.users import UsernameTaken, create_user
 
 ADMIN_PASSWORD_ENV = "INVENTORY_ADMIN_PASSWORD"  # noqa: S105  (環境変数名)
 DEMO_PASSWORD = "demo-password"  # noqa: S105  (公開デモ用。README に記載)
-DEMO_USERS = [("demo-admin", "admin"), ("demo-staff", "staff")]
+DEMO_VISITOR = "demo-visitor"
+DEMO_USERS = [("demo-admin", "admin"), ("demo-staff", "staff"), (DEMO_VISITOR, ROLE_VISITOR)]
 DEMO_PRODUCTS = [
     # sku, name, category, unit, unit_price, reorder_point
     ("ST-001", "ボールペン（黒）", "文具", "本", 120, 50),
@@ -71,12 +72,21 @@ def _create_admin(db: Session, username: str, password: str) -> int:
     return 0
 
 
+def _add_missing_demo_visitor(db: Session) -> int:
+    """閲覧者の追加前に作成済みのデモ環境へ、閲覧者だけを足す（商品・入出庫は作らない）。"""
+    if db.scalar(select(User.id).where(User.username == DEMO_VISITOR)) is not None:
+        return 0
+    create_user(db, UserCreate(username=DEMO_VISITOR, password=DEMO_PASSWORD, role=ROLE_VISITOR))
+    print(f"閲覧者 {DEMO_VISITOR} を追加しました。")
+    return 0
+
+
 def _seed_demo(db: Session) -> int:
     """デモデータを作る。書き込む前にすべての前提を確認し、途中で失敗して半端に残らないようにする。"""
     demo_names = [name for name, _ in DEMO_USERS]
     if db.scalar(select(User.id).where(User.username.in_(demo_names))) is not None:
         print("デモデータは作成済みです。")
-        return 0
+        return _add_missing_demo_visitor(db)
     demo_skus = [sku for sku, *_ in DEMO_PRODUCTS]
     taken = db.scalars(select(Product.sku).where(Product.sku.in_(demo_skus))).all()
     if taken:
@@ -103,10 +113,12 @@ def _seed_demo(db: Session) -> int:
         db.add(product)
         products[sku] = product
     db.commit()
+    # 閲覧者は入出庫できないため、記録の担当者にしない。
+    editors = [user for user in users if user.role != ROLE_VISITOR]
     for i, (sku, kind, qty) in enumerate(DEMO_MOVEMENTS):
         record_movement(
             db,
-            user=users[i % len(users)],
+            user=editors[i % len(editors)],
             product_id=products[sku].id,
             movement_type=kind,
             quantity=qty,
