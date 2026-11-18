@@ -1,5 +1,6 @@
 ---
 title: "在庫管理システム（Next.js + FastAPI）"
+description: "在庫管理システムのデモを操作できます。(ユーザー名 : visitor , パスワード : 12345678)"
 tags:
   - "React"
   - "Next.js"

@@ -1,6 +1,7 @@
 """運用コマンド。
 
 python -m app.cli create-admin --username admin --password <8文字以上>
+python -m app.cli create-visitor --username visitor --password <8文字以上>
 python -m app.cli seed-demo   # デモ用のユーザー・商品・入出庫（既にあれば何もしない）
 """
 
@@ -16,14 +17,16 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.db import make_engine, make_session_factory
-from app.models import MOVEMENT_IN, MOVEMENT_OUT, Product, User
+from app.models import MOVEMENT_IN, MOVEMENT_OUT, ROLE_VISITOR, Product, User
 from app.schemas import UserCreate
 from app.services.inventory import record_movement
 from app.services.users import UsernameTaken, create_user
 
 ADMIN_PASSWORD_ENV = "INVENTORY_ADMIN_PASSWORD"  # noqa: S105  (環境変数名)
+VISITOR_PASSWORD_ENV = "INVENTORY_VISITOR_PASSWORD"  # noqa: S105  (環境変数名)
 DEMO_PASSWORD = "demo-password"  # noqa: S105  (公開デモ用。README に記載)
-DEMO_USERS = [("demo-admin", "admin"), ("demo-staff", "staff")]
+DEMO_VISITOR = "demo-visitor"  # 閲覧者。入出庫できないため DEMO_USERS とは分ける
+DEMO_USERS = [("demo-admin", "admin"), ("demo-staff", "staff")]  # 入出庫記録の担当者にもなる
 DEMO_PRODUCTS = [
     # sku, name, category, unit, unit_price, reorder_point
     ("ST-001", "ボールペン（黒）", "文具", "本", 120, 50),
@@ -49,33 +52,52 @@ DEMO_MOVEMENTS = [
 ]
 
 
-def _admin_password(cli_value: str | None) -> str:
+def _password(cli_value: str | None, env_name: str, label: str) -> str:
     if cli_value:
         return cli_value
-    from_env = os.environ.get(ADMIN_PASSWORD_ENV)
+    from_env = os.environ.get(env_name)
     if from_env:
         return from_env
-    return getpass.getpass("管理者のパスワード（8文字以上）: ")
+    return getpass.getpass(f"{label}のパスワード（8文字以上）: ")
 
 
-def _create_admin(db: Session, username: str, password: str) -> int:
+def _create_user(db: Session, username: str, password: str, role: str, label: str) -> int:
     try:
-        create_user(db, UserCreate(username=username, password=password, role="admin"))
+        create_user(db, UserCreate(username=username, password=password, role=role))
     except ValidationError as exc:
         print(f"入力が不正です: {exc.errors()[0]['msg']}", file=sys.stderr)
         return 1
     except UsernameTaken:
         print(f"ユーザー {username} は既に存在します。", file=sys.stderr)
         return 1
-    print(f"管理者 {username} を作成しました。")
+    print(f"{label} {username} を作成しました。")
     return 0
+
+
+def _add_demo_visitor(db: Session) -> User:
+    user = create_user(
+        db, UserCreate(username=DEMO_VISITOR, password=DEMO_PASSWORD, role=ROLE_VISITOR)
+    )
+    print(f"閲覧者 {DEMO_VISITOR} を追加しました。")
+    return user
 
 
 def _seed_demo(db: Session) -> int:
     """デモデータを作る。書き込む前にすべての前提を確認し、途中で失敗して半端に残らないようにする。"""
+    visitor = db.scalar(select(User).where(User.username == DEMO_VISITOR))
+    if visitor is not None and visitor.role != ROLE_VISITOR:
+        # 公開してよい閲覧者のつもりで、書き込みできるアカウントを共有させないため。
+        print(
+            f"ユーザー {DEMO_VISITOR} が閲覧者以外の権限で存在するため作成しません。",
+            file=sys.stderr,
+        )
+        return 1
     demo_names = [name for name, _ in DEMO_USERS]
     if db.scalar(select(User.id).where(User.username.in_(demo_names))) is not None:
         print("デモデータは作成済みです。")
+        # 閲覧者の追加前に作成済みのデモ環境へ、閲覧者だけを足す（商品・入出庫は作らない）。
+        if visitor is None:
+            _add_demo_visitor(db)
         return 0
     demo_skus = [sku for sku, *_ in DEMO_PRODUCTS]
     taken = db.scalars(select(Product.sku).where(Product.sku.in_(demo_skus))).all()
@@ -90,6 +112,8 @@ def _seed_demo(db: Session) -> int:
         create_user(db, UserCreate(username=name, password=DEMO_PASSWORD, role=role))
         for name, role in DEMO_USERS
     ]
+    if visitor is None:
+        _add_demo_visitor(db)
     products: dict[str, Product] = {}
     for sku, name, category, unit, price, reorder in DEMO_PRODUCTS:
         product = Product(
@@ -130,6 +154,15 @@ def main(argv: Sequence[str] | None = None, settings: Settings | None = None) ->
             f"省略時は環境変数 {ADMIN_PASSWORD_ENV}、なければ入力を求める"
         ),
     )
+    visitor = sub.add_parser("create-visitor", help="閲覧者（読み取り専用）ユーザーを作成する")
+    visitor.add_argument("--username", required=True)
+    visitor.add_argument(
+        "--password",
+        help=(
+            "非推奨（シェルの履歴に残る）。"
+            f"省略時は環境変数 {VISITOR_PASSWORD_ENV}、なければ入力を求める"
+        ),
+    )
     seed = sub.add_parser("seed-demo", help="デモ用のユーザー・商品・入出庫を作成する")
     seed.add_argument(
         "--allow-production",
@@ -150,7 +183,11 @@ def main(argv: Sequence[str] | None = None, settings: Settings | None = None) ->
     try:
         with make_session_factory(engine)() as db:
             if args.command == "create-admin":
-                return _create_admin(db, args.username, _admin_password(args.password))
+                password = _password(args.password, ADMIN_PASSWORD_ENV, "管理者")
+                return _create_user(db, args.username, password, "admin", "管理者")
+            if args.command == "create-visitor":
+                password = _password(args.password, VISITOR_PASSWORD_ENV, "閲覧者")
+                return _create_user(db, args.username, password, ROLE_VISITOR, "閲覧者")
             return _seed_demo(db)
     finally:
         engine.dispose()
