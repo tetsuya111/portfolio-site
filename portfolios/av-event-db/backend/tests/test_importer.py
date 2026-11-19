@@ -204,6 +204,18 @@ def test_run_source_respects_limit():
     assert len(fetcher.calls) == 2
 
 
+def test_limit_does_not_count_already_fetched_pages():
+    fetcher = FakeFetcher(
+        {
+            "https://a.example.com/list/": '<a class="e" href="/1">1</a><a class="e" href="/2">2</a>',
+            "https://a.example.com/1": "skip",
+            "https://a.example.com/2": detail("イベント2"),
+        }
+    )
+    stats = run_source(DETAIL_SOURCE, fetcher, importer(), limit=1)
+    assert (stats.created, stats.skipped) == (1, 1)
+
+
 def test_run_source_list_mode():
     source = parse_source(
         {
@@ -285,3 +297,14 @@ def test_seed_demo_is_idempotent():
     assert Event.objects.count() == count
     assert Event.objects.filter(venue__latitude__isnull=False).exists()
     assert not FetchedPage.objects.exists()
+
+
+def test_seed_demo_keeps_events_with_crawled_sources():
+    call_command("seed_demo", stdout=StringIO())
+    demo = Event.objects.first()
+    EventSource.objects.create(
+        event=demo, source_name="site-a", source_url="https://a.example.com/x"
+    )
+    call_command("seed_demo", stdout=StringIO())
+    assert Event.objects.filter(id=demo.id).exists()
+    assert EventSource.objects.filter(source_url="https://a.example.com/x").exists()

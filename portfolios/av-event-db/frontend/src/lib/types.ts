@@ -27,7 +27,13 @@ export type EventDetail = Omit<EventListItem, "venue"> & {
   sources: EventSource[];
 };
 
-export type Page<T> = { count: number; next: string | null; previous: string | null; results: T[] };
+export type Page<T> = {
+  count: number;
+  total_pages: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+};
 
 export type MapEvent = Pick<EventListItem, "id" | "title" | "start_date" | "end_date" | "start_time">;
 

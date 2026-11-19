@@ -11,6 +11,8 @@ _DATE_RE = re.compile(
     r"(?<!\d)(?:(?P<y>\d{4})\s*[年/.\-]\s*(?P<m>\d{1,2})\s*[月/.\-]\s*(?P<d>\d{1,2})"
     r"|(?P<m2>\d{1,2})(?:月|/)(?P<d2>\d{1,2}))(?!\d)"
 )
+# 1つ目と2つ目の日付の間がこれに一致するときだけ範囲（開始〜終了）とみなす
+_RANGE_GAP_RE = re.compile(r"^日?\s*(?:\([^)]*\))?\s*(?:\d{1,2}:\d{2})?\s*[〜~\-–―ー]\s*$")
 _TIME_RE = re.compile(r"(?<!\d)([01]?\d|2[0-3]):([0-5]\d)(?!\d)")
 # 年のない日付が取得日よりこれ以上前なら翌年のこととみなす
 _ROLLOVER_DAYS = 60
@@ -29,6 +31,8 @@ def parse_event_dates(text: str, today: dt.date) -> EventDates | None:
     matches = list(_DATE_RE.finditer(text))[:2]
     if not matches:
         return None
+    if len(matches) == 2 and not _RANGE_GAP_RE.match(text[matches[0].end() : matches[1].start()]):
+        matches = matches[:1]
     try:
         start = _to_date(matches[0], ref_year=None, today=today)
         end = start

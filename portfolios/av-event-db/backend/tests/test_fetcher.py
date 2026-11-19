@@ -5,6 +5,7 @@ from events.crawler.fetcher import FetchStatus, PageFetcher
 from events.models import FetchedPage
 
 pytestmark = pytest.mark.django_db
+ROBOTS_PATHS = ("/robots.txt", "/real-robots.txt")
 
 
 class FakeClock:
@@ -20,12 +21,14 @@ class FakeClock:
         self.now += seconds
 
 
-def make_fetcher(handler, robots="", clock=None):
+def make_fetcher(handler, robots="", clock=None, robots_handler=None):
     requests: list[httpx.Request] = []
 
     def wrapped(request: httpx.Request) -> httpx.Response:
         requests.append(request)
-        if request.url.path == "/robots.txt":
+        if request.url.path in ROBOTS_PATHS:
+            if robots_handler:
+                return robots_handler(request)
             return httpx.Response(200, text=robots) if robots else httpx.Response(404)
         return handler(request)
 
@@ -40,7 +43,7 @@ def ok(request):
 
 
 def page_requests(requests):
-    return [r for r in requests if r.url.path != "/robots.txt"]
+    return [r for r in requests if r.url.path not in ROBOTS_PATHS]
 
 
 def test_fetch_records_page():
@@ -199,3 +202,35 @@ def test_too_many_redirects_fail():
     fetcher, _ = make_fetcher(lambda r: httpx.Response(302, headers={"location": "/loop"}))
     res = fetcher.fetch("https://a.example.com/loop", "site", "detail")
     assert res.status is FetchStatus.FAILED
+
+
+def test_robots_redirect_is_followed():
+    def robots(request):
+        if request.url.path == "/robots.txt":
+            return httpx.Response(301, headers={"location": "/real-robots.txt"})
+        return httpx.Response(200, text="User-agent: *\nDisallow: /private/\n")
+
+    fetcher, requests = make_fetcher(ok, robots_handler=robots)
+    res = fetcher.fetch("https://a.example.com/private/1", "s", "detail")
+    assert res.status is FetchStatus.DISALLOWED
+    assert page_requests(requests) == []
+
+
+def test_robots_server_error_disallows_all():
+    fetcher, requests = make_fetcher(ok, robots_handler=lambda r: httpx.Response(503))
+    assert fetcher.fetch("https://a.example.com/1", "s", "list").status is FetchStatus.DISALLOWED
+    assert page_requests(requests) == []
+
+
+def test_cookie_is_not_sent_after_downgrade_to_http():
+    seen = []
+
+    def handler(request):
+        seen.append((request.url.scheme, request.headers.get("cookie")))
+        if request.url.scheme == "https":
+            return httpx.Response(302, headers={"location": "http://a.example.com/x"})
+        return ok(request)
+
+    fetcher, _ = make_fetcher(handler)
+    fetcher.fetch("https://a.example.com/x", "s", "list", cookies={"age": "1"})
+    assert seen == [("https", "age=1"), ("http", None)]

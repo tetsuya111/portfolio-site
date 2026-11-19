@@ -59,3 +59,13 @@ def test_leap_day_end_without_year():
 def test_leap_day_start_without_year():
     r = parse_event_dates("2/29", today=dt.date(2027, 11, 1))
     assert r.start_date == dt.date(2028, 2, 29)
+
+
+def test_second_date_without_range_separator_is_not_end_date():
+    r = parse_event_dates("11/23(土) ※予約受付は11/10から", today=TODAY)
+    assert (r.start_date, r.end_date) == (dt.date(2026, 11, 23), dt.date(2026, 11, 23))
+
+
+def test_range_with_weekday_and_time():
+    r = parse_event_dates("12/30(水) 13:00〜1/2(土)", today=TODAY)
+    assert r.end_date == dt.date(2027, 1, 2)

@@ -57,6 +57,11 @@ def _overlapping(qs: QuerySet[Event], start: dt.date | None, end: dt.date | None
 class EventPagination(PageNumberPagination):
     page_size = 20
 
+    def get_paginated_response(self, data):
+        response = super().get_paginated_response(data)
+        response.data["total_pages"] = self.page.paginator.num_pages
+        return response
+
 
 class EventViewSet(viewsets.ReadOnlyModelViewSet):
     pagination_class = EventPagination

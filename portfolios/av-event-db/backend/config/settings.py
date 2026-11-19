@@ -7,7 +7,8 @@ from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-APP_ENV = os.environ.get("APP_ENV", "development")
+# 未設定時は本番扱い（DEBUG 無効・SECRET_KEY 必須）。ローカル開発は scripts/run-backend.mjs が補う
+APP_ENV = os.environ.get("APP_ENV", "production")
 _DEV_ENVS = {"development", "test"}
 
 # 開発・テスト専用の固定鍵。本番（APP_ENV が development・test 以外）では使わない。

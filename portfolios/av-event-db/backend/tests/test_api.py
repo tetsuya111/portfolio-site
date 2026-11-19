@@ -118,6 +118,7 @@ def test_pagination(client):
     )
     body = client.get("/api/events/").json()
     assert body["count"] == 25
+    assert body["total_pages"] == 2
     assert len(body["results"]) == 20
     assert len(client.get("/api/events/", {"page": 2}).json()["results"]) == 5
 

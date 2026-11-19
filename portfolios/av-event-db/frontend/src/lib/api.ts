@@ -5,8 +5,6 @@ export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localho
   "",
 );
 
-export const PAGE_SIZE = 20;
-
 export class ApiError extends Error {
   constructor(
     message: string,

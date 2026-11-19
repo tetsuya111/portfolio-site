@@ -25,6 +25,17 @@ MAX_REDIRECTS = 5
 _META_CHARSET = re.compile(rb"""<meta[^>]+charset=["']?([\w-]+)""", re.IGNORECASE)
 
 
+def _origin(url: str) -> str:
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}"
+
+
+def _disallow_all() -> RobotFileParser:
+    parser = RobotFileParser()
+    parser.parse(["User-agent: *", "Disallow: /"])
+    return parser
+
+
 class _RedirectDisallowedError(Exception):
     """リダイレクト先が robots.txt で禁止されている。"""
 
@@ -125,13 +136,14 @@ class PageFetcher:
     def _get(self, url: str, cookies: dict[str, str] | None) -> httpx.Response:
         """リダイレクトを1回ずつ辿り、各リダイレクト先も robots.txt で確認する（REQ-1.6）。
 
-        Cookie は元のURLと同じホストにだけ送る（別ホストへのリダイレクトで漏らさない）。
+        Cookie は元のURLと同じオリジン（スキーム＋ホスト）にだけ送る。
         """
-        origin_host = urlsplit(url).netloc
+        origin = _origin(url)
         current = url
         for _ in range(MAX_REDIRECTS + 1):
-            same_host = urlsplit(current).netloc == origin_host
-            response = self._request(current, cookies if same_host else None)
+            # https→http の格下げや別ホストへは Cookie を送らない
+            same_origin = _origin(current) == origin
+            response = self._request(current, cookies if same_origin else None)
             if not response.is_redirect:
                 return response
             location = response.headers.get("location", "")
@@ -161,21 +173,36 @@ class PageFetcher:
             self._last_request[host] = self._clock()
 
     def _allowed(self, url: str) -> bool:
-        parts = urlsplit(url)
-        origin = f"{parts.scheme}://{parts.netloc}"
+        origin = _origin(url)
         if origin not in self._robots:
             self._robots[origin] = self._load_robots(origin)
         parser = self._robots[origin]
         return parser is None or parser.can_fetch(USER_AGENT, url)
 
     def _load_robots(self, origin: str) -> RobotFileParser | None:
-        """robots.txt を読む。取得できなければ制限なし（None）とみなす。"""
+        """robots.txt を読む（RFC 9309 に沿う）。
+
+        - リダイレクトは最大5回辿る
+        - 4xx（存在しない）は制限なし（None）
+        - 5xx・通信エラーは一時的に読めないため、すべて禁止とみなす
+        """
+        url = f"{origin}/robots.txt"
         try:
-            response = self._request(f"{origin}/robots.txt", None)
+            for _ in range(MAX_REDIRECTS + 1):
+                response = self._request(url, None)
+                if not response.is_redirect:
+                    break
+                url = urljoin(url, response.headers.get("location", ""))
+                if urlsplit(url).scheme not in ("http", "https"):
+                    return _disallow_all()
+            else:
+                return _disallow_all()
         except httpx.HTTPError:
+            return _disallow_all()
+        if 400 <= response.status_code < 500:
             return None
         if response.status_code != 200:
-            return None
+            return _disallow_all()
         parser = RobotFileParser()
         parser.parse(_decode(response).splitlines())
         return parser

@@ -72,7 +72,7 @@ npm run fetch:events -- --source pls1 --limit 10   # サイトごとの処理件
 
 | 変数 | 用途 | 既定値 |
 |---|---|---|
-| `APP_ENV` | `development`（DEBUG 有効）・`test`・それ以外は本番扱い | `development` |
+| `APP_ENV` | `development`（DEBUG 有効）・`test`・それ以外は本番扱い（DEBUG 無効・`DJANGO_SECRET_KEY` 必須） | 本番扱い（`npm run` 経由のときは `development`） |
 | `DJANGO_SECRET_KEY` | 本番では必須 | 開発用の固定値 |
 | `ALLOWED_HOSTS` | カンマ区切り | `localhost,127.0.0.1` |
 | `CORS_ORIGINS` | フロントエンドのオリジン（カンマ区切り） | `http://localhost:3000` |

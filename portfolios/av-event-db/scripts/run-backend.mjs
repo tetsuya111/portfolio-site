@@ -19,5 +19,8 @@ if (!python) {
   process.exit(1);
 }
 
-const result = spawnSync(python, process.argv.slice(2), { cwd: backendDir, stdio: "inherit" });
+// npm スクリプトはローカル開発用のため、APP_ENV が未設定なら development にする
+// （Django 側の既定は本番扱い。本番では APP_ENV と DJANGO_SECRET_KEY を明示する）
+const env = { ...process.env, APP_ENV: process.env.APP_ENV || "development" };
+const result = spawnSync(python, process.argv.slice(2), { cwd: backendDir, stdio: "inherit", env });
 process.exit(result.status ?? 1);

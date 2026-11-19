@@ -74,3 +74,19 @@ class TestFindDuplicate:
     def test_same_part_number_is_duplicate(self):
         e = self._event("トークライブ 第1部")
         assert find_duplicate("【トークライブ】第1部", dt.date(2026, 12, 1), None) == e
+
+    def test_kanji_part_numbers_are_distinguished(self):
+        self._event("トークライブ 第一部")
+        assert find_duplicate("トークライブ 第二部", dt.date(2026, 12, 1), None) is None
+
+    def test_different_start_time_is_not_duplicate(self):
+        Event.objects.create(
+            title="サイン会", start_date=dt.date(2026, 12, 1), start_time=dt.time(13)
+        )
+        assert find_duplicate("サイン会", dt.date(2026, 12, 1), None, dt.time(18)) is None
+
+    def test_missing_start_time_does_not_block_merge(self):
+        e = Event.objects.create(
+            title="サイン会", start_date=dt.date(2026, 12, 1), start_time=dt.time(13)
+        )
+        assert find_duplicate("サイン会", dt.date(2026, 12, 1), None, None) == e

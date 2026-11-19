@@ -8,7 +8,8 @@ import { EventDetail } from "./EventDetail";
 import { EventSearch } from "./EventSearch";
 
 function page(results: object[], count = results.length, next: string | null = null) {
-  return new Response(JSON.stringify({ count, next, previous: null, results }));
+  const total_pages = Math.max(1, Math.ceil(count / 20));
+  return new Response(JSON.stringify({ count, total_pages, next, previous: null, results }));
 }
 
 const item = {

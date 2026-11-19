@@ -40,7 +40,11 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options) -> None:
-        Event.objects.filter(sources__source_name=DEMO_SOURCE).delete()
+        # デモの取得元だけを持つイベントを消す。取り込んだ取得元が統合されたイベントは残し、
+        # デモの取得元だけを外す
+        crawled = EventSource.objects.exclude(source_name=DEMO_SOURCE).values("event_id")
+        Event.objects.filter(sources__source_name=DEMO_SOURCE).exclude(id__in=crawled).delete()
+        EventSource.objects.filter(source_name=DEMO_SOURCE).delete()
         venues = []
         for name, address, pref, lat, lng in VENUES:
             venue, _ = Venue.objects.update_or_create(

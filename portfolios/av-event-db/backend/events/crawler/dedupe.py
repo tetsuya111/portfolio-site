@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 # 正規化後のタイトルの類似度がこの値以上なら同一イベントとみなす（design.md 参照）
 SIMILARITY_THRESHOLD = 0.8
 # 「第1部」「2部」のような部番号。番号が違えば類似度にかかわらず別イベントとする
-_PART_RE = re.compile(r"(\d+)部")
+_PART_RE = re.compile(r"([0-9一二三四五六七八九十]+)部")
 
 
 def levenshtein(a: str, b: str) -> int:
@@ -49,8 +49,16 @@ def part_numbers(normalized_title: str) -> set[str]:
     return set(_PART_RE.findall(normalized_title))
 
 
-def find_duplicate(title: str, start_date: dt.date, source_url: str | None) -> Event | None:
-    """取り込むイベントと同一とみなせる既存イベントを返す。"""
+def find_duplicate(
+    title: str,
+    start_date: dt.date,
+    source_url: str | None,
+    start_time: dt.time | None = None,
+) -> Event | None:
+    """取り込むイベントと同一とみなせる既存イベントを返す。
+
+    部番号や開始時刻が両方にあって異なる場合は、同じ日の別の回とみなして候補から外す。
+    """
     from events.models import Event, EventSource
 
     if source_url:
@@ -64,6 +72,8 @@ def find_duplicate(title: str, start_date: dt.date, source_url: str | None) -> E
     for event in Event.objects.filter(start_date=start_date).order_by("id"):
         parts = part_numbers(event.normalized_title)
         if target_parts and parts and target_parts != parts:
+            continue
+        if start_time and event.start_time and start_time != event.start_time:
             continue
         score = similarity(target, event.normalized_title)
         if score >= SIMILARITY_THRESHOLD and (best is None or score > best[0]):

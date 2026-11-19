@@ -51,7 +51,7 @@ class EventImporter:
         dates = parse_event_dates(raw.date_text, today=self._today)
         if dates is None or not raw.source_url or len(raw.source_url) > MAX_URL_LENGTH:
             return "skipped"
-        existing = find_duplicate(raw.title, dates.start_date, raw.source_url)
+        existing = find_duplicate(raw.title, dates.start_date, raw.source_url, dates.start_time)
         # AI・ジオコーディングの通信はトランザクションの外で行い、DB のロックを長く持たない
         venue = None
         if raw.venue_text and (existing is None or existing.venue_id is None):
@@ -145,11 +145,12 @@ def run_source(
             seen.add(link)
             if limit is not None and processed >= limit:
                 return stats
-            processed += 1
             res = fetcher.fetch(link, source.name, "detail", source.cookies or None)
             if res.status is FetchStatus.SKIPPED:
+                # 取得済みのページは通信しないため --limit の件数に数えない
                 stats.skipped += 1
                 continue
+            processed += 1
             if res.status is not FetchStatus.FETCHED:
                 stats.failed += 1
                 continue

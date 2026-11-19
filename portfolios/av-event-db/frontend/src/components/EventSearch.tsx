@@ -5,7 +5,6 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import {
   ApiError,
-  PAGE_SIZE,
   buildQuery,
   fetchEvents,
   parseQuery,
@@ -56,7 +55,7 @@ export function EventSearch({ query, onQueryChange }: Props) {
 
   const current = loaded?.key === key ? loaded : null;
   const page = query.page ?? 1;
-  const totalPages = current?.data ? Math.max(1, Math.ceil(current.data.count / PAGE_SIZE)) : 1;
+  const totalPages = current?.data?.total_pages ?? 1;
 
   return (
     <>
