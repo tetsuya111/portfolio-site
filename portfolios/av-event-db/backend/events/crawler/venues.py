@@ -154,6 +154,13 @@ class VenueResolver:
         # 座標のない会場のジオコーディングは1回の実行につき1度だけ試す（失敗は次回の実行で再試行）
         self._geocode_attempted: set[int] = set()
 
+    def known_venue_id(self, raw_text: str) -> int | None:
+        """過去に解決した表記なら会場IDを返す（AI は呼ばない）。"""
+        text = preprocess(raw_text)[:300]
+        if not text:
+            return None
+        return VenueAlias.objects.filter(raw_text=text).values_list("venue_id", flat=True).first()
+
     def resolve(self, raw_text: str) -> Venue | None:
         text = preprocess(raw_text)[:300]
         if not text:

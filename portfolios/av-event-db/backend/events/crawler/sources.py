@@ -58,6 +58,8 @@ def parse_source(raw: dict[str, Any]) -> SourceConfig:
     if mode not in ("detail", "list"):
         raise SourceConfigError(f"{name}: mode は detail か list です。")
     raw_fields = raw.get("fields") or {}
+    if not isinstance(raw_fields, dict):
+        raise SourceConfigError(f"{name}: fields はオブジェクトで指定してください。")
     unknown = set(raw_fields) - set(FIELD_NAMES)
     if unknown:
         raise SourceConfigError(f"{name}: 未知のフィールド {sorted(unknown)}")
@@ -72,6 +74,8 @@ def parse_source(raw: dict[str, Any]) -> SourceConfig:
     if mode == "list" and not item_sel:
         raise SourceConfigError(f"{name}: list モードでは item_selector が必須です。")
     cookies = raw.get("cookies") or {}
+    if not isinstance(cookies, dict):
+        raise SourceConfigError(f"{name}: cookies はオブジェクトで指定してください。")
     if not all(isinstance(k, str) and isinstance(v, str) for k, v in cookies.items()):
         raise SourceConfigError(f"{name}: cookies は文字列の対応で指定してください。")
     return SourceConfig(

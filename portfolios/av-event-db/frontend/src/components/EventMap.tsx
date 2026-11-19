@@ -67,7 +67,8 @@ export function EventMap({ apiKey, today = new Date(), loadMaps = loadGoogleMaps
 
   useEffect(() => {
     let cancelled = false;
-    fetchMapVenues(period.from, period.to)
+    const [from, to] = key.split("|");
+    fetchMapVenues(from, to)
       .then((venues) => !cancelled && setLoaded({ key, venues }))
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -76,7 +77,7 @@ export function EventMap({ apiKey, today = new Date(), loadMaps = loadGoogleMaps
     return () => {
       cancelled = true;
     };
-  }, [key, period]);
+  }, [key]);
 
   const current = loaded?.key === key ? loaded : null;
   const venues = current?.venues;
@@ -109,7 +110,8 @@ export function EventMap({ apiKey, today = new Date(), loadMaps = loadGoogleMaps
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSelectedId(null);
-    setPeriod(form);
+    // 同じ期間なら取り直さない
+    if (form.from !== period.from || form.to !== period.to) setPeriod(form);
   }
 
   const showMap = Boolean(apiKey) && !mapError;

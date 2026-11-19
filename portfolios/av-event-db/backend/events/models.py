@@ -103,6 +103,7 @@ class FetchedPage(models.Model):
         SUCCESS = "success", "成功"
         FAILED = "failed", "失敗"
         DISALLOWED = "disallowed", "robots.txt で禁止"
+        UNPARSED = "unparsed", "解析できず"
 
     url = models.URLField(max_length=500, unique=True)
     source_name = models.CharField(max_length=50)

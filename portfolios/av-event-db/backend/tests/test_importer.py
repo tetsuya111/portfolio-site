@@ -137,6 +137,7 @@ class FakeFetcher:
         self.pages = pages
         self.calls = []
         self.failed = []
+        self.unparsed = []
 
     def fetch(self, url, source_name, kind, cookies=None):
         self.calls.append((url, kind, cookies))
@@ -149,6 +150,9 @@ class FakeFetcher:
 
     def mark_failed(self, url, error):
         self.failed.append(url)
+
+    def mark_unparsed(self, url, error):
+        self.unparsed.append(url)
 
     def close(self):
         pass
@@ -188,7 +192,24 @@ def test_run_source_detail_mode_continues_after_failures():
     stats = run_source(DETAIL_SOURCE, fetcher, importer())
     assert (stats.created, stats.merged, stats.skipped, stats.failed) == (1, 0, 1, 3)
     assert fetcher.calls[0] == ("https://a.example.com/list/", "list", {"age": "1"})
-    assert fetcher.failed == ["https://a.example.com/4", "https://a.example.com/5"]
+    assert fetcher.unparsed == ["https://a.example.com/4", "https://a.example.com/5"]
+    assert fetcher.failed == []
+
+
+def test_cookies_are_sent_only_to_list_origin():
+    fetcher = FakeFetcher(
+        {
+            "https://a.example.com/list/": (
+                '<a class="e" href="/1">1</a><a class="e" href="https://ad.example.net/2">2</a>'
+            ),
+            "https://a.example.com/1": detail("イベント1"),
+            "https://ad.example.net/2": detail("広告", date="2026/12/9"),
+        }
+    )
+    run_source(DETAIL_SOURCE, fetcher, importer())
+    cookies = {url: c for url, _, c in fetcher.calls}
+    assert cookies["https://a.example.com/1"] == {"age": "1"}
+    assert cookies["https://ad.example.net/2"] is None
 
 
 def test_run_source_respects_limit():
@@ -262,7 +283,7 @@ def command_env(tmp_path, monkeypatch, settings):
             "https://b.example.com/s": '<li><span class="t">B</span><span class="d">12/4</span></li>',
         }
     )
-    monkeypatch.setattr(fetch_events, "build_fetcher", lambda: fetcher)
+    monkeypatch.setattr(fetch_events, "build_fetcher", lambda **kwargs: fetcher)
     return path, fetcher
 
 

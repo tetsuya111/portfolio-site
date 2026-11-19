@@ -234,3 +234,24 @@ def test_cookie_is_not_sent_after_downgrade_to_http():
     fetcher, _ = make_fetcher(handler)
     fetcher.fetch("https://a.example.com/x", "s", "list", cookies={"age": "1"})
     assert seen == [("https", "age=1"), ("http", None)]
+
+
+def test_unparsed_page_is_not_refetched_by_default():
+    fetcher, requests = make_fetcher(ok)
+    fetcher.fetch("https://a.example.com/e/1", "s", "detail")
+    fetcher.mark_unparsed("https://a.example.com/e/1", "no date")
+    assert FetchedPage.objects.get().result == "unparsed"
+    assert fetcher.fetch("https://a.example.com/e/1", "s", "detail").status is FetchStatus.SKIPPED
+    assert len(page_requests(requests)) == 1
+
+
+def test_unparsed_page_is_refetched_with_retry_option():
+    FetchedPage.objects.create(
+        url="https://a.example.com/e/1", source_name="s", kind="detail", result="unparsed"
+    )
+    client = httpx.Client(transport=httpx.MockTransport(ok))
+    clock = FakeClock()
+    fetcher = PageFetcher(
+        client=client, min_interval=1.0, sleep=clock.sleep, clock=clock.time, retry_unparsed=True
+    )
+    assert fetcher.fetch("https://a.example.com/e/1", "s", "detail").status is FetchStatus.FETCHED

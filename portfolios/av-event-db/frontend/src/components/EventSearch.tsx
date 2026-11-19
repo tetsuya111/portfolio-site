@@ -20,7 +20,7 @@ type Props = {
   onQueryChange: (query: SearchQuery) => void;
 };
 
-type Loaded = { key: string; data?: Page<EventListItem>; error?: string };
+type Loaded = { attempt: number; data?: Page<EventListItem>; error?: string };
 
 /** イベントの検索フォームと結果一覧（REQ-5）。 */
 export function EventSearch({ query, onQueryChange }: Props) {
@@ -30,30 +30,33 @@ export function EventSearch({ query, onQueryChange }: Props) {
     to: query.to ?? "",
     prefecture: query.prefecture ?? "",
   });
+  // 同じ条件での再検索（エラー後の再試行など）は URL が変わらないため、試行回数で取り直す
+  const [attempt, setAttempt] = useState(0);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const key = buildQuery(query).toString();
 
   useEffect(() => {
     let cancelled = false;
     fetchEvents(parseQuery(new URLSearchParams(key)))
-      .then((data) => !cancelled && setLoaded({ key, data }))
+      .then((data) => !cancelled && setLoaded({ attempt, data }))
       .catch((e: unknown) => {
         if (cancelled) return;
-        setLoaded({ key, error: e instanceof ApiError ? e.message : "読み込みに失敗しました。" });
+        const error = e instanceof ApiError ? e.message : "読み込みに失敗しました。";
+        setLoaded({ attempt, error });
       });
     return () => {
       cancelled = true;
     };
-  }, [key]);
-
-  const apply = onQueryChange;
+  }, [key, attempt]);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    apply({ ...form, page: 1 });
+    const next = { ...form, page: 1 };
+    if (buildQuery(next).toString() === key) setAttempt((a) => a + 1);
+    else onQueryChange(next);
   }
 
-  const current = loaded?.key === key ? loaded : null;
+  const current = loaded?.attempt === attempt ? loaded : null;
   const page = query.page ?? 1;
   const totalPages = current?.data?.total_pages ?? 1;
 
@@ -107,6 +110,15 @@ export function EventSearch({ query, onQueryChange }: Props) {
       <section aria-live="polite" aria-busy={!current}>
         {!current && <p className="muted">読み込み中…</p>}
         {current?.error && <p className="alert">{current.error}</p>}
+        {current?.error && page > 1 && (
+          <button
+            type="button"
+            className="button secondary small"
+            onClick={() => onQueryChange({ ...query, page: 1 })}
+          >
+            1ページ目に戻る
+          </button>
+        )}
         {current?.data && current.data.results.length === 0 && (
           <p className="notice">条件に合うイベントはありません。</p>
         )}
@@ -137,7 +149,7 @@ export function EventSearch({ query, onQueryChange }: Props) {
                 type="button"
                 className="button secondary small"
                 disabled={page <= 1}
-                onClick={() => apply({ ...query, page: page - 1 })}
+                onClick={() => onQueryChange({ ...query, page: page - 1 })}
               >
                 前へ
               </button>
@@ -148,7 +160,7 @@ export function EventSearch({ query, onQueryChange }: Props) {
                 type="button"
                 className="button secondary small"
                 disabled={!current.data.next}
-                onClick={() => apply({ ...query, page: page + 1 })}
+                onClick={() => onQueryChange({ ...query, page: page + 1 })}
               >
                 次へ
               </button>

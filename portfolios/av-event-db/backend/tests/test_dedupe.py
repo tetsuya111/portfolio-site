@@ -90,3 +90,16 @@ class TestFindDuplicate:
             title="サイン会", start_date=dt.date(2026, 12, 1), start_time=dt.time(13)
         )
         assert find_duplicate("サイン会", dt.date(2026, 12, 1), None, None) == e
+
+    def test_different_known_venue_is_not_duplicate(self):
+        from events.models import Venue
+
+        a = Venue.objects.create(name="秋葉原店", address="")
+        b = Venue.objects.create(name="新宿店", address="")
+        Event.objects.create(
+            title="新作DVD発売記念サイン会 秋葉原店", start_date=dt.date(2026, 12, 1), venue=a
+        )
+        found = find_duplicate(
+            "新作DVD発売記念サイン会 新宿店", dt.date(2026, 12, 1), None, venue_id=b.id
+        )
+        assert found is None

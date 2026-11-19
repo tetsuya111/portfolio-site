@@ -14,7 +14,7 @@ from events.models import Actress, Event, EventSource, Venue
 
 from .dates import EventDates, parse_event_dates
 from .dedupe import find_duplicate
-from .fetcher import FetchResult, FetchStatus
+from .fetcher import FetchResult, FetchStatus, origin_of
 from .parser import MAX_URL_LENGTH, RawEvent, extract_detail_links, parse_detail, parse_list
 from .sources import SourceConfig
 from .venues import VenueResolver
@@ -29,6 +29,8 @@ class Fetcher(Protocol):
     ) -> FetchResult: ...
 
     def mark_failed(self, url: str, error: str) -> None: ...
+
+    def mark_unparsed(self, url: str, error: str) -> None: ...
 
 
 @dataclass
@@ -51,7 +53,13 @@ class EventImporter:
         dates = parse_event_dates(raw.date_text, today=self._today)
         if dates is None or not raw.source_url or len(raw.source_url) > MAX_URL_LENGTH:
             return "skipped"
-        existing = find_duplicate(raw.title, dates.start_date, raw.source_url, dates.start_time)
+        existing = find_duplicate(
+            raw.title,
+            dates.start_date,
+            raw.source_url,
+            dates.start_time,
+            venue_id=self._resolver.known_venue_id(raw.venue_text),
+        )
         # AI・ジオコーディングの通信はトランザクションの外で行い、DB のロックを長く持たない
         venue = None
         if raw.venue_text and (existing is None or existing.venue_id is None):
@@ -125,6 +133,8 @@ def run_source(
     """1サイト分を取り込む。ページ単位の失敗は記録して続ける（REQ-1.4）。"""
     stats = ImportStats()
     seen: set[str] = set()
+    # 設定の Cookie は一覧ページと同じオリジンにだけ送る（他サイトへのリンクに漏らさない）
+    list_origins = {origin_of(u) for u in source.list_urls}
     processed = 0
     for list_url in source.list_urls:
         page = fetcher.fetch(list_url, source.name, "list", source.cookies or None)
@@ -145,7 +155,8 @@ def run_source(
             seen.add(link)
             if limit is not None and processed >= limit:
                 return stats
-            res = fetcher.fetch(link, source.name, "detail", source.cookies or None)
+            cookies = source.cookies if origin_of(link) in list_origins else {}
+            res = fetcher.fetch(link, source.name, "detail", cookies or None)
             if res.status is FetchStatus.SKIPPED:
                 # 取得済みのページは通信しないため --limit の件数に数えない
                 stats.skipped += 1
@@ -156,13 +167,13 @@ def run_source(
                 continue
             raw = parse_detail(res.body, link, source)
             if raw is None:
-                fetcher.mark_failed(link, "イベント名を抽出できませんでした")
+                fetcher.mark_unparsed(link, "イベント名を抽出できませんでした")
                 stats.failed += 1
                 continue
             result = _import_raw(importer, raw, stats)
             if result == "skipped":
-                # 日付が読めないページは抽出ルールの修正後に取り直せるよう失敗扱いにする
-                fetcher.mark_failed(link, "開催日を抽出できませんでした")
+                # 日付が読めないページは解析できずとして記録する（--retry-unparsed で取り直せる）
+                fetcher.mark_unparsed(link, "開催日を抽出できませんでした")
                 stats.skipped -= 1
                 stats.failed += 1
             elif result is None:

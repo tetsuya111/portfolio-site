@@ -136,6 +136,21 @@ def test_invalid_config_raises(broken):
         parse_source(broken)
 
 
+@pytest.mark.parametrize(
+    "override", [{"cookies": ["age_check_done=1"]}, {"fields": ["title"]}, {"list_urls": "x"}]
+)
+def test_wrong_types_raise_config_error(override):
+    base = {
+        "name": "x",
+        "list_urls": ["https://x"],
+        "mode": "list",
+        "item_selector": "li",
+        "fields": {"title": "h1", "date": "p"},
+    }
+    with pytest.raises(SourceConfigError):
+        parse_source({**base, **override})
+
+
 def test_bundled_sources_json_is_valid():
     sources = load_sources()
     assert {s.name for s in sources} >= {"av-event", "dmm-avevent", "pls1"}

@@ -35,8 +35,12 @@ export const loadGoogleMaps: MapsLoader = (apiKey) => {
   if (loading) return loading;
   loading = new Promise<MapsApi>((resolve, reject) => {
     window.__avEventDbMapsReady = () => {
-      if (window.google?.maps) resolve(window.google.maps);
-      else reject(new Error("Google Maps を読み込めませんでした。"));
+      if (window.google?.maps) {
+        resolve(window.google.maps);
+      } else {
+        loading = null; // 次回の呼び出しで読み込み直せるようにする
+        reject(new Error("Google Maps を読み込めませんでした。"));
+      }
     };
     const script = document.createElement("script");
     const params = new URLSearchParams({

@@ -25,7 +25,7 @@ MAX_REDIRECTS = 5
 _META_CHARSET = re.compile(rb"""<meta[^>]+charset=["']?([\w-]+)""", re.IGNORECASE)
 
 
-def _origin(url: str) -> str:
+def origin_of(url: str) -> str:
     parts = urlsplit(url)
     return f"{parts.scheme}://{parts.netloc}"
 
@@ -72,6 +72,7 @@ class PageFetcher:
         min_interval: float | None = None,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
+        retry_unparsed: bool = False,
     ) -> None:
         self._client = client or httpx.Client(timeout=TIMEOUT_SECONDS)
         self._min_interval = settings.FETCH_MIN_INTERVAL if min_interval is None else min_interval
@@ -79,6 +80,11 @@ class PageFetcher:
         self._clock = clock
         self._last_request: dict[str, float] = {}
         self._robots: dict[str, RobotFileParser | None] = {}
+        # 取得済みとして再取得しない結果（解析できなかったページは抽出ルール修正後に
+        # --retry-unparsed で取り直す）
+        self._done = [FetchedPage.Result.SUCCESS]
+        if not retry_unparsed:
+            self._done.append(FetchedPage.Result.UNPARSED)
 
     def close(self) -> None:
         self._client.close()
@@ -88,7 +94,7 @@ class PageFetcher:
     ) -> FetchResult:
         if (
             kind == FetchedPage.Kind.DETAIL
-            and FetchedPage.objects.filter(url=url, result=FetchedPage.Result.SUCCESS).exists()
+            and FetchedPage.objects.filter(url=url, result__in=self._done).exists()
         ):
             return FetchResult(FetchStatus.SKIPPED)
 
@@ -129,8 +135,12 @@ class PageFetcher:
         )
         return FetchResult(FetchStatus.FETCHED, body)
 
+    def mark_unparsed(self, url: str, error: str) -> None:
+        """取得はできたがイベントを抽出できなかったページ。既定では再取得しない。"""
+        FetchedPage.objects.filter(url=url).update(result=FetchedPage.Result.UNPARSED, error=error)
+
     def mark_failed(self, url: str, error: str) -> None:
-        """取得は成功したが解析できなかったページを失敗扱いにし、次回再取得させる。"""
+        """取得はできたが保存に失敗したページを失敗扱いにし、次回再取得させる。"""
         FetchedPage.objects.filter(url=url).update(result=FetchedPage.Result.FAILED, error=error)
 
     def _get(self, url: str, cookies: dict[str, str] | None) -> httpx.Response:
@@ -138,11 +148,11 @@ class PageFetcher:
 
         Cookie は元のURLと同じオリジン（スキーム＋ホスト）にだけ送る。
         """
-        origin = _origin(url)
+        origin = origin_of(url)
         current = url
         for _ in range(MAX_REDIRECTS + 1):
             # https→http の格下げや別ホストへは Cookie を送らない
-            same_origin = _origin(current) == origin
+            same_origin = origin_of(current) == origin
             response = self._request(current, cookies if same_origin else None)
             if not response.is_redirect:
                 return response
@@ -173,7 +183,7 @@ class PageFetcher:
             self._last_request[host] = self._clock()
 
     def _allowed(self, url: str) -> bool:
-        origin = _origin(url)
+        origin = origin_of(url)
         if origin not in self._robots:
             self._robots[origin] = self._load_robots(origin)
         parser = self._robots[origin]

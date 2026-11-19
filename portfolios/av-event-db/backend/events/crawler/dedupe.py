@@ -54,10 +54,11 @@ def find_duplicate(
     start_date: dt.date,
     source_url: str | None,
     start_time: dt.time | None = None,
+    venue_id: int | None = None,
 ) -> Event | None:
     """取り込むイベントと同一とみなせる既存イベントを返す。
 
-    部番号や開始時刻が両方にあって異なる場合は、同じ日の別の回とみなして候補から外す。
+    部番号・開始時刻・会場が両方にあって異なる場合は、別のイベントとみなして候補から外す。
     """
     from events.models import Event, EventSource
 
@@ -74,6 +75,8 @@ def find_duplicate(
         if target_parts and parts and target_parts != parts:
             continue
         if start_time and event.start_time and start_time != event.start_time:
+            continue
+        if venue_id and event.venue_id and venue_id != event.venue_id:
             continue
         score = similarity(target, event.normalized_title)
         if score >= SIMILARITY_THRESHOLD and (best is None or score > best[0]):

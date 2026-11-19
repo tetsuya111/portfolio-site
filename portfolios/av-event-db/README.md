@@ -47,10 +47,11 @@ npm run dev:frontend   # http://localhost:3000/apps/av-event-db/
 ```bash
 npm run fetch:events                               # すべての対象サイト
 npm run fetch:events -- --source av-event          # サイトを指定（複数可）
-npm run fetch:events -- --source pls1 --limit 10   # サイトごとの処理件数を制限
+npm run fetch:events -- --source pls1 --limit 10   # サイトごとに新しく取得するページ数を制限
+npm run fetch:events -- --retry-unparsed          # 抽出ルールを直したあと、抽出できなかったページを取り直す
 ```
 
-サイトごとに「作成 / 統合 / スキップ / 失敗」の件数を出力します。定期実行したい場合は cron などからこのコマンドを呼んでください。取得したページは `FetchedPage`（Django admin では「取得ページ」）に残り、失敗したページは次回の実行で取り直します。
+サイトごとに「作成 / 統合 / スキップ / 失敗」の件数を出力します。定期実行したい場合は cron などからこのコマンドを呼んでください。取得したページは `FetchedPage`（Django admin では「取得ページ」）に残ります。通信に失敗したページは次回の実行で取り直し、取得できたのにイベント名・開催日を抽出できなかったページ（「解析できず」）は `--retry-unparsed` を付けたときだけ取り直します。
 
 ### 抽出ルールの調整
 
@@ -63,7 +64,7 @@ npm run fetch:events -- --source pls1 --limit 10   # サイトごとの処理件
 | `mode` | `detail`（一覧から詳細ページを辿る）か `list`（一覧の各項目から直接読む） |
 | `detail_link_selector` | `detail` のとき、一覧から詳細ページへのリンク（`a` 要素）を選ぶセレクタ |
 | `item_selector` | `list` のとき、1件分の要素を選ぶセレクタ |
-| `cookies` | 送る Cookie（年齢確認が必要なサイト用） |
+| `cookies` | 送る Cookie（年齢確認が必要なサイト用）。`list_urls` と同じオリジン（スキーム＋ホスト）へのリクエストにだけ送る |
 | `fields` | `title`・`date` は必須。ほかに `actresses`・`venue`・`summary`・`note`・`link`。文字列（セレクタ）か `{"selector", "multiple", "attr"}` |
 
 日付は `2026年12月3日`・`2026/12/3`・`12/3(木)`・`12月3日`・`〜` 区切りの期間などに対応しています。

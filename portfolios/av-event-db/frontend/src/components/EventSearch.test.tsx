@@ -117,6 +117,31 @@ describe("EventSearch", () => {
     expect(calledUrls(fetchMock)[1]).toMatch(/\/api\/events\/$/);
   });
 
+  it("同じ条件で検索し直すと取り直す（エラー後の再試行）", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("failed"))
+      .mockImplementation(() => Promise.resolve(page([item])));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<Harness initial={{}} />);
+    expect(await screen.findByText("サーバーに接続できませんでした。")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "検索" }));
+    expect(await screen.findByText("全 1 件")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("存在しないページなら1ページ目に戻れる", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("{}", { status: 404 }))
+      .mockImplementation(() => Promise.resolve(page([item])));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<Harness initial={{ page: 5 }} />);
+    await userEvent.click(await screen.findByRole("button", { name: "1ページ目に戻る" }));
+    expect(await screen.findByText("全 1 件")).toBeInTheDocument();
+    expect(String(fetchMock.mock.calls[1][0])).not.toContain("page=");
+  });
+
   it("エラーを表示する", async () => {
     vi.stubGlobal(
       "fetch",

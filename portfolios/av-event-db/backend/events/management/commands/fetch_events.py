@@ -10,8 +10,8 @@ from events.crawler.sources import load_sources
 from events.crawler.venues import build_default_resolver
 
 
-def build_fetcher() -> PageFetcher:
-    return PageFetcher()
+def build_fetcher(retry_unparsed: bool = False) -> PageFetcher:
+    return PageFetcher(retry_unparsed=retry_unparsed)
 
 
 class Command(BaseCommand):
@@ -23,6 +23,11 @@ class Command(BaseCommand):
         )
         parser.add_argument("--limit", type=int, default=None, help="サイトごとの最大処理件数")
         parser.add_argument("--sources-file", type=Path, default=None, help="抽出ルールのファイル")
+        parser.add_argument(
+            "--retry-unparsed",
+            action="store_true",
+            help="前回イベントを抽出できなかった詳細ページも取り直す（抽出ルールの修正後に使う）",
+        )
 
     def handle(self, *args, **options) -> None:
         sources = load_sources(options["sources_file"])
@@ -34,7 +39,7 @@ class Command(BaseCommand):
             sources = [s for s in sources if s.name in wanted]
 
         importer = EventImporter(build_default_resolver())
-        fetcher = build_fetcher()
+        fetcher = build_fetcher(retry_unparsed=options["retry_unparsed"])
         try:
             for source in sources:
                 stats = run_source(source, fetcher, importer, limit=options["limit"])

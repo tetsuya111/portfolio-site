@@ -6,9 +6,18 @@ import { ApiError, fetchEvent } from "@/lib/api";
 import { formatPeriod, mapsSearchUrl, safeExternalUrl } from "@/lib/format";
 import type { EventDetail as EventDetailData } from "@/lib/types";
 
-function ExternalLink({ href, children }: { href: string | null; children: string }) {
+/** http(s) の URL だけをリンクにし、それ以外は文字だけを出す（NFR-3）。 */
+function ExternalLink({
+  href,
+  children,
+  fallback,
+}: {
+  href: string | null;
+  children: string;
+  fallback?: string;
+}) {
   const safe = safeExternalUrl(href);
-  if (!safe) return <>{children}</>;
+  if (!safe) return <>{fallback ?? children}</>;
   return (
     <a href={safe} target="_blank" rel="noopener noreferrer">
       {children}
@@ -67,13 +76,9 @@ export function EventDetail({ id }: { id: number }) {
         </dd>
         <dt>リンク</dt>
         <dd>
-          {official ? (
-            <a href={official} target="_blank" rel="noopener noreferrer">
-              {official}
-            </a>
-          ) : (
-            "—"
-          )}
+          <ExternalLink href={official} fallback="—">
+            {official ?? ""}
+          </ExternalLink>
         </dd>
         <dt>概要</dt>
         <dd>{e.summary || "—"}</dd>
