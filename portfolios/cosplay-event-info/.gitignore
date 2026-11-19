@@ -10,7 +10,6 @@ backend/staticfiles/
 *.db-journal
 *.sqlite3
 .env
-!.env.example
 # Node
 node_modules/
 frontend/.next/

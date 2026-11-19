@@ -32,7 +32,6 @@
 cosplay-event-info/
 ├── package.json            # npm test / lint / build（backend と frontend をまとめて実行）
 ├── docker-compose.yml      # バックエンドをコンテナで起動（開発・動作確認用）
-├── .env.example            # 環境変数の例
 ├── backend/                # Django
 │   ├── config/             # 設定・URL
 │   ├── catalog/            # モデル・API・管理画面・管理コマンド
@@ -116,6 +115,22 @@ npm run build     # frontend を静的出力（frontend/out/）
 ```
 
 テストは実サイト・実 API に接続しません（HTTP は `httpx.MockTransport`、Claude は偽のクライアント、HTML は固定データ）。
+
+## 環境変数
+
+| 変数 | 既定値 | 内容 |
+|---|---|---|
+| `APP_ENV` | `development` | `production` では `DEBUG` が無効になり、`DJANGO_SECRET_KEY` が必須になる（Dockerfile の既定は `production`） |
+| `DJANGO_SECRET_KEY` | （開発用の固定値） | 本番では十分に長いランダムな文字列を設定する。未設定だと本番では起動しない |
+| `ALLOWED_HOSTS` | `localhost,127.0.0.1` | カンマ区切り |
+| `DATABASE_PATH` | `backend/cosplay.db` | SQLite ファイルの場所（Docker では `/data/cosplay.db`） |
+| `CORS_ORIGINS` | `http://localhost:3000` | API を呼べるオリジン（カンマ区切り） |
+| `FETCH_MIN_INTERVAL` | `1.0` | 同じホストへのリクエスト間隔（秒） |
+| `ANTHROPIC_API_KEY` | なし | 設定すると開催場所の正規化に Claude を使う（任意） |
+| `CLAUDE_MODEL` | `claude-opus-5-5` | 正規化に使う Claude のモデル |
+| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8000` | フロントエンドから呼ぶ API の URL（ビルド時に埋め込まれる） |
+
+空の値は未設定として既定値を使います。
 
 ## 本番で動かす場合
 

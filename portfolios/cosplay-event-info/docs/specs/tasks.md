@@ -32,7 +32,7 @@
 ### Task 1: バックエンドの土台（設定・ヘルスチェック・npm スクリプト）— NF-3
 
 **Files:**
-- Create: `backend/pyproject.toml`, `backend/manage.py`, `backend/config/{__init__,settings,urls,wsgi}.py`, `backend/catalog/{__init__,apps,views}.py`, `backend/conftest.py`, `scripts/run-backend.mjs`, `package.json`, `.gitignore`, `.env.example`
+- Create: `backend/pyproject.toml`, `backend/manage.py`, `backend/config/{__init__,settings,urls,wsgi}.py`, `backend/catalog/{__init__,apps,views}.py`, `backend/conftest.py`, `scripts/run-backend.mjs`, `package.json`, `.gitignore`（環境変数は README の表に記載）
 - Test: `backend/tests/test_health.py`, `backend/tests/test_settings.py`
 
 **Interfaces:**
