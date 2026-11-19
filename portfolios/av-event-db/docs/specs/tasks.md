@@ -62,8 +62,8 @@
 ## T10. フロントエンドの土台と年齢確認（REQ-7, NFR-3）
 
 - [ ] `frontend/` の `package.json`・Next/Vitest/ESLint 設定・`src/app/layout.tsx` を作成する。
-- [ ] テスト: `AgeGate`（未確認で内容非表示、承認で表示・保存、保存済みなら省略、未満で案内）、`safeExternalUrl`、`mapsSearchUrl`。
-- [ ] `src/components/AgeGate.tsx`・`src/lib/url.ts` を実装する。
+- [ ] テスト: `AgeGate`（未確認で内容非表示、承認で表示・保存、保存済みなら省略、未満で案内）、`safeExternalUrl`、`mapsSearchUrl`、`api.ts` のクエリ組み立て。
+- [ ] `src/components/AgeGate.tsx`・`src/lib/format.ts`・`src/lib/api.ts` を実装する。
 - 確認: `npm run test:frontend`・`npm run lint:frontend`
 
 ## T11. 検索画面と詳細画面（REQ-5）
