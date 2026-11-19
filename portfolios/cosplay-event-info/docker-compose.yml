@@ -1,0 +1,20 @@
+# 開発・動作確認用。バックエンドだけをコンテナで起動する（フロントエンドは npm run dev:frontend）。
+#   docker compose up -d --build
+#   docker compose exec backend python manage.py seed_demo
+services:
+  backend:
+    build: ./backend
+    ports:
+      # 開発用の秘密鍵で動くため、このマシンからだけ接続できるようにする
+      - "127.0.0.1:8000:8000"
+    environment:
+      # 開発用。本番では APP_ENV=production（Dockerfile の既定）と DJANGO_SECRET_KEY を指定する。
+      APP_ENV: development
+      ALLOWED_HOSTS: localhost,127.0.0.1
+      CORS_ORIGINS: http://localhost:3000
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - cosplay-data:/data
+
+volumes:
+  cosplay-data:
