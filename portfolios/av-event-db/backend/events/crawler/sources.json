@@ -1,0 +1,54 @@
+{
+  "_comment": "取り込み対象サイトの抽出ルール。セレクタは実サイト未調査の仮置きなので、実際のHTMLに合わせて調整する（README 参照）。",
+  "sources": [
+    {
+      "name": "av-event",
+      "list_urls": [
+        "https://www.av-event.jp/top/",
+        "https://www.av-event.jp/new_event/",
+        "https://www.av-event.jp/search/?area_id=4"
+      ],
+      "mode": "detail",
+      "detail_link_selector": "a[href*='/event/']",
+      "fields": {
+        "title": "h1",
+        "actresses": { "selector": ".actress a, .performer a", "multiple": true },
+        "date": ".event-date, .date",
+        "venue": ".event-place, .place",
+        "summary": ".event-summary, .summary",
+        "note": ".event-note, .note",
+        "link": { "selector": "a.official, a.shop-link", "attr": "href" }
+      }
+    },
+    {
+      "name": "dmm-avevent",
+      "list_urls": ["https://www.dmm.co.jp/live/chat/-/avevent/"],
+      "mode": "detail",
+      "detail_link_selector": "a[href*='avevent'][href*='detail']",
+      "cookies": { "age_check_done": "1" },
+      "fields": {
+        "title": "h1",
+        "actresses": { "selector": ".actress a", "multiple": true },
+        "date": ".date",
+        "venue": ".place",
+        "summary": ".summary",
+        "note": ".note",
+        "link": { "selector": "a.official", "attr": "href" }
+      }
+    },
+    {
+      "name": "pls1",
+      "list_urls": ["https://pls1.jp/schedule/"],
+      "mode": "list",
+      "item_selector": ".schedule-item, .schedule li",
+      "fields": {
+        "title": ".title",
+        "actresses": { "selector": ".name", "multiple": true },
+        "date": ".date",
+        "venue": ".place",
+        "summary": ".text",
+        "link": { "selector": "a", "attr": "href" }
+      }
+    }
+  ]
+}
