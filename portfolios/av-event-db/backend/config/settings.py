@@ -5,7 +5,13 @@ from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
 
+from .dotenv import load_env_file
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# backend/.env があれば読み込む（シェルで設定済みの環境変数が優先）。テストでは読み込まない
+if os.environ.get("AV_EVENT_DB_SKIP_DOTENV") != "1":
+    load_env_file(BASE_DIR / ".env", os.environ)
 
 # 未設定時は本番扱い（DEBUG 無効・SECRET_KEY 必須）。ローカル開発は scripts/run-backend.mjs が補う
 APP_ENV = os.environ.get("APP_ENV", "production")

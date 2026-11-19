@@ -75,6 +75,8 @@ npm run fetch:events -- --retry-unparsed          # 抽出ルールを直した�
 
 ## 環境変数
 
+バックエンドの値は `backend/.env` に書けます（[backend/.env.example](backend/.env.example) をコピーして使う）。シェルで設定した環境変数があればそちらが優先されます。フロントエンドの `NEXT_PUBLIC_*` は `frontend/.env.local` に書きます。どちらもコミットされません。
+
 | 変数 | 用途 | 既定値 |
 |---|---|---|
 | `APP_ENV` | `development`（DEBUG 有効）・`test`・それ以外は本番扱い（DEBUG 無効・`DJANGO_SECRET_KEY` 必須） | 本番扱い（`npm run` 経由のときは `development`） |
