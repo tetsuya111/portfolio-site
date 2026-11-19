@@ -127,3 +127,36 @@ def test_parse_date_range_weekday_before_bare_end_day():
 def test_parse_date_range_recent_past_date_stays_this_year():
     # 一覧に残っている直近の過去のイベントを1年後のイベントにしない
     assert parse_date_range("11月10日", TODAY) == (date(2026, 11, 10), date(2026, 11, 10))
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("1/31(土)〜2日", (date(2027, 1, 31), date(2027, 2, 2))),
+        ("2026.12.30 - 01", (date(2026, 12, 30), date(2027, 1, 1))),
+    ],
+)
+def test_parse_date_range_bare_day_crosses_month(text, expected):
+    assert parse_date_range(text, TODAY) == expected
+
+
+def test_jsonld_utc_datetime_is_converted_to_japan_date():
+    html = (
+        '<script type="application/ld+json">{"@type": "Event", "name": "UTC",'
+        ' "startDate": "2026-12-04T15:00:00Z", "endDate": "2026-12-05T09:00:00+00:00"}</script>'
+    )
+
+    [event] = parse_events(html, "https://example.com/", CONFIG, TODAY)
+
+    assert (event.start_date, event.end_date) == (date(2026, 12, 5), date(2026, 12, 5))
+
+
+def test_item_text_is_used_when_date_selector_matches_nothing():
+    html = (
+        '<article class="event"><h2><a href="/e">ブログ形式</a></h2>'
+        "<p>開催日：12月5日</p></article>"
+    )
+
+    [event] = parse_events(html, "https://example.com/", CONFIG, TODAY)
+
+    assert event.start_date == date(2026, 12, 5)

@@ -69,3 +69,34 @@ def test_old_style_heading_is_supported():
     item = parse_person_page(html, "https://ja.wikipedia.org/wiki/ka")
 
     assert item.career == "経歴本文。"
+
+
+LIVE_LIKE_PERSON = """
+<div id="siteNotice"><div class="mw-parser-output"><p>募金のお願い</p></div></div>
+<h1 id="firstHeading">さしす</h1>
+<div id="mw-content-text"><div class="mw-parser-output">
+  <table class="infobox"><tr><td><a class="external" href="https://x.com/sashisu">X</a></td></tr></table>
+  <p>さしすは、コスプレイヤー<sup class="reference"><a href="#c1">[1]</a></sup>。
+  <a class="external" href="https://twitter.com/other_person">別の人</a>と共演。</p>
+  <div class="mw-heading mw-heading2"><h2>経歴</h2><span class="mw-editsection">[<a>編集</a>]</span></div>
+  <div class="mw-heading mw-heading3"><h3>2020年以降</h3><span class="mw-editsection">[<a>編集</a>]</span></div>
+  <p>写真集を発売。</p>
+  <div class="mw-heading mw-heading2"><h2>脚注</h2></div>
+  <ol class="references"><li><a class="external" href="https://twitter.com/news_site/status/1">記事</a></li></ol>
+  <div class="mw-heading mw-heading2"><h2>外部リンク</h2></div>
+  <ul><li><a class="external" href="https://www.youtube.com/@sashisu">YouTube</a></li></ul>
+</div></div>
+"""
+
+
+def test_sns_only_from_infobox_and_external_links_section():
+    item = parse_person_page(LIVE_LIKE_PERSON, "https://ja.wikipedia.org/wiki/s")
+
+    assert item.sns_links == ["https://x.com/sashisu", "https://www.youtube.com/@sashisu"]
+
+
+def test_edit_section_links_and_site_notice_are_ignored():
+    item = parse_person_page(LIVE_LIKE_PERSON, "https://ja.wikipedia.org/wiki/s")
+
+    assert item.career == "2020年以降\n写真集を発売。"
+    assert item.description.startswith("さしすは、コスプレイヤー。")

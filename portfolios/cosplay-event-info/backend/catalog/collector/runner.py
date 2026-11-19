@@ -15,7 +15,6 @@ from catalog.collector.parsers.cosplayers import (
     parse_person_page,
 )
 from catalog.collector.parsers.events import SiteConfig, parse_events
-from catalog.models import FetchedPage
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +49,9 @@ def _new_counts() -> dict[str, int]:
     return {"pages": 0, "created": 0, "merged": 0, "skipped": 0, "failed": 0}
 
 
-def _count_not_fetched(url: str, counts: dict[str, int]) -> None:
-    """fetch が None を返した理由（取得済みか失敗か）を数える。"""
-    page = FetchedPage.objects.filter(url=url).first()
-    counts["skipped" if page and page.is_success else "failed"] += 1
+def _count_not_fetched(fetcher: Fetcher, counts: dict[str, int]) -> None:
+    """fetch が None を返した理由を数える（取得済みは skipped、それ以外は failed）。"""
+    counts["skipped" if fetcher.last_outcome == "skipped" else "failed"] += 1
 
 
 def run_event_collection(
@@ -70,7 +68,7 @@ def run_event_collection(
         for url in site.start_urls:
             page = fetcher.fetch(url, "event", force=force)
             if page is None:
-                _count_not_fetched(url, counts)
+                _count_not_fetched(fetcher, counts)
                 continue
             counts["pages"] += 1
             for item in parse_events(page.content, page.url, site, today):
@@ -105,7 +103,7 @@ def run_cosplayer_collection(
                 return counts
             page = fetcher.fetch(person_url, "cosplayer", force=force)
             if page is None:
-                _count_not_fetched(person_url, counts)
+                _count_not_fetched(fetcher, counts)
                 continue
             counts["pages"] += 1
             item = parse_person_page(page.content, page.url)

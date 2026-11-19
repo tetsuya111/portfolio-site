@@ -53,11 +53,17 @@ def resolve_venue(location_raw: str, normalizer: Normalizer) -> Venue | None:
 
 
 def _find_similar_event(item: EventItem, venue: Venue | None) -> Event | None:
-    """同じ開始日で名前が似ているイベントを探す。会場がどちらも分かっていて違う場合は別とする。"""
+    """同じ開始日で名前が似ているイベントを探す。
+
+    開催地の都道府県がどちらも分かっていて異なる場合（「東京会場」と「大阪会場」など）は別とする。
+    会場名は正規化の表記ゆれで別レコードになりうるため、会場名の違いだけでは別としない。
+    """
     threshold = settings.EVENT_SIMILARITY_THRESHOLD
+    prefecture = venue.prefecture if venue else ""
     best, best_score = None, 0.0
-    for candidate in Event.objects.filter(start_date=item.start_date):
-        if venue and candidate.venue_id and candidate.venue_id != venue.pk:
+    for candidate in Event.objects.filter(start_date=item.start_date).select_related("venue"):
+        other = candidate.venue.prefecture if candidate.venue else ""
+        if prefecture and other and prefecture != other:
             continue
         score = similarity(candidate.name, item.name)
         if score >= threshold and score > best_score:

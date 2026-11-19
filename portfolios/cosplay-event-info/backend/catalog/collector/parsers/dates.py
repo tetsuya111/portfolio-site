@@ -62,7 +62,11 @@ def parse_date_range(text: str, today: date) -> tuple[date, date] | None:
     end = start
     bare = _BARE_DAY.match(text[first.end() :])
     if bare:
-        end = _build(start.year, start.month, int(bare.group("d"))) or start
+        day = int(bare.group("d"))
+        year, month = start.year, start.month
+        if day < start.day:  # 「1/31〜2日」のように月をまたぐ
+            year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+        end = _build(year, month, day) or start
     elif len(matches) > 1:
         second = matches[1]
         if _RANGE_SEPARATOR.search(text[first.end() : second.start()]):

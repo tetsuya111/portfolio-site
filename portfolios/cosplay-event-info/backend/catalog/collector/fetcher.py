@@ -3,7 +3,8 @@
 import logging
 import time
 from collections.abc import Callable
-from urllib.parse import urlsplit
+from typing import Literal
+from urllib.parse import urljoin, urlsplit
 from urllib.robotparser import RobotFileParser
 
 import httpx
@@ -15,6 +16,10 @@ logger = logging.getLogger(__name__)
 
 USER_AGENT = "cosplay-event-info-bot/0.1"
 REQUEST_TIMEOUT = 30.0
+MAX_REDIRECTS = 5
+
+# fetch の結果。None を返したときの理由を呼び出し側が区別するために使う。
+Outcome = Literal["fetched", "skipped", "disallowed", "failed"]
 
 
 class Fetcher:
@@ -35,31 +40,49 @@ class Fetcher:
         self._last_request: dict[str, float] = {}
         # None は制限なし、False はすべて禁止（robots.txt がサーバーエラー・接続不可）
         self._robots: dict[str, RobotFileParser | bool | None] = {}
+        self.last_outcome: Outcome | None = None
 
     def fetch(self, url: str, kind: str, *, force: bool = False) -> FetchedPage | None:
-        """ページを取得する。取得済み・robots.txt で禁止・失敗のときは None を返す。"""
+        """ページを取得する。取得済み・robots.txt で禁止・失敗のときは None を返す。
+
+        None を返した理由は last_outcome（skipped / disallowed / failed）で分かる。
+        """
+        page, self.last_outcome = self._fetch(url, kind, force)
+        return page
+
+    def _fetch(self, url: str, kind: str, force: bool) -> tuple[FetchedPage | None, Outcome]:
         if not is_http_url(url):
             logger.warning("http(s) 以外の URL は取得しません: %s", url)
-            return None
+            return None, "disallowed"
         if not force and self._already_fetched(url):
             logger.info("取得済みのためスキップ: %s", url)
-            return None
-        if not self._allowed(url):
-            logger.info("robots.txt で禁止されているためスキップ: %s", url)
-            return None
+            return None, "skipped"
 
-        try:
-            response = self._get(url)
-        except httpx.HTTPError as exc:
-            logger.warning("取得に失敗: %s (%s)", url, exc)
-            self._save(url, kind, status_code=None, content="", error=str(exc) or repr(exc))
-            return None
+        current = url
+        for _ in range(MAX_REDIRECTS + 1):
+            # リダイレクト先も含め、リクエストのたびにそのホストの robots.txt と間隔を守る
+            if not is_http_url(current) or not self._allowed(current):
+                logger.info("robots.txt で禁止されているためスキップ: %s", current)
+                return None, "disallowed"
+            try:
+                response = self._get(current)
+            except httpx.HTTPError as exc:
+                logger.warning("取得に失敗: %s (%s)", current, exc)
+                self._save(url, kind, status_code=None, content="", error=str(exc) or repr(exc))
+                return None, "failed"
+            location = response.headers.get("Location")
+            if not (response.is_redirect and location):
+                break
+            current = urljoin(current, location)
+        else:
+            self._save(url, kind, None, "", "リダイレクトが多すぎます")
+            return None, "failed"
 
         if not response.is_success:
-            logger.warning("取得に失敗: %s (HTTP %s)", url, response.status_code)
+            logger.warning("取得に失敗: %s (HTTP %s)", current, response.status_code)
             self._save(url, kind, response.status_code, "", f"HTTP {response.status_code}")
-            return None
-        return self._save(url, kind, response.status_code, response.text, "")
+            return None, "failed"
+        return self._save(url, kind, response.status_code, response.text, ""), "fetched"
 
     # ---- 内部処理 ----
 
@@ -80,7 +103,7 @@ class Fetcher:
             return self.client.get(
                 url,
                 headers={"User-Agent": USER_AGENT},
-                follow_redirects=True,
+                follow_redirects=False,
                 timeout=REQUEST_TIMEOUT,
             )
         finally:

@@ -6,7 +6,7 @@ schema.org の Event（JSON-LD）があればそれを使い、なければサ�
 import json
 from collections.abc import Iterator
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from bs4 import BeautifulSoup, Tag
@@ -15,6 +15,8 @@ from catalog.collector.parsers import absolute_http_url
 from catalog.collector.parsers.dates import parse_date_range
 
 MAX_NOTES_LENGTH = 1000
+# 日本時間（夏時間がないため固定オフセットで扱い、tz データベースに依存しない）
+JAPAN = timezone(timedelta(hours=9))
 
 
 @dataclass(frozen=True)
@@ -89,12 +91,21 @@ def _walk(obj: Any) -> Iterator[dict[str, Any]]:
 
 
 def _iso_date(value: Any) -> date | None:
+    """ISO 8601 の日付・日時を日本時間の日付にする（UTC の日時は日付がずれうるため変換する）。"""
     if not isinstance(value, str) or len(value) < 10:
         return None
     try:
-        return date.fromisoformat(value[:10])
+        if len(value) == 10:
+            return date.fromisoformat(value)
+        parsed = datetime.fromisoformat(value.strip())
     except ValueError:
-        return None
+        try:
+            return date.fromisoformat(value[:10])
+        except ValueError:
+            return None
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(JAPAN)
+    return parsed.date()
 
 
 def _str(value: Any) -> str:
@@ -156,7 +167,8 @@ def parse_with_selectors(
     items: list[EventItem] = []
     for node in soup.select(config.item):
         name = _select_text(node, config.name_sel)
-        date_text = _select_text(node, config.date) if config.date else _text(node)
+        # 日付のセレクターに当たる要素がなければ、項目全体の文章から探す
+        date_text = _select_text(node, config.date) or _text(node)
         dates = parse_date_range(date_text, today)
         if not name or not dates:
             continue

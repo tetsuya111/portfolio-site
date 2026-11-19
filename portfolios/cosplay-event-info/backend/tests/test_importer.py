@@ -203,3 +203,17 @@ def test_similar_events_at_different_venues_are_separate():
 
     assert created is True
     assert Event.objects.count() == 2
+
+
+def test_same_event_with_venue_spelling_variants_is_merged():
+    class Variants:
+        def normalize(self, raw):
+            return NormalizedLocation(raw, "東京都", "")
+
+    import_event(item(location="東京ビッグサイト"), page("https://a.example/1"), Variants())
+
+    _, created = import_event(
+        item(location="東京国際展示場"), page("https://b.example/2"), Variants()
+    )
+
+    assert created is False

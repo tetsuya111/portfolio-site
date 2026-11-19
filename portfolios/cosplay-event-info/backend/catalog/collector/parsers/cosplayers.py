@@ -58,8 +58,9 @@ def parse_category_page(html: str, base_url: str) -> tuple[list[str], str | None
 
 
 def _clean_text(node: Tag) -> str:
-    for sup in node.select("sup.reference"):
-        sup.decompose()
+    """脚注・「[編集]」リンクを除いた本文。"""
+    for extra in node.select("sup.reference, .mw-editsection"):
+        extra.decompose()
     text = _FOOTNOTE.sub("", node.get_text(""))
     return " ".join(text.split())
 
@@ -75,17 +76,26 @@ def _heading_level(el: Tag) -> int | None:
     return None
 
 
-def _career(body: Tag) -> str:
-    lines: list[str] = []
+def _section_elements(body: Tag, keywords: tuple[str, ...]) -> list[Tag]:
+    """見出し（第2階層）に keywords のいずれかを含む節の要素（小見出しを含む）。"""
+    elements: list[Tag] = []
     in_section = False
     for el in body.find_all(recursive=False):
-        level = _heading_level(el)
-        if level == 2:
-            in_section = any(k in el.get_text() for k in CAREER_KEYWORDS)
+        if _heading_level(el) == 2:
+            heading = el.find(["h2"]) or el
+            for extra in heading.select(".mw-editsection"):
+                extra.decompose()
+            in_section = any(k in heading.get_text() for k in keywords)
             continue
-        if not in_section:
-            continue
-        if level is not None or el.name == "p":
+        if in_section:
+            elements.append(el)
+    return elements
+
+
+def _career(body: Tag) -> str:
+    lines: list[str] = []
+    for el in _section_elements(body, CAREER_KEYWORDS):
+        if _heading_level(el) is not None or el.name == "p":
             text = _clean_text(el)
             if text:
                 lines.append(text)
@@ -108,11 +118,17 @@ def _is_sns(url: str) -> bool:
 
 
 def _sns_links(body: Tag, base_url: str) -> list[str]:
+    """本人の SNS として、情報欄（infobox）と「外部リンク」節のリンクだけを集める。
+
+    本文や脚注の SNS リンク（他人のアカウント・報道の投稿など）は含めない。
+    """
+    containers = [*body.select(".infobox"), *_section_elements(body, ("外部リンク",))]
     links: list[str] = []
-    for a in body.find_all("a", href=True):
-        url = absolute_http_url(str(a["href"]), base_url)
-        if url and _is_sns(url) and url not in links:
-            links.append(url)
+    for container in containers:
+        for a in container.find_all("a", href=True):
+            url = absolute_http_url(str(a["href"]), base_url)
+            if url and _is_sns(url) and url not in links:
+                links.append(url)
     return links
 
 
@@ -120,7 +136,10 @@ def parse_person_page(html: str, url: str) -> CosplayerItem:
     soup = BeautifulSoup(html, "html.parser")
     heading = soup.select_one("#firstHeading")
     name = _DISAMBIGUATION.sub("", heading.get_text(strip=True)) if heading else ""
-    body = soup.select_one(".mw-parser-output")
+    # サイトの告知欄（#siteNotice）にも .mw-parser-output があるため、記事本文に限定する
+    body = soup.select_one("#mw-content-text .mw-parser-output") or soup.select_one(
+        ".mw-parser-output"
+    )
     if body is None:
         return CosplayerItem(name=name)
     # 本文の抽出で脚注を消すため、SNS は先に集める

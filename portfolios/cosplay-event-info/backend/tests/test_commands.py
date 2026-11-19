@@ -146,7 +146,7 @@ def category_html(people, next_href=None):
 def person_html(name):
     return (
         f'<h1 id="firstHeading">{name}</h1><div class="mw-parser-output"><p>{name}の説明。</p>'
-        '<a href="https://x.com/' + name + '">X</a></div>'
+        f'<h2>外部リンク</h2><ul><li><a href="https://x.com/{name}">X</a></li></ul></div>'
     )
 
 
@@ -221,3 +221,13 @@ def test_seed_demo_is_idempotent():
     assert counts[1] >= 5
     assert (Event.objects.count(), Cosplayer.objects.count()) == counts
     assert Event.objects.filter(venue__isnull=False).count() == counts[0]
+
+
+def test_failed_force_refetch_is_counted_as_failed(fake_web, monkeypatch):
+    web = fake_web({"https://a.example/events": LIST_HTML})
+    monkeypatch.setattr(events_module, "SITES", {"a": site("a", "https://a.example/events")})
+    call_command("fetch_events")
+    web.pages.clear()
+
+    with pytest.raises(CommandError):
+        call_command("fetch_events", "--force")

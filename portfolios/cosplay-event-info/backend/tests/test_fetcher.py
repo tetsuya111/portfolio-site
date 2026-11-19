@@ -186,3 +186,46 @@ def test_failed_force_refetch_keeps_previous_content():
     assert saved.status_code == 200
     assert saved.content == "saved body"
     assert "500" in saved.error
+
+
+def test_redirect_to_disallowed_host_is_not_followed():
+    def handler(request):
+        if request.url.host == "a.example":
+            if request.url.path == "/robots.txt":
+                return httpx.Response(404)
+            return httpx.Response(301, headers={"Location": "https://b.example/private/x"})
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text=ROBOTS)
+        return httpx.Response(200, text="secret")
+
+    calls = []
+
+    def recording(request):
+        calls.append(str(request.url))
+        return handler(request)
+
+    fetcher = Fetcher(
+        httpx.Client(transport=httpx.MockTransport(recording)), min_interval=0, sleep=lambda s: None
+    )
+
+    assert fetcher.fetch("https://a.example/start", "event") is None
+    assert "https://b.example/private/x" not in calls
+
+
+def test_redirect_is_followed_and_saved_under_requested_url():
+    def handler(request):
+        if request.url.path == "/robots.txt":
+            return httpx.Response(404)
+        if request.url.path == "/old":
+            return httpx.Response(302, headers={"Location": "/new"})
+        return httpx.Response(200, text="moved body")
+
+    fetcher = Fetcher(
+        httpx.Client(transport=httpx.MockTransport(handler)), min_interval=0, sleep=lambda s: None
+    )
+
+    page = fetcher.fetch("https://a.example/old", "event")
+
+    assert page is not None
+    assert page.url == "https://a.example/old"
+    assert page.content == "moved body"
