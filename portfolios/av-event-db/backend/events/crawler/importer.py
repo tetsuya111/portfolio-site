@@ -127,6 +127,10 @@ def _import_raw(importer: EventImporter, raw: RawEvent, stats: ImportStats) -> I
     return result
 
 
+def _log_unparsed(source: SourceConfig, url: str, reason: str) -> None:
+    logger.warning("[%s] %s: %s", source.name, reason, url)
+
+
 def run_source(
     source: SourceConfig, fetcher: Fetcher, importer: EventImporter, limit: int | None = None
 ) -> ImportStats:
@@ -141,15 +145,21 @@ def run_source(
         if page.status is not FetchStatus.FETCHED:
             stats.failed += 1
             continue
+        if source.mode == "detail":
+            assert source.detail_link_selector is not None  # noqa: S101 - parse_source で検証済み
+            links = extract_detail_links(page.body, list_url, source.detail_link_selector)
+            logger.info("[%s] %s から詳細ページ %d 件", source.name, list_url, len(links))
         if source.mode == "list":
             for raw in parse_list(page.body, list_url, source):
                 if limit is not None and processed >= limit:
                     return stats
                 processed += 1
-                _import_raw(importer, raw, stats)
+                if _import_raw(importer, raw, stats) == "skipped":
+                    _log_unparsed(
+                        source, raw.source_url, f"開催日を抽出できませんでした（{raw.date_text!r}）"
+                    )
             continue
-        assert source.detail_link_selector is not None  # noqa: S101 - parse_source で検証済み
-        for link in extract_detail_links(page.body, list_url, source.detail_link_selector):
+        for link in links:
             if link in seen:
                 continue
             seen.add(link)
@@ -167,13 +177,22 @@ def run_source(
                 continue
             raw = parse_detail(res.body, link, source)
             if raw is None:
-                fetcher.mark_unparsed(link, "イベント名を抽出できませんでした")
+                reason = (
+                    f"イベント名を抽出できませんでした（title: {source.fields['title'].selector}）"
+                )
+                _log_unparsed(source, link, reason)
+                fetcher.mark_unparsed(link, reason)
                 stats.failed += 1
                 continue
             result = _import_raw(importer, raw, stats)
             if result == "skipped":
                 # 日付が読めないページは解析できずとして記録する（--retry-unparsed で取り直せる）
-                fetcher.mark_unparsed(link, "開催日を抽出できませんでした")
+                reason = (
+                    f"開催日を抽出できませんでした（date: {source.fields['date'].selector}"
+                    f" → {raw.date_text!r}）"
+                )
+                _log_unparsed(source, link, reason)
+                fetcher.mark_unparsed(link, reason)
                 stats.skipped -= 1
                 stats.failed += 1
             elif result is None:

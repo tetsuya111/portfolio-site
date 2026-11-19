@@ -47,9 +47,8 @@ def _text(el: Tag) -> str:
 
 
 def _values(root: Tag, rule: FieldRule, base: str) -> list[str]:
-    elements = root.select(rule.selector) if rule.multiple else root.select(rule.selector)[:1]
-    values = []
-    for el in elements:
+    values: list[str] = []
+    for el in root.select(rule.selector):
         if rule.attr:
             raw = el.get(rule.attr)
             value = raw if isinstance(raw, str) else ""
@@ -58,6 +57,8 @@ def _values(root: Tag, rule: FieldRule, base: str) -> list[str]:
             value = _text(el)
         if value and value not in values:
             values.append(value)
+            if not rule.multiple:
+                break  # 単一値は最初の空でない要素だけを使う
     return values
 
 
@@ -80,7 +81,14 @@ def _build(root: Tag, config: SourceConfig, page_url: str, source_url: str) -> R
         title=title,
         date_text=_first(root, config, "date", page_url),
         actresses=_values(root, actress_rule, page_url) if actress_rule else [],
-        venue_text=_first(root, config, "venue", page_url),
+        venue_text=" ".join(
+            v
+            for v in (
+                _first(root, config, "venue", page_url),
+                _first(root, config, "address", page_url),
+            )
+            if v
+        ),
         summary=_first(root, config, "summary", page_url),
         note=_first(root, config, "note", page_url),
         link=safe_url(_first(root, config, "link", page_url), page_url),

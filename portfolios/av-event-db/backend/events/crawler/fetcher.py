@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import enum
 import hashlib
+import logging
 import re
 import time
 from collections.abc import Callable
@@ -18,6 +19,8 @@ import httpx
 from django.conf import settings
 
 from events.models import FetchedPage
+
+logger = logging.getLogger(__name__)
 
 USER_AGENT = "av-event-db-crawler/0.1"
 TIMEOUT_SECONDS = 10.0
@@ -218,6 +221,14 @@ class PageFetcher:
         return parser
 
     def _record(self, url: str, source_name: str, kind: str, **values) -> None:
+        if values["result"] != FetchedPage.Result.SUCCESS:
+            logger.warning(
+                "[%s] 取得できませんでした（%s）: %s %s",
+                source_name,
+                values["result"],
+                url,
+                values.get("error", ""),
+            )
         body = values.get("body", "")
         values.setdefault("status_code", None)
         values.setdefault("error", "")

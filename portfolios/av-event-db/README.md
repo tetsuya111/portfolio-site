@@ -55,7 +55,9 @@ npm run fetch:events -- --retry-unparsed          # 抽出ルールを直した�
 
 ### 抽出ルールの調整
 
-対象サイトと CSS セレクタは [backend/events/crawler/sources.json](backend/events/crawler/sources.json) にまとめています。**同梱のセレクタは実サイトの HTML を確認せずに置いた仮の値**なので、実際に取り込む前に各サイトの HTML に合わせて調整してください。コードの変更は不要です。
+対象サイトと CSS セレクタは [backend/events/crawler/sources.json](backend/events/crawler/sources.json) にまとめています。`av-event` は実サイトの HTML に合わせて調整済みです。**`dmm-avevent`・`pls1` のセレクタは HTML を確認せずに置いた仮の値**なので、取り込む前に調整してください。コードの変更は不要です。
+
+抽出に失敗したページは、`[サイト名] イベント名を抽出できませんでした（title: <セレクタ>）: <URL>` のように理由と使ったセレクタがログ（標準エラー）に出ます。セレクタを直したら `--retry-unparsed` を付けて取り直してください。
 
 | 項目 | 内容 |
 |---|---|
@@ -65,7 +67,7 @@ npm run fetch:events -- --retry-unparsed          # 抽出ルールを直した�
 | `detail_link_selector` | `detail` のとき、一覧から詳細ページへのリンク（`a` 要素）を選ぶセレクタ |
 | `item_selector` | `list` のとき、1件分の要素を選ぶセレクタ |
 | `cookies` | 送る Cookie（年齢確認が必要なサイト用）。`list_urls` と同じオリジン（スキーム＋ホスト）へのリクエストにだけ送る |
-| `fields` | `title`・`date` は必須。ほかに `actresses`・`venue`・`summary`・`note`・`link`。文字列（セレクタ）か `{"selector", "multiple", "attr"}` |
+| `fields` | `title`・`date` は必須。ほかに `actresses`・`venue`・`address`（会場名と連結して開催場所にする）・`summary`・`note`・`link`。文字列（セレクタ）か `{"selector", "multiple", "attr"}`。単一値のフィールドは、一致した要素のうち最初の空でないものを使う |
 
 日付は `2026年12月3日`・`2026/12/3`・`12/3(木)`・`12月3日`・`〜` 区切りの期間などに対応しています。
 

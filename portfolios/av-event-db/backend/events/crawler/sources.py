@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_SOURCES_PATH = Path(__file__).with_name("sources.json")
-FIELD_NAMES = ("title", "actresses", "date", "venue", "summary", "note", "link")
+FIELD_NAMES = ("title", "actresses", "date", "venue", "address", "summary", "note", "link")
 REQUIRED_FIELDS = ("title", "date")
 
 

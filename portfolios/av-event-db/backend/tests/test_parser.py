@@ -188,3 +188,42 @@ def test_too_long_url_is_dropped():
     assert extract_detail_links(html, "https://a.example.com/", "a.event") == [
         "https://a.example.com/ok"
     ]
+
+
+def test_single_field_skips_empty_matches():
+    html = '<h1 class="logo"></h1><h1>本当のタイトル</h1><p class="date">2026/12/3</p>'
+    raw = parse_detail(html, "https://a.example.com/e", DETAIL_CONFIG)
+    assert raw.title == "本当のタイトル"
+
+
+AV_EVENT_HTML = """
+<h1 class="c-header_logo"><a href="/"></a></h1>
+<div class="m-ttl-event"><h1 class="m-ttl-event_tx">【店】12/26(土) 山田花子 DVD発売記念イベント</h1></div>
+<dl class="p-event-info_detail-info p-event-info_detail-info--cast"><dt>出演者</dt><dd><ul>
+  <li><a class="p-event-info_detail-info-anchor-btn" href="/search/?q=a">山田花子</a>
+      <span class="p-event-info_detail-info-external"><a href="https://x.com/a">X</a></span></li>
+</ul></dd></dl>
+<section class="p-event-info_held-info"><div class="p-event-info_held-info-inner">
+  <dl class="p-event-info_held-info-list">
+    <dt>開催日時</dt><dd>2026/12/26(土) 13:00 〜</dd>
+    <dt>出演者</dt><dd><p>山田花子</p></dd>
+    <dt>会場情報</dt><dd><a href="/shop/1/">デモ本店</a></dd>
+    <dt>住所</dt><dd>東京都 千代田区外神田 1-1-1</dd>
+  </dl>
+</div></section>
+<section class="p-event-info_considerations-area">
+  <dl><dt>参加条件</dt><dd>対象商品の購入者</dd></dl>
+  <dl class="p-event-info_considerations"><dt>注意事項</dt><dd>撮影禁止</dd></dl>
+</section>
+"""
+
+
+def test_bundled_av_event_rules_extract_event():
+    source = next(s for s in load_sources() if s.name == "av-event")
+    raw = parse_detail(AV_EVENT_HTML, "https://www.av-event.jp/event/1/", source)
+    assert raw.title == "【店】12/26(土) 山田花子 DVD発売記念イベント"
+    assert raw.actresses == ["山田花子"]
+    assert raw.date_text == "2026/12/26(土) 13:00 〜"
+    assert raw.venue_text == "デモ本店 東京都 千代田区外神田 1-1-1"
+    assert raw.summary == "対象商品の購入者"
+    assert raw.note == "撮影禁止"

@@ -329,3 +329,18 @@ def test_seed_demo_keeps_events_with_crawled_sources():
     call_command("seed_demo", stdout=StringIO())
     assert Event.objects.filter(id=demo.id).exists()
     assert EventSource.objects.filter(source_url="https://a.example.com/x").exists()
+
+
+def test_unparsed_pages_are_logged_with_reason(caplog):
+    fetcher = FakeFetcher(
+        {
+            "https://a.example.com/list/": '<a class="e" href="/4">4</a><a class="e" href="/5">5</a>',
+            "https://a.example.com/4": "<p>タイトルなし</p>",
+            "https://a.example.com/5": detail("イベント5", date="未定"),
+        }
+    )
+    with caplog.at_level("WARNING"):
+        run_source(DETAIL_SOURCE, fetcher, importer())
+    text = caplog.text
+    assert "[site-a] イベント名を抽出できませんでした（title: h1）: https://a.example.com/4" in text
+    assert "開催日を抽出できませんでした（date: .d → '未定'）: https://a.example.com/5" in text

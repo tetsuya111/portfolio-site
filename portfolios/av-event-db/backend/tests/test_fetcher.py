@@ -255,3 +255,13 @@ def test_unparsed_page_is_refetched_with_retry_option():
         client=client, min_interval=1.0, sleep=clock.sleep, clock=clock.time, retry_unparsed=True
     )
     assert fetcher.fetch("https://a.example.com/e/1", "s", "detail").status is FetchStatus.FETCHED
+
+
+def test_failed_fetch_is_logged(caplog):
+    fetcher, _ = make_fetcher(lambda r: httpx.Response(503))
+    with caplog.at_level("WARNING"):
+        fetcher.fetch("https://a.example.com/event/1", "site", "detail")
+    assert (
+        "[site] 取得できませんでした（failed）: https://a.example.com/event/1 HTTP 503"
+        in caplog.text
+    )
