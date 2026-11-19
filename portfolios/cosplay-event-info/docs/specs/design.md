@@ -76,7 +76,7 @@ portfolios/cosplay-event-info/
 
 - `NormalizedLocation(venue_name, prefecture, address)`。
 - `RuleBasedNormalizer`: NFKC 正規化・空白の圧縮・括弧内の補足の除去、主要会場の辞書（東京ビッグサイト・幕張メッセ・インテックス大阪・ポートメッセなごや・池袋サンシャインシティ など。別名を含む）、47都道府県名の抽出。
-- `ClaudeNormalizer(api_key, client, fallback)`: Claude Messages API（`claude-haiku-5-5`）に生の場所文字列を渡し、JSON（`venue_name`・`prefecture`・`address`）で返させる。都道府県が47件のいずれでもない場合・JSON が壊れている場合・通信失敗時は `fallback`（ルールベース）の結果を返す（EV-6）。
+- `ClaudeNormalizer(client, fallback, model)`: 公式 SDK（`anthropic`）で Claude Messages API（既定 `claude-opus-5-5`、環境変数 `CLAUDE_MODEL` で変更可、`effort: low`）に生の場所文字列を渡し、構造化出力（`output_config.format` の JSON Schema）で `venue_name`・`prefecture`・`address` を返させる。都道府県が47件のいずれでもない場合・JSON が壊れている場合・通信失敗時は `fallback`（ルールベース）の結果を返す（EV-6）。
 - `get_normalizer()`: 環境変数 `ANTHROPIC_API_KEY` があれば `ClaudeNormalizer`、なければ `RuleBasedNormalizer`（EV-5）。
 - 同じ `location_raw` の結果はバッチ実行中メモリーにキャッシュし、DB に同じ `location_raw` のイベントがあればその `Venue` を再利用して API 呼び出しを減らす。
 

@@ -65,10 +65,10 @@
 
 **Files:** Create `backend/catalog/collector/normalizer.py`／Test `backend/tests/test_normalizer.py`
 
-**Interfaces:** Produces `NormalizedLocation(venue_name: str, prefecture: str, address: str)`（dataclass）、`RuleBasedNormalizer().normalize(raw: str) -> NormalizedLocation`、`ClaudeNormalizer(api_key: str, client: httpx.Client, fallback: RuleBasedNormalizer)`、`get_normalizer(env: Mapping[str, str] | None = None)`、`PREFECTURES: tuple[str, ...]`（47件）
+**Interfaces:** Produces `NormalizedLocation(venue_name: str, prefecture: str, address: str)`（dataclass）、`RuleBasedNormalizer().normalize(raw: str) -> NormalizedLocation`、`ClaudeNormalizer(client: anthropic.Anthropic, fallback: RuleBasedNormalizer, model: str = "claude-opus-5-5")`、`get_normalizer(env: Mapping[str, str] | None = None)`、`PREFECTURES: tuple[str, ...]`（47件）
 
-- [ ] テスト: `"東京ビッグサイト 西1ホール"` → 会場名 `東京ビッグサイト`・`東京都`、`"ビッグサイト"`（別名）→ 同じ、`"大阪府大阪市 某ホール"` → 都道府県 `大阪府`、空文字 → 会場名 `""`。Claude: MockTransport の正常 JSON を採用、壊れた JSON・不正な都道府県・500 はルールベースの結果。`get_normalizer({})` は RuleBased、`{"ANTHROPIC_API_KEY": "x"}` は Claude。
-- [ ] 実装（Claude API は `POST https://api.anthropic.com/v1/messages`、ヘッダー `x-api-key`・`anthropic-version: 2023-06-01`、モデル `claude-haiku-5-5`）→ 成功 → コミット
+- [ ] テスト: `"東京ビッグサイト 西1ホール"` → 会場名 `東京ビッグサイト`・`東京都`、`"ビッグサイト"`（別名）→ 同じ、`"大阪府大阪市 某ホール"` → 都道府県 `大阪府`、空文字 → 会場名 `""`。Claude: 偽のクライアントが返す正常 JSON を採用、壊れた JSON・不正な都道府県・API 例外・refusal はルールベースの結果。`get_normalizer({})` は RuleBased、`{"ANTHROPIC_API_KEY": "x"}` は Claude。
+- [ ] 実装（公式 SDK `anthropic` の `messages.create`、`output_config` に `effort: low` と JSON Schema の `format`）→ 成功 → コミット
 
 ### Task 5: ページ取得（Fetcher）— FT-1〜FT-4, NF-1
 
