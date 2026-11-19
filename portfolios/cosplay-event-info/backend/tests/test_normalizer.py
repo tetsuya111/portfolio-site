@@ -122,3 +122,11 @@ def test_get_normalizer_with_key_is_claude():
 
     assert isinstance(normalizer, ClaudeNormalizer)
     assert normalizer.model == "claude-sonnet-5-5"
+
+
+def test_claude_without_text_block_falls_back():
+    client = fake_client(None)
+
+    result = ClaudeNormalizer(client, fallback=rule).normalize("東京ビッグサイト")
+
+    assert result == rule.normalize("東京ビッグサイト")

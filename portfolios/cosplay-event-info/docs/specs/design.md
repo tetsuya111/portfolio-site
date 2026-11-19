@@ -55,9 +55,9 @@ portfolios/cosplay-event-info/
 - `Fetcher(client: httpx.Client, *, min_interval=1.0, sleep=time.sleep, clock=time.monotonic)`。テストでは `httpx.MockTransport` と偽の `sleep` を渡す。
 - `fetch(url, kind, *, force=False) -> FetchedPage | None`
   - 取得済み（成功ステータスの `FetchedPage` がある）かつ `force=False` なら `None` を返し、通信しない（FT-2・FT-3）。
-  - robots.txt をホストごとに1回取得し `urllib.robotparser` で判定。禁止なら取得せず `None`（NF-1）。robots.txt 自体の取得失敗時は許可とみなす。
+  - robots.txt をホストごとに1回取得し `urllib.robotparser` で判定。禁止なら取得せず `None`（NF-1）。robots.txt が 4xx なら制限なし、5xx・接続できない場合はすべて禁止とみなす（RFC 9309）。
   - 同じホストへの前回リクエストから `min_interval` 秒未満なら待つ（NF-1）。
-  - 結果（成功・失敗とも）を `FetchedPage` に保存（`update_or_create`）。通信例外・4xx/5xx は `error` に記録し `None` を返す（FT-4）。
+  - 結果（成功・失敗とも）を `FetchedPage` に保存（`update_or_create`）。ただし `--force` の再取得に失敗した場合は、前回の本文を残して `error` だけ更新する。通信例外・4xx/5xx は `error` に記録し `None` を返す（FT-4）。
 - User-Agent は汎用名 `cosplay-event-info-bot/0.1`（個人情報を含めない）。
 
 ### 抽出（parsers/）
@@ -66,7 +66,7 @@ portfolios/cosplay-event-info/
   - `parse_jsonld_events(html, base_url)`: `script[type="application/ld+json"]` から `@type` が `Event`（配列・`@graph` も探索）のものを `EventItem(name, url, location, start_date, end_date, notes)` に変換。
   - `parse_with_selectors(html, base_url, config, today)`: `SiteConfig`（`item`・`name`・`link`・`date`・`location`・`notes` の CSS セレクター）で抽出。
   - `parse_events(html, base_url, config, today)`: JSON-LD で1件以上取れればそれを、なければセレクターの結果を返す。名前・開始日がない項目は捨てる。
-  - `parse_date_range(text, today)`: 「2026年12月5日」「2026/12/5」「12/5(土)〜12/6(日)」「2026.12.05 - 06」などから開始日・終了日を返す。年がなければ `today` 以降で最も近い年を補う。
+  - `parse_date_range(text, today)`: 「2026年12月5日」「2026/12/5」「12/5(土)〜12/6(日)」「2026.12.05 - 06」などから開始日・終了日を返す。年がなければ今年とし、`today` の30日より前になる場合は翌年を補う（一覧に残っている直近の過去のイベントを翌年と誤解しないため）。
   - `SITES`: 対象4サイト（cos-cam・cos-compass・cossuke・cospot）の `SiteConfig`。セレクターは汎用的な候補（`article`、`.event` など）で、実サイトの構造に合わせて調整する前提（requirements の仮定を参照）。
 - **cosplayers.py**（CP-1）
   - `parse_category_page(html, base_url) -> (person_urls, next_page_url)`: MediaWiki のカテゴリーページ（`#mw-pages` 内のリンク、「次のページ」リンク）。
@@ -85,7 +85,7 @@ portfolios/cosplay-event-info/
 - `levenshtein(a, b)`: 2行の DP による標準実装（依存ライブラリなし）。
 - `normalize_name(s)`: NFKC → 小文字化 → 空白・記号（`・`、`-`、`!` など）の除去。
 - `similarity(a, b) = 1 - levenshtein(na, nb) / max(len(na), len(nb))`（両方空なら 0）。
-- `import_event(item, page, normalizer)`: 同じ `start_date` のイベントを候補に、類似度 0.85 以上で最大のものに統合（空の項目を補う・`sources` に追加）。なければ新規作成。結果を `created`/`merged` で返す。
+- `import_event(item, page, normalizer)`: 同じ `start_date` のイベント（会場がどちらも判明していて異なるものは除く）を候補に、類似度 0.85 以上で最大のものに統合（空の項目を補う・`sources` に追加）。なければ新規作成。結果を `created`/`merged` で返す。
 - `import_cosplayer(item, page)`: 名前の長さの差が `ceil(長い方×0.1)` 以内の候補に絞ってから類似度 0.9 以上で統合。SNS は URL を重複なく追加。
 - しきい値は `settings.EVENT_SIMILARITY_THRESHOLD`・`COSPLAYER_SIMILARITY_THRESHOLD` で変更できる。
 

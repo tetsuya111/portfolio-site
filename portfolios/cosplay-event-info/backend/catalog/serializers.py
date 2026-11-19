@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 
-from catalog.collector.importer import is_http_url
+from catalog.collector.parsers import is_http_url
 from catalog.models import Cosplayer, Event, FetchedPage, Venue
 
 

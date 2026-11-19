@@ -115,3 +115,15 @@ def test_sites_cover_target_sites():
         "https://cossuke.jp/",
         "https://cospot-media.com/category/event-list/",
     }
+
+
+def test_parse_date_range_weekday_before_bare_end_day():
+    assert parse_date_range("2026年12月5日(土)〜6日(日)", TODAY) == (
+        date(2026, 12, 5),
+        date(2026, 12, 6),
+    )
+
+
+def test_parse_date_range_recent_past_date_stays_this_year():
+    # 一覧に残っている直近の過去のイベントを1年後のイベントにしない
+    assert parse_date_range("11月10日", TODAY) == (date(2026, 11, 10), date(2026, 11, 10))

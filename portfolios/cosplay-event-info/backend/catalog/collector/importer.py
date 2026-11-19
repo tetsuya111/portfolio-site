@@ -1,21 +1,16 @@
 """抽出した項目を DB に取り込む。似た名前のものは既存のレコードに統合する（EV-3・CP-3）。"""
 
 import math
-from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.db import transaction
 
 from catalog.collector.normalizer import Normalizer
+from catalog.collector.parsers import is_http_url
 from catalog.collector.parsers.cosplayers import CosplayerItem
 from catalog.collector.parsers.events import EventItem
 from catalog.collector.similarity import normalize_name, similarity
 from catalog.models import Cosplayer, Event, FetchedPage, Venue
-
-
-def is_http_url(url: str) -> bool:
-    parts = urlsplit(url or "")
-    return parts.scheme in ("http", "https") and bool(parts.netloc)
 
 
 def _safe_url(url: str) -> str:
@@ -57,10 +52,13 @@ def resolve_venue(location_raw: str, normalizer: Normalizer) -> Venue | None:
 # ---- イベント ----
 
 
-def _find_similar_event(item: EventItem) -> Event | None:
+def _find_similar_event(item: EventItem, venue: Venue | None) -> Event | None:
+    """同じ開始日で名前が似ているイベントを探す。会場がどちらも分かっていて違う場合は別とする。"""
     threshold = settings.EVENT_SIMILARITY_THRESHOLD
     best, best_score = None, 0.0
     for candidate in Event.objects.filter(start_date=item.start_date):
+        if venue and candidate.venue_id and candidate.venue_id != venue.pk:
+            continue
         score = similarity(candidate.name, item.name)
         if score >= threshold and score > best_score:
             best, best_score = candidate, score
@@ -71,7 +69,8 @@ def _find_similar_event(item: EventItem) -> Event | None:
 def import_event(item: EventItem, page: FetchedPage, normalizer: Normalizer) -> tuple[Event, bool]:
     """イベントを取り込み、(イベント, 新規作成なら True) を返す。"""
     end_date = max(item.start_date, item.end_date)
-    existing = _find_similar_event(item)
+    venue = resolve_venue(item.location, normalizer)
+    existing = _find_similar_event(item, venue)
     if existing:
         fields = []
         for name, value in (
@@ -83,8 +82,8 @@ def import_event(item: EventItem, page: FetchedPage, normalizer: Normalizer) -> 
             if not getattr(existing, name) and value:
                 setattr(existing, name, value)
                 fields.append(name)
-        if existing.venue_id is None and item.location:
-            existing.venue = resolve_venue(item.location, normalizer)
+        if existing.venue_id is None and venue:
+            existing.venue = venue
             fields.append("venue")
         if fields:
             existing.save(update_fields=[*fields, "updated_at"])
@@ -95,7 +94,7 @@ def import_event(item: EventItem, page: FetchedPage, normalizer: Normalizer) -> 
         name=item.name[:300],
         url=_safe_url(item.url),
         location_raw=item.location.strip()[:300],
-        venue=resolve_venue(item.location, normalizer),
+        venue=venue,
         start_date=item.start_date,
         end_date=end_date,
         notes=item.notes,

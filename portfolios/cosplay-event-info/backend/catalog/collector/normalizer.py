@@ -150,7 +150,9 @@ class ClaudeNormalizer:
         )
         if response.stop_reason != "end_turn":
             raise ValueError(f"想定外の stop_reason: {response.stop_reason}")
-        text = next(b.text for b in response.content if b.type == "text")
+        text = next((b.text for b in response.content if b.type == "text"), None)
+        if text is None:
+            raise ValueError("応答にテキストがありません")
         data = json.loads(text)  # 壊れた JSON は ValueError（JSONDecodeError）
         venue_name = str(data["venue_name"]).strip()
         prefecture = str(data["prefecture"]).strip()

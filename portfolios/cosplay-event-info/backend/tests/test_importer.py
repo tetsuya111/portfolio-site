@@ -185,3 +185,21 @@ def test_cosplayer_exactly_at_threshold_with_length_difference_is_merged():
     _, created = import_cosplayer(cosplayer(name="あいうえおかきくけ"), page("https://w.example/2"))
 
     assert created is False
+
+
+def test_similar_events_at_different_venues_are_separate():
+    normalizer = CountingNormalizer()
+    import_event(
+        item(name="コスプレフェスティバル2026 東京会場", location="東京ビッグサイト"),
+        page("https://a.example/1"),
+        normalizer,
+    )
+
+    _, created = import_event(
+        item(name="コスプレフェスティバル2026 大阪会場", location="インテックス大阪"),
+        page("https://b.example/2"),
+        normalizer,
+    )
+
+    assert created is True
+    assert Event.objects.count() == 2

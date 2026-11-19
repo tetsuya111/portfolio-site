@@ -1,9 +1,10 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { type FormEvent, Suspense, useState } from "react";
+import { Suspense } from "react";
 
 import { CosplayerList } from "@/components/CosplayerList";
+import { KeywordSearchForm } from "@/components/KeywordSearchForm";
 import { Pagination } from "@/components/Pagination";
 import { fetchCosplayers } from "@/lib/api";
 import { useFetch } from "@/lib/useFetch";
@@ -14,7 +15,6 @@ function CosplayersContent() {
   const params = useSearchParams();
   const q = params.get("q") ?? "";
   const page = Math.max(1, Number(params.get("page")) || 1);
-  const [draft, setDraft] = useState(q);
   const { data, error, loading } = useFetch(() => fetchCosplayers({ q, page }), params.toString());
 
   const navigate = (nextQ: string, nextPage: number) => {
@@ -25,28 +25,15 @@ function CosplayersContent() {
     router.push(qs ? `${pathname}?${qs}` : pathname);
   };
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    navigate(draft, 1);
-  };
-
   return (
     <>
       <h1>コスプレイヤーを探す</h1>
-      <form className="search-form card" onSubmit={submit} role="search">
-        <label className="field">
-          キーワード
-          <input
-            type="search"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="名前・説明文・経歴"
-          />
-        </label>
-        <div>
-          <button type="submit">検索</button>
-        </div>
-      </form>
+      <KeywordSearchForm
+        key={q}
+        initial={q}
+        placeholder="名前・説明文・経歴"
+        onSearch={(keyword) => navigate(keyword, 1)}
+      />
       {error && <p className="error">{error}</p>}
       {loading && <p className="muted">読み込み中…</p>}
       {data && !loading && (

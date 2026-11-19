@@ -8,6 +8,7 @@ from urllib.robotparser import RobotFileParser
 
 import httpx
 
+from catalog.collector.parsers import is_http_url
 from catalog.models import FetchedPage
 
 logger = logging.getLogger(__name__)
@@ -32,12 +33,12 @@ class Fetcher:
         self._sleep = sleep
         self._clock = clock
         self._last_request: dict[str, float] = {}
-        self._robots: dict[str, RobotFileParser | None] = {}
+        # None は制限なし、False はすべて禁止（robots.txt がサーバーエラー・接続不可）
+        self._robots: dict[str, RobotFileParser | bool | None] = {}
 
     def fetch(self, url: str, kind: str, *, force: bool = False) -> FetchedPage | None:
         """ページを取得する。取得済み・robots.txt で禁止・失敗のときは None を返す。"""
-        parts = urlsplit(url)
-        if parts.scheme not in ("http", "https") or not parts.netloc:
+        if not is_http_url(url):
             logger.warning("http(s) 以外の URL は取得しません: %s", url)
             return None
         if not force and self._already_fetched(url):
@@ -91,14 +92,23 @@ class Fetcher:
         if origin not in self._robots:
             self._robots[origin] = self._load_robots(origin)
         parser = self._robots[origin]
-        return parser is None or parser.can_fetch(USER_AGENT, url)
+        if parser is None or parser is True:
+            return True
+        if parser is False:
+            return False
+        return parser.can_fetch(USER_AGENT, url)
 
-    def _load_robots(self, origin: str) -> RobotFileParser | None:
-        """robots.txt を読む。取得できない場合は None（制限なし）とする。"""
+    def _load_robots(self, origin: str) -> RobotFileParser | bool | None:
+        """robots.txt を読む（RFC 9309）。
+
+        4xx（置いていない）なら制限なし、5xx・接続できない場合はすべて禁止とみなす。
+        """
         try:
             response = self._get(f"{origin}/robots.txt")
         except httpx.HTTPError:
-            return None
+            return False
+        if response.status_code >= 500:
+            return False
         if response.status_code != 200:
             return None
         parser = RobotFileParser()
@@ -109,6 +119,13 @@ class Fetcher:
     def _save(
         url: str, kind: str, status_code: int | None, content: str, error: str
     ) -> FetchedPage:
+        failed = status_code is None or not 200 <= status_code < 300
+        previous = FetchedPage.objects.filter(url=url).first()
+        if failed and previous and previous.is_success:
+            # --force の再取得に失敗した場合は、前回取得できた本文を残してエラーだけ記録する
+            previous.error = error
+            previous.save(update_fields=["error", "fetched_at"])
+            return previous
         page, _ = FetchedPage.objects.update_or_create(
             url=url,
             defaults={

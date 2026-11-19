@@ -137,3 +137,52 @@ def test_non_http_url_is_rejected():
 
     assert fetcher.fetch("file:///etc/passwd", "event") is None
     assert calls == []
+
+
+def make_fetcher_with_robots(robots_response, handler=ok):
+    calls = []
+
+    def recording(request):
+        calls.append(str(request.url))
+        if request.url.path == "/robots.txt":
+            return robots_response(request)
+        return handler(request)
+
+    client = httpx.Client(transport=httpx.MockTransport(recording))
+    return Fetcher(client, min_interval=0, sleep=lambda s: None), calls
+
+
+def test_robots_server_error_disallows_all():
+    fetcher, calls = make_fetcher_with_robots(lambda r: httpx.Response(503))
+
+    assert fetcher.fetch("https://example.com/a", "event") is None
+    assert "https://example.com/a" not in calls
+
+
+def test_robots_unreachable_disallows_all():
+    def boom(request):
+        raise httpx.ConnectError("down", request=request)
+
+    fetcher, calls = make_fetcher_with_robots(boom)
+
+    assert fetcher.fetch("https://example.com/a", "event") is None
+    assert "https://example.com/a" not in calls
+
+
+def test_robots_not_found_allows_all():
+    fetcher, _ = make_fetcher_with_robots(lambda r: httpx.Response(404))
+
+    assert fetcher.fetch("https://example.com/a", "event") is not None
+
+
+def test_failed_force_refetch_keeps_previous_content():
+    responses = iter([httpx.Response(200, text="saved body"), httpx.Response(500)])
+    fetcher, _ = make_fetcher(lambda r: next(responses))
+    fetcher.fetch("https://example.com/p", "event")
+
+    assert fetcher.fetch("https://example.com/p", "event", force=True) is None
+
+    saved = FetchedPage.objects.get(url="https://example.com/p")
+    assert saved.status_code == 200
+    assert saved.content == "saved body"
+    assert "500" in saved.error
