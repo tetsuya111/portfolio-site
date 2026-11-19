@@ -9,3 +9,4 @@
 | ポートフォリオ取り込みコマンド | [portfolios/portfolio-importer/](../portfolios/portfolio-importer/) | [README](../portfolios/portfolio-importer/README.md)・[配信の仕組み](../portfolio-site/docs/apps.md) |
 | バックエンドの docker compose 登録コマンド（VPS 用の compose・nginx） | [portfolios/backend-compose/](../portfolios/backend-compose/) | [README](../portfolios/backend-compose/README.md)・[apps.json の env](../portfolio-site/docs/apps.md#appsjson-の書式) |
 | スキルシートからの自己紹介作成コマンド | [portfolios/skillsheet-profile/](../portfolios/skillsheet-profile/) | [README](../portfolios/skillsheet-profile/README.md) |
+| AVイベント情報DBサイト（DRF + Next.js） | [portfolios/av-event-db/](../portfolios/av-event-db/) | [README](../portfolios/av-event-db/README.md)・[要件](../portfolios/av-event-db/docs/specs/requirements.md)・[設計](../portfolios/av-event-db/docs/specs/design.md)・[タスク](../portfolios/av-event-db/docs/specs/tasks.md) |
