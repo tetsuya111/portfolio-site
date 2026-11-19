@@ -42,6 +42,8 @@ npm run dev:backend    # http://localhost:8000
 npm run dev:frontend   # http://localhost:3000/apps/av-event-db/
 ```
 
+開発サーバーは `http://localhost:3000/apps/av-event-db/` か `http://127.0.0.1:3000/apps/av-event-db/` で開いてください。それ以外のホスト（LAN の IP など）で開くと、Next.js が JS の読み込みを拒否してボタンなどが動かなくなります。その場合は `NEXT_DEV_ALLOWED_ORIGINS` にホストを指定してから起動し直してください。
+
 ## イベントの取り込み
 
 ```bash
@@ -78,13 +80,14 @@ npm run fetch:events -- --retry-unparsed          # 抽出ルールを直した�
 | `APP_ENV` | `development`（DEBUG 有効）・`test`・それ以外は本番扱い（DEBUG 無効・`DJANGO_SECRET_KEY` 必須） | 本番扱い（`npm run` 経由のときは `development`） |
 | `DJANGO_SECRET_KEY` | 本番では必須 | 開発用の固定値 |
 | `ALLOWED_HOSTS` | カンマ区切り | `localhost,127.0.0.1` |
-| `CORS_ORIGINS` | フロントエンドのオリジン（カンマ区切り） | `http://localhost:3000` |
+| `CORS_ORIGINS` | フロントエンドのオリジン（カンマ区切り） | `http://localhost:3000,http://127.0.0.1:3000` |
 | `DATABASE_PATH` | SQLite のファイル | `backend/db.sqlite3` |
 | `DJANGO_ENABLE_ADMIN` | `1` で `/admin/` を有効にする | 無効 |
 | `FETCH_MIN_INTERVAL` | 同じサイトへのリクエスト間隔（秒） | `1.0` |
 | `ANTHROPIC_API_KEY` | 開催場所の AI 補完（未設定なら規則ベース） | なし |
 | `VENUE_NORMALIZER_MODEL` | AI 補完に使う Claude のモデル | `claude-opus-5-5` |
 | `GOOGLE_MAPS_GEOCODING_API_KEY` | 会場の緯度経度の取得（バックエンド） | なし |
+| `NEXT_DEV_ALLOWED_ORIGINS` | 開発サーバーを localhost・127.0.0.1 以外のホスト（LAN の IP など）で開くときに許可するホスト（カンマ区切り）。`CORS_ORIGINS` にも同じオリジンを追加する | なし |
 | `NEXT_PUBLIC_API_BASE_URL` | フロントエンドから呼ぶ API の場所（ビルド時） | `http://localhost:8000` |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | 地図表示用の Maps JavaScript API キー（ビルド時。未設定なら会場一覧で表示） | なし |
 
