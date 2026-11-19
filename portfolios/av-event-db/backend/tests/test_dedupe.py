@@ -47,7 +47,9 @@ class TestFindDuplicate:
 
     def test_different_day_is_not_duplicate(self):
         self._event("新作DVD発売記念サイン会 in 秋葉原")
-        assert find_duplicate("新作DVD発売記念サイン会 in 秋葉原", dt.date(2026, 12, 2), None) is None
+        assert (
+            find_duplicate("新作DVD発売記念サイン会 in 秋葉原", dt.date(2026, 12, 2), None) is None
+        )
 
     def test_dissimilar_title_is_not_duplicate(self):
         self._event("新作DVD発売記念サイン会")

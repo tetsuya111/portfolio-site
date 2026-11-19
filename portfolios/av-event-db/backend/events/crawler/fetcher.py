@@ -1,4 +1,7 @@
-"""対象サイトのページ取得。robots.txt・アクセス間隔・取得ページのログを扱う（REQ-1.4〜1.6, REQ-2）。"""
+"""対象サイトのページ取得。robots.txt・アクセス間隔・取得ページのログを扱う。
+
+対応要件: REQ-1.4〜1.6, REQ-2
+"""
 
 from __future__ import annotations
 
@@ -67,9 +70,10 @@ class PageFetcher:
     def fetch(
         self, url: str, source_name: str, kind: str, cookies: dict[str, str] | None = None
     ) -> FetchResult:
-        if kind == FetchedPage.Kind.DETAIL and FetchedPage.objects.filter(
-            url=url, result=FetchedPage.Result.SUCCESS
-        ).exists():
+        if (
+            kind == FetchedPage.Kind.DETAIL
+            and FetchedPage.objects.filter(url=url, result=FetchedPage.Result.SUCCESS).exists()
+        ):
             return FetchResult(FetchStatus.SKIPPED)
 
         if not self._allowed(url):

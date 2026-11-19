@@ -130,7 +130,7 @@ portfolios/av-event-db/
 1. 規則ベースの前処理（NFKC・連続空白の統一・前後の空白除去）。空なら `None`。
 2. `VenueAlias` に前処理後の文字列があればその会場を返す（AIを呼ばない）。
 3. ノーマライザで `{name, address, prefecture}` を得る。
-   - `ClaudeVenueNormalizer`: `ANTHROPIC_API_KEY` があるとき使う。モデルは環境変数 `VENUE_NORMALIZER_MODEL`（既定 `claude-haiku-5-5`）。出力をJSONに限定するプロンプトで、会場名・住所・都道府県を補完させる。JSONとして読めない・API例外のときは規則ベースにフォールバックする（REQ-4.3）。
+   - `ClaudeVenueNormalizer`: `ANTHROPIC_API_KEY` があるとき使う。モデルは環境変数 `VENUE_NORMALIZER_MODEL`（既定 `claude-opus-5-5`、`effort: low`）。構造化出力（JSON Schema）で、会場名・住所・都道府県を補完させる。JSONとして読めない・API例外のときは規則ベースにフォールバックする（REQ-4.3）。
    - `RuleVenueNormalizer`: 前処理後の文字列を `name` とし、文字列中の都道府県名を `prefecture` に入れる。
 4. `name`+`address` で `Venue` を get_or_create（REQ-4.2）し、`VenueAlias` を作る。
 5. 新規会場で座標がなく `GOOGLE_MAPS_GEOCODING_API_KEY` があれば Google Geocoding API で緯度経度を取得する（REQ-4.4）。失敗しても会場は保存する。
