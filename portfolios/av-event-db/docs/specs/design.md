@@ -62,7 +62,7 @@ portfolios/av-event-db/
 
 ## 取り込みバッチ（REQ-1・REQ-2）
 
-`python manage.py fetch_events [--source <name> ...] [--limit N] [--dry-run]`
+`python manage.py fetch_events [--source <name> ...] [--limit N] [--sources-file <path>]`
 
 1. `sources.json` を読み、`--source` 指定があれば絞り込む（REQ-1.3）。
 2. 各サイトの `list_urls` を取得する（一覧ページは毎回取得し、ログは残す）。
