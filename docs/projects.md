@@ -9,3 +9,4 @@
 | ポートフォリオ取り込みコマンド | [portfolios/portfolio-importer/](../portfolios/portfolio-importer/) | [README](../portfolios/portfolio-importer/README.md)・[配信の仕組み](../portfolio-site/docs/apps.md) |
 | バックエンドの docker compose 登録コマンド（VPS 用の compose・nginx） | [portfolios/backend-compose/](../portfolios/backend-compose/) | [README](../portfolios/backend-compose/README.md)・[apps.json の env](../portfolio-site/docs/apps.md#appsjson-の書式) |
 | スキルシートからの自己紹介作成コマンド | [portfolios/skillsheet-profile/](../portfolios/skillsheet-profile/) | [README](../portfolios/skillsheet-profile/README.md) |
+| コスプレイベント情報まとめサイト（Django REST Framework + Next.js） | [portfolios/cosplay-event-info/](../portfolios/cosplay-event-info/) | [README](../portfolios/cosplay-event-info/README.md)・[要件定義](../portfolios/cosplay-event-info/docs/specs/requirements.md)・[設計](../portfolios/cosplay-event-info/docs/specs/design.md) |
