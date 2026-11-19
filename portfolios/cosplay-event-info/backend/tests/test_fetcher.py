@@ -1,0 +1,139 @@
+import httpx
+import pytest
+
+from catalog.collector.fetcher import Fetcher
+from catalog.models import FetchedPage
+
+pytestmark = pytest.mark.django_db
+
+ROBOTS = "User-agent: *\nDisallow: /private/\n"
+
+
+class FakeClock:
+    def __init__(self):
+        self.now = 0.0
+        self.slept = []
+
+    def clock(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.slept.append(seconds)
+        self.now += seconds
+
+
+def make_fetcher(handler, clock=None, min_interval=1.0):
+    calls = []
+
+    def recording(request):
+        calls.append(str(request.url))
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text=ROBOTS)
+        return handler(request)
+
+    clock = clock or FakeClock()
+    client = httpx.Client(transport=httpx.MockTransport(recording))
+    fetcher = Fetcher(client, min_interval=min_interval, sleep=clock.sleep, clock=clock.clock)
+    return fetcher, calls
+
+
+def ok(request):
+    return httpx.Response(200, text=f"<html>{request.url.path}</html>")
+
+
+def test_fetch_saves_page():
+    fetcher, _ = make_fetcher(ok)
+
+    page = fetcher.fetch("https://example.com/events", "event")
+
+    assert page is not None
+    saved = FetchedPage.objects.get(url="https://example.com/events")
+    assert saved.status_code == 200
+    assert saved.kind == "event"
+    assert "/events" in saved.content
+
+
+def test_fetched_url_is_not_fetched_again():
+    fetcher, calls = make_fetcher(ok)
+    fetcher.fetch("https://example.com/events", "event")
+
+    second = fetcher.fetch("https://example.com/events", "event")
+
+    assert second is None
+    assert calls.count("https://example.com/events") == 1
+
+
+def test_already_saved_page_from_previous_run_is_skipped():
+    FetchedPage.objects.create(url="https://example.com/old", kind="event", status_code=200)
+    fetcher, calls = make_fetcher(ok)
+
+    assert fetcher.fetch("https://example.com/old", "event") is None
+    assert calls == []
+
+
+def test_force_refetches():
+    fetcher, calls = make_fetcher(ok)
+    fetcher.fetch("https://example.com/events", "event")
+
+    page = fetcher.fetch("https://example.com/events", "event", force=True)
+
+    assert page is not None
+    assert calls.count("https://example.com/events") == 2
+    assert FetchedPage.objects.filter(url="https://example.com/events").count() == 1
+
+
+def test_failed_page_is_logged_and_retried_next_time():
+    fetcher, calls = make_fetcher(lambda r: httpx.Response(404, text="not found"))
+
+    assert fetcher.fetch("https://example.com/missing", "event") is None
+    saved = FetchedPage.objects.get(url="https://example.com/missing")
+    assert saved.status_code == 404
+    assert "404" in saved.error
+
+    fetcher.fetch("https://example.com/missing", "event")
+    assert calls.count("https://example.com/missing") == 2
+
+
+def test_network_error_is_logged():
+    def boom(request):
+        raise httpx.ConnectError("connection refused", request=request)
+
+    fetcher, _ = make_fetcher(boom)
+
+    assert fetcher.fetch("https://example.com/down", "event") is None
+    saved = FetchedPage.objects.get(url="https://example.com/down")
+    assert saved.status_code is None
+    assert "connection refused" in saved.error
+
+
+def test_robots_disallowed_is_not_fetched():
+    fetcher, calls = make_fetcher(ok)
+
+    assert fetcher.fetch("https://example.com/private/a", "event") is None
+    assert "https://example.com/private/a" not in calls
+    assert calls.count("https://example.com/robots.txt") == 1
+
+
+def test_robots_is_fetched_once_per_host():
+    fetcher, calls = make_fetcher(ok)
+    fetcher.fetch("https://example.com/a", "event")
+    fetcher.fetch("https://example.com/b", "event")
+
+    assert calls.count("https://example.com/robots.txt") == 1
+
+
+def test_waits_between_requests_to_same_host():
+    clock = FakeClock()
+    fetcher, _ = make_fetcher(ok, clock=clock, min_interval=1.0)
+
+    fetcher.fetch("https://example.com/a", "event")
+    fetcher.fetch("https://example.com/b", "event")
+
+    assert sum(clock.slept) >= 1.0
+
+
+def test_non_http_url_is_rejected():
+    fetcher, calls = make_fetcher(ok)
+
+    assert fetcher.fetch("file:///etc/passwd", "event") is None
+    assert calls == []
