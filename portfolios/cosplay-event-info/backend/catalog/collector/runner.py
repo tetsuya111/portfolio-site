@@ -71,7 +71,7 @@ def run_event_collection(
                 _count_not_fetched(fetcher, counts)
                 continue
             counts["pages"] += 1
-            for item in parse_events(page.content, page.url, site, today):
+            for item in parse_events(page.content, page.final_url or page.url, site, today):
                 _, created = import_event(item, page, normalizer)
                 counts["created" if created else "merged"] += 1
         logger.info("イベント収集 %s: %s", site.name, counts)
@@ -96,7 +96,7 @@ def run_cosplayer_collection(
             counts["failed"] += 1
             break
         counts["pages"] += 1
-        person_urls, url = parse_category_page(category.content, category.url)
+        person_urls, url = parse_category_page(category.content, category.final_url or category.url)
         for person_url in person_urls:
             if limit is not None and counts["created"] + counts["merged"] >= limit:
                 logger.info("コスプレイヤー収集: 上限 %s 人に達したため終了", limit)
@@ -106,7 +106,7 @@ def run_cosplayer_collection(
                 _count_not_fetched(fetcher, counts)
                 continue
             counts["pages"] += 1
-            item = parse_person_page(page.content, page.url)
+            item = parse_person_page(page.content, page.final_url or page.url)
             if not item.name:
                 continue
             _, created = import_cosplayer(item, page)

@@ -231,3 +231,25 @@ def test_failed_force_refetch_is_counted_as_failed(fake_web, monkeypatch):
 
     with pytest.raises(CommandError):
         call_command("fetch_events", "--force")
+
+
+def test_relative_links_use_url_after_redirect():
+    class RedirectWeb(Web):
+        def handler(self, request):
+            if str(request.url) == "https://a.example/event/":
+                self.calls.append(str(request.url))
+                return httpx.Response(301, headers={"Location": "/events/list/"})
+            return super().handler(request)
+
+    html = '<article class="event"><h2><a href="detail/1">相対リンク</a></h2><span class="date">12/5</span></article>'
+    web = RedirectWeb({"https://a.example/events/list/": html})
+
+    runner.run_event_collection(
+        web.fetcher(),
+        [site("a", "https://a.example/event/")],
+        RuleBasedNormalizer(),
+        TODAY,
+        force=False,
+    )
+
+    assert Event.objects.get().url == "https://a.example/events/list/detail/1"

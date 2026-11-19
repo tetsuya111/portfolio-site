@@ -23,3 +23,21 @@ def test_development_uses_dev_key():
 
     assert isinstance(key, str)
     assert key
+
+
+def test_empty_env_values_fall_back_to_defaults(monkeypatch):
+    import importlib
+
+    import config.settings as settings_module
+
+    monkeypatch.setenv("DATABASE_PATH", "")
+    monkeypatch.setenv("FETCH_MIN_INTERVAL", "")
+    monkeypatch.setenv("ALLOWED_HOSTS", "")
+    try:
+        reloaded = importlib.reload(settings_module)
+        assert reloaded.DATABASES["default"]["NAME"].endswith("cosplay.db")
+        assert reloaded.FETCH_MIN_INTERVAL == 1.0
+        assert reloaded.ALLOWED_HOSTS == ["localhost", "127.0.0.1"]
+    finally:
+        monkeypatch.undo()
+        importlib.reload(settings_module)

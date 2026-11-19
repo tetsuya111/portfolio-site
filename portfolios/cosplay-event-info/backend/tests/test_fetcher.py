@@ -229,3 +229,37 @@ def test_redirect_is_followed_and_saved_under_requested_url():
     assert page is not None
     assert page.url == "https://a.example/old"
     assert page.content == "moved body"
+
+
+def test_redirected_robots_txt_is_followed():
+    def handler(request):
+        if request.url.path == "/robots.txt" and request.url.host == "a.example":
+            return httpx.Response(301, headers={"Location": "https://www.a.example/robots.txt"})
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text=ROBOTS)
+        return httpx.Response(200, text="body")
+
+    fetcher = Fetcher(
+        httpx.Client(transport=httpx.MockTransport(handler)), min_interval=0, sleep=lambda s: None
+    )
+
+    assert fetcher.fetch("https://a.example/private/x", "event") is None
+    assert fetcher.last_outcome == "disallowed"
+
+
+def test_final_url_after_redirect_is_saved():
+    def handler(request):
+        if request.url.path == "/robots.txt":
+            return httpx.Response(404)
+        if request.url.path == "/event/":
+            return httpx.Response(301, headers={"Location": "/events/list/"})
+        return httpx.Response(200, text="list")
+
+    fetcher = Fetcher(
+        httpx.Client(transport=httpx.MockTransport(handler)), min_interval=0, sleep=lambda s: None
+    )
+
+    page = fetcher.fetch("https://a.example/event/", "event")
+
+    assert page.url == "https://a.example/event/"
+    assert page.final_url == "https://a.example/events/list/"

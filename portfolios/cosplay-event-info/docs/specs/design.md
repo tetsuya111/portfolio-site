@@ -41,7 +41,7 @@ portfolios/cosplay-event-info/
 
 | モデル | 項目 | 備考 |
 |---|---|---|
-| `FetchedPage` | `url`(unique), `kind`(`event`/`cosplayer`), `status_code`(null可), `content`(text), `error`(text), `fetched_at` | FT-1。`status_code` が 200〜299 のものを「取得済み」とする |
+| `FetchedPage` | `url`(unique), `final_url`（リダイレクト後。相対リンクの基準）, `kind`(`event`/`cosplayer`), `status_code`(null可), `content`(text), `error`(text), `fetched_at` | FT-1。`status_code` が 200〜299 のものを「取得済み」とする |
 | `Venue` | `name`(unique), `prefecture`, `address` | EV-4。正規化後の会場。地図の単位 |
 | `Event` | `name`, `url`, `location_raw`, `venue`(FK, null可), `start_date`, `end_date`, `notes`, `source_url`, `sources`(M2M→FetchedPage), `created_at`, `updated_at` | EV-1。`start_date` に索引。`end_date >= start_date` を CHECK 制約で保証 |
 | `Cosplayer` | `name`, `sns_links`(JSON: URL の配列), `career`, `description`, `notes`, `source_url`, `sources`(M2M→FetchedPage), `created_at`, `updated_at` | CP-1 |
@@ -64,7 +64,7 @@ portfolios/cosplay-event-info/
 ### 抽出（parsers/）
 
 - **events.py**（EV-1）
-  - `parse_jsonld_events(html, base_url)`: （日時は時差を考慮して日本時間の日付にする）`script[type="application/ld+json"]` から `@type` が `Event`（配列・`@graph` も探索）のものを `EventItem(name, url, location, start_date, end_date, notes)` に変換。
+  - `parse_jsonld_events(html, base_url)`: （日時は時差を考慮して日本時間の日付にする）`script[type="application/ld+json"]` から `@type` が `Event`（配列・`@graph`・`ItemList` などの入れ子も探索）のものを `EventItem(name, url, location, start_date, end_date, notes)` に変換。
   - `parse_with_selectors(html, base_url, config, today)`: `SiteConfig`（`item`・`name`・`link`・`date`・`location`・`notes` の CSS セレクター）で抽出。
   - `parse_events(html, base_url, config, today)`: JSON-LD で1件以上取れればそれを、なければセレクターの結果を返す。名前・開始日がない項目は捨てる。
   - `parse_date_range(text, today)`: 「2026年12月5日」「2026/12/5」「12/5(土)〜12/6(日)」「2026.12.05 - 06」などから開始日・終了日を返す。年がなければ今年とし、`today` の30日より前になる場合は翌年を補う（一覧に残っている直近の過去のイベントを翌年と誤解しないため）。
@@ -86,7 +86,7 @@ portfolios/cosplay-event-info/
 - `levenshtein(a, b)`: 2行の DP による標準実装（依存ライブラリなし）。
 - `normalize_name(s)`: NFKC → 小文字化 → 空白・記号（`・`、`-`、`!` など）の除去。
 - `similarity(a, b) = 1 - levenshtein(na, nb) / max(len(na), len(nb))`（両方空なら 0）。
-- `import_event(item, page, normalizer)`: 同じ `start_date` のイベント（開催地の都道府県がどちらも判明していて異なるものは除く）を候補に、類似度 0.85 以上で最大のものに統合（空の項目を補う・`sources` に追加）。なければ新規作成。結果を `created`/`merged` で返す。
+- `import_event(item, page, normalizer)`: 同じ `start_date` のイベント（開催地の都道府県がどちらも判明していて異なるものは除く）を候補に、類似度 0.85 以上で最大のものに統合（空の項目を補う・終了日は長いほうに延ばす・`sources` に追加）。なければ新規作成。結果を `created`/`merged` で返す。
 - `import_cosplayer(item, page)`: 名前の長さの差が `ceil(長い方×0.1)` 以内の候補に絞ってから類似度 0.9 以上で統合。SNS は URL を重複なく追加。
 - しきい値は `settings.EVENT_SIMILARITY_THRESHOLD`・`COSPLAYER_SIMILARITY_THRESHOLD` で変更できる。
 

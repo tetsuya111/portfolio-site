@@ -86,8 +86,10 @@ def _walk(obj: Any) -> Iterator[dict[str, Any]]:
     elif isinstance(obj, dict):
         if _is_event(obj):
             yield obj
-        if "@graph" in obj:
-            yield from _walk(obj["@graph"])
+            return
+        # @graph や ItemList の itemListElement[].item など、入れ子の中も探す
+        for value in obj.values():
+            yield from _walk(value)
 
 
 def _iso_date(value: Any) -> date | None:

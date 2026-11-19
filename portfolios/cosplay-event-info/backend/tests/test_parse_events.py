@@ -160,3 +160,22 @@ def test_item_text_is_used_when_date_selector_matches_nothing():
     [event] = parse_events(html, "https://example.com/", CONFIG, TODAY)
 
     assert event.start_date == date(2026, 12, 5)
+
+
+def test_jsonld_events_inside_item_list_are_found():
+    html = (
+        '<script type="application/ld+json">{"@type": "ItemList", "itemListElement": ['
+        '{"@type": "ListItem", "item": {"@type": "Event", "name": "入れ子", "startDate": "2026-12-05"}}'
+        "]}</script>"
+    )
+
+    [event] = parse_events(html, "https://example.com/", CONFIG, TODAY)
+
+    assert event.name == "入れ子"
+
+
+def test_parse_date_range_leap_day_next_year():
+    assert parse_date_range("2/29〜3/1", date(2027, 12, 10)) == (
+        date(2028, 2, 29),
+        date(2028, 3, 1),
+    )

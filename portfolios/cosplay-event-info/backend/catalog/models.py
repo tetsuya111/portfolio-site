@@ -11,6 +11,7 @@ class FetchedPage(models.Model):
         COSPLAYER = "cosplayer", "コスプレイヤー"
 
     url = models.URLField("URL", max_length=2000, unique=True)
+    final_url = models.URLField("リダイレクト後の URL", max_length=2000, blank=True)
     kind = models.CharField("種別", max_length=20, choices=Kind.choices)
     status_code = models.PositiveSmallIntegerField("HTTP ステータス", null=True, blank=True)
     content = models.TextField("本文", blank=True)

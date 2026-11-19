@@ -39,7 +39,7 @@ class Fetcher:
         self._clock = clock
         self._last_request: dict[str, float] = {}
         # None は制限なし、False はすべて禁止（robots.txt がサーバーエラー・接続不可）
-        self._robots: dict[str, RobotFileParser | bool | None] = {}
+        self._robots: dict[str, RobotFileParser | Literal[False] | None] = {}
         self.last_outcome: Outcome | None = None
 
     def fetch(self, url: str, kind: str, *, force: bool = False) -> FetchedPage | None:
@@ -82,7 +82,8 @@ class Fetcher:
             logger.warning("取得に失敗: %s (HTTP %s)", current, response.status_code)
             self._save(url, kind, response.status_code, "", f"HTTP {response.status_code}")
             return None, "failed"
-        return self._save(url, kind, response.status_code, response.text, ""), "fetched"
+        page = self._save(url, kind, response.status_code, response.text, "", final_url=current)
+        return page, "fetched"
 
     # ---- 内部処理 ----
 
@@ -92,7 +93,7 @@ class Fetcher:
             url=url, status_code__gte=200, status_code__lt=300
         ).exists()
 
-    def _get(self, url: str) -> httpx.Response:
+    def _get(self, url: str, *, follow_redirects: bool = False) -> httpx.Response:
         host = urlsplit(url).netloc
         last = self._last_request.get(host)
         if last is not None:
@@ -103,7 +104,7 @@ class Fetcher:
             return self.client.get(
                 url,
                 headers={"User-Agent": USER_AGENT},
-                follow_redirects=False,
+                follow_redirects=follow_redirects,
                 timeout=REQUEST_TIMEOUT,
             )
         finally:
@@ -115,19 +116,20 @@ class Fetcher:
         if origin not in self._robots:
             self._robots[origin] = self._load_robots(origin)
         parser = self._robots[origin]
-        if parser is None or parser is True:
+        if parser is None:
             return True
         if parser is False:
             return False
         return parser.can_fetch(USER_AGENT, url)
 
-    def _load_robots(self, origin: str) -> RobotFileParser | bool | None:
+    def _load_robots(self, origin: str) -> RobotFileParser | Literal[False] | None:
         """robots.txt を読む（RFC 9309）。
 
         4xx（置いていない）なら制限なし、5xx・接続できない場合はすべて禁止とみなす。
         """
         try:
-            response = self._get(f"{origin}/robots.txt")
+            # robots.txt のリダイレクト（http→https、www 付きなど）はたどる（RFC 9309）
+            response = self._get(f"{origin}/robots.txt", follow_redirects=True)
         except httpx.HTTPError:
             return False
         if response.status_code >= 500:
@@ -140,7 +142,7 @@ class Fetcher:
 
     @staticmethod
     def _save(
-        url: str, kind: str, status_code: int | None, content: str, error: str
+        url: str, kind: str, status_code: int | None, content: str, error: str, final_url: str = ""
     ) -> FetchedPage:
         failed = status_code is None or not 200 <= status_code < 300
         previous = FetchedPage.objects.filter(url=url).first()
@@ -156,6 +158,7 @@ class Fetcher:
                 "status_code": status_code,
                 "content": content,
                 "error": error,
+                "final_url": final_url if final_url != url else "",
             },
         )
         return page

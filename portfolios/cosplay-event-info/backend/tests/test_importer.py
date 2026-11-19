@@ -217,3 +217,26 @@ def test_same_event_with_venue_spelling_variants_is_merged():
     )
 
     assert created is False
+
+
+def test_merge_extends_end_date():
+    normalizer = CountingNormalizer()
+    import_event(item(), page("https://a.example/1"), normalizer)
+
+    merged, _ = import_event(item(end=date(2026, 12, 6)), page("https://b.example/2"), normalizer)
+
+    merged.refresh_from_db()
+    assert merged.end_date == date(2026, 12, 6)
+
+
+def test_long_location_is_normalized_once():
+    normalizer = CountingNormalizer()
+    long_location = "東京ビッグサイト " + "あ" * 400
+    import_event(
+        item(name="長い場所A", location=long_location), page("https://a.example/1"), normalizer
+    )
+    import_event(
+        item(name="全然違うB", location=long_location), page("https://a.example/2"), normalizer
+    )
+
+    assert len(normalizer.calls) == 1

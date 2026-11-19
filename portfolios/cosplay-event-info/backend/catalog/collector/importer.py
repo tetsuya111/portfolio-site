@@ -9,7 +9,7 @@ from catalog.collector.normalizer import Normalizer
 from catalog.collector.parsers import is_http_url
 from catalog.collector.parsers.cosplayers import CosplayerItem
 from catalog.collector.parsers.events import EventItem
-from catalog.collector.similarity import normalize_name, similarity
+from catalog.collector.similarity import levenshtein, normalize_name, similarity
 from catalog.models import Cosplayer, Event, FetchedPage, Venue
 
 
@@ -22,7 +22,8 @@ def _safe_url(url: str) -> str:
 
 def resolve_venue(location_raw: str, normalizer: Normalizer) -> Venue | None:
     """開催場所の表記から会場を決める。同じ表記のイベントがあればその会場を使い、正規化を省く。"""
-    raw = location_raw.strip()
+    # location_raw は300文字で保存するため、照合も同じ長さにそろえる
+    raw = location_raw.strip()[:300]
     if not raw:
         return None
     known = (
@@ -91,6 +92,9 @@ def import_event(item: EventItem, page: FetchedPage, normalizer: Normalizer) -> 
         if existing.venue_id is None and venue:
             existing.venue = venue
             fields.append("venue")
+        if end_date > existing.end_date:  # 別の取得元のほうが開催期間が長い
+            existing.end_date = end_date
+            fields.append("end_date")
         if fields:
             existing.save(update_fields=[*fields, "updated_at"])
         existing.sources.add(page)
@@ -116,17 +120,19 @@ def import_event(item: EventItem, page: FetchedPage, normalizer: Normalizer) -> 
 def _find_similar_cosplayer(name: str) -> Cosplayer | None:
     threshold = settings.COSPLAYER_SIMILARITY_THRESHOLD
     target = normalize_name(name)
+    if not target:
+        return None
     best, best_score = None, 0.0
-    for candidate in Cosplayer.objects.only("id", "name"):
+    for candidate in Cosplayer.objects.all():
         other = normalize_name(candidate.name)
         # 距離は文字数の差以上になるため、しきい値に届かない候補は計算を省く
         longest = max(len(target), len(other))
         if abs(len(target) - len(other)) > math.floor(longest * (1 - threshold) + 1e-9):
             continue
-        score = similarity(candidate.name, name)
+        score = 1 - levenshtein(target, other) / longest
         if score >= threshold and score > best_score:
             best, best_score = candidate, score
-    return Cosplayer.objects.get(pk=best.pk) if best else None
+    return best
 
 
 @transaction.atomic

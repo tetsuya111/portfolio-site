@@ -50,13 +50,17 @@ def parse_date_range(text: str, today: date) -> tuple[date, date] | None:
     終了日がない・読み取れない場合は開始日と同じ日にする。日付がなければ None。
     """
     text = unicodedata.normalize("NFKC", text or "")
-    matches = [m for m in _DATE.finditer(text) if _parse_match(m, today.year)]
+    matches = [
+        m
+        for m in _DATE.finditer(text)
+        if _parse_match(m, today.year) or _parse_match(m, today.year + 1)
+    ]
     if not matches:
         return None
 
     first = matches[0]
-    start = _with_inferred_year(first, today, PAST_GRACE)
-    if start is None:  # 2月29日など、補った年に存在しない日付
+    start = _with_inferred_year(first, today, PAST_GRACE) or _parse_match(first, today.year + 1)
+    if start is None:
         return None
 
     end = start
