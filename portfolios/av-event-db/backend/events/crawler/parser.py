@@ -12,6 +12,8 @@ from bs4 import BeautifulSoup, Tag
 from .sources import FieldRule, SourceConfig
 
 _SPACES = re.compile(r"\s+")
+# DB に保存できる URL の最大長（これより長いリンクは扱わない）
+MAX_URL_LENGTH = 500
 
 
 @dataclass
@@ -34,6 +36,8 @@ def safe_url(href: str | None, base: str) -> str:
     absolute = urljoin(base, href.strip())
     parts = urlsplit(absolute)
     if parts.scheme not in ("http", "https") or not parts.netloc:
+        return ""
+    if len(absolute) > MAX_URL_LENGTH:
         return ""
     return absolute
 
@@ -107,10 +111,9 @@ def parse_list(html: str, page_url: str, config: SourceConfig) -> list[RawEvent]
         raw = _build(item, config, page_url, page_url)
         if raw is None:
             continue
-        if raw.link:
-            raw.source_url = raw.link
-        else:
-            digest = hashlib.sha256(f"{raw.title}|{raw.date_text}".encode()).hexdigest()[:16]
-            raw.source_url = f"{page_url}#{digest}"
+        # 複数の項目が同じリンク（店舗ページなど）を指すことがあるため、リンクは取得元の識別に
+        # 使わず、一覧URL＋項目内容のハッシュで識別する
+        key = f"{raw.title}|{raw.date_text}|{raw.link}"
+        raw.source_url = f"{page_url}#{hashlib.sha256(key.encode()).hexdigest()[:16]}"
         events.append(raw)
     return events

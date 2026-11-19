@@ -9,9 +9,12 @@ import { buildQuery, parseQuery } from "@/lib/api";
 function SearchPage() {
   const router = useRouter();
   const params = useSearchParams();
+  const query = parseQuery(new URLSearchParams(params.toString()));
+  // URL（ヘッダーのリンク・ブラウザの戻る）が変わったらフォームごと作り直して URL に合わせる
   return (
     <EventSearch
-      initialQuery={parseQuery(new URLSearchParams(params.toString()))}
+      key={buildQuery(query).toString()}
+      query={query}
       onQueryChange={(q) => {
         const qs = buildQuery(q).toString();
         router.replace(qs ? `/?${qs}` : "/", { scroll: false });

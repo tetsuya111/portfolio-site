@@ -100,7 +100,8 @@ REST_FRAMEWORK = {
 }
 
 # 収集処理の設定
-FETCH_MIN_INTERVAL = float(os.environ.get("FETCH_MIN_INTERVAL", "1.0"))
+# REQ-1.5: 同じサイトへの間隔は1秒未満にできない
+FETCH_MIN_INTERVAL = max(1.0, float(os.environ.get("FETCH_MIN_INTERVAL", "1.0")))
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 VENUE_NORMALIZER_MODEL = os.environ.get("VENUE_NORMALIZER_MODEL", "claude-opus-5-5")
 GOOGLE_MAPS_GEOCODING_API_KEY = os.environ.get("GOOGLE_MAPS_GEOCODING_API_KEY", "")

@@ -88,6 +88,23 @@ class TestResolver:
         assert venue.latitude is None
         assert Venue.objects.count() == 1
 
+    def test_failed_geocoding_is_retried_in_next_run(self):
+        VenueResolver(FakeNormalizer(), FakeGeocoder(result=None)).resolve("秋葉原ホール")
+        geo = FakeGeocoder()
+        resolver = VenueResolver(FakeNormalizer(), geo)
+        venue = resolver.resolve("秋葉原ホール")
+        assert venue.latitude == 35.7
+        # 同じ実行内では成功後に再度呼ばない
+        resolver.resolve("秋葉原ホール")
+        assert len(geo.calls) == 1
+
+    def test_geocoding_is_attempted_once_per_run(self):
+        geo = FakeGeocoder(result=None)
+        resolver = VenueResolver(FakeNormalizer(), geo)
+        resolver.resolve("秋葉原ホール")
+        resolver.resolve("秋葉原ホール")
+        assert len(geo.calls) == 1
+
     def test_default_resolver_without_keys_uses_rules(self, settings):
         settings.ANTHROPIC_API_KEY = ""
         settings.GOOGLE_MAPS_GEOCODING_API_KEY = ""

@@ -151,6 +151,8 @@ class VenueResolver:
     def __init__(self, normalizer: VenueNormalizer, geocoder: Geocoder | None) -> None:
         self.normalizer = normalizer
         self.geocoder = geocoder
+        # 座標のない会場のジオコーディングは1回の実行につき1度だけ試す（失敗は次回の実行で再試行）
+        self._geocode_attempted: set[int] = set()
 
     def resolve(self, raw_text: str) -> Venue | None:
         text = preprocess(raw_text)[:300]
@@ -158,21 +160,29 @@ class VenueResolver:
             return None
         alias = VenueAlias.objects.select_related("venue").filter(raw_text=text).first()
         if alias:
-            return alias.venue
-        normalized = self.normalizer.normalize(text)
-        with transaction.atomic():
-            venue, created = Venue.objects.get_or_create(
-                name=normalized.name,
-                address=normalized.address,
-                defaults={"prefecture": normalized.prefecture},
-            )
-            VenueAlias.objects.get_or_create(raw_text=text, defaults={"venue": venue})
-        if created and self.geocoder is not None:
-            coords = self.geocoder.geocode(f"{venue.name} {venue.address}".strip())
-            if coords:
-                venue.latitude, venue.longitude = coords
-                venue.save(update_fields=["latitude", "longitude"])
+            venue = alias.venue
+        else:
+            normalized = self.normalizer.normalize(text)
+            with transaction.atomic():
+                venue, _ = Venue.objects.get_or_create(
+                    name=normalized.name,
+                    address=normalized.address,
+                    defaults={"prefecture": normalized.prefecture},
+                )
+                VenueAlias.objects.get_or_create(raw_text=text, defaults={"venue": venue})
+        self._geocode(venue)
         return venue
+
+    def _geocode(self, venue: Venue) -> None:
+        if self.geocoder is None or venue.latitude is not None:
+            return
+        if venue.pk in self._geocode_attempted:
+            return
+        self._geocode_attempted.add(venue.pk)
+        coords = self.geocoder.geocode(f"{venue.name} {venue.address}".strip())
+        if coords:
+            venue.latitude, venue.longitude = coords
+            venue.save(update_fields=["latitude", "longitude"])
 
 
 def build_default_resolver() -> VenueResolver:

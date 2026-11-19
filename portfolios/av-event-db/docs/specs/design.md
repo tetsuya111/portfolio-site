@@ -104,6 +104,8 @@ portfolios/av-event-db/
 - `httpx.Client` を使い、User-Agent は汎用名 `av-event-db-crawler/0.1` とする。タイムアウト10秒。
 - ホストごとに最後のリクエスト時刻を持ち、1秒未満なら待つ（REQ-1.5）。待機関数は差し替え可能にしてテストで時間を使わない。
 - `urllib.robotparser` でホストごとの robots.txt を1回だけ読み、禁止URLは `result=disallowed` で記録して取得しない（REQ-1.6）。robots.txt 自体が取得できない場合は許可とみなす。
+- リダイレクトは自動では辿らず1回ずつ処理し（最大5回）、リダイレクト先も robots.txt で確認する。設定の Cookie は元のURLと同じホストにだけ送る。
+- 500文字を超えるURLは保存できないため扱わない。
 - `fetch(url, kind)`:
   - `kind=detail` かつ `FetchedPage(url, result=success)` があれば `None` を返し、HTTPを送らない（REQ-2.2）。失敗記録なら再取得する（REQ-2.3）。
   - 取得後、URL・ステータス・本文・SHA-256・結果を `FetchedPage` に upsert する（REQ-2.1）。
@@ -121,7 +123,9 @@ portfolios/av-event-db/
   1. 同じ `source_url` の `EventSource` があればそのイベント（同ページの再取り込み）。
   2. `start_date` が同じイベントのうち、`normalized_title` の類似度が最大かつ **0.8 以上** のもの（REQ-3.1）。開催日が違えば候補にならない（REQ-3.4）。
 - 統合（`merge_into`）: `EventSource` を追加し（REQ-3.2）、空の `url`・`summary`・`note`・`venue`・`start_time`・`end_date` を補い、女優を和集合にする（REQ-3.3）。既存の値は上書きしない（先に取り込んだサイトを優先する）。
-- しきい値 0.8 は「【】付きの装飾違い」「全角半角違い」「末尾に会場名が付く」程度を同一と見なし、「第1部／第2部」のような別イベントを分けられる値として選んだ。定数にしてテストで境界を確認する。
+- しきい値 0.8 は「【】付きの装飾違い」「全角半角違い」「末尾に会場名が付く」程度を同一と見なせる値として選んだ。定数にしてテストで境界を確認する。
+- 「第1部／第2部」は1文字違いで類似度が高くなるため、両方のタイトルに部番号（`N部`）があって番号が違う場合は、類似度にかかわらず別イベントとする。
+- 一覧（`list`）モードの取得元は、複数の項目が同じリンクを指すことがあるため、リンクではなく「一覧URL＋項目内容のハッシュ」で識別する。
 
 ## 会場の正規化（`venues.py`、REQ-4）
 
@@ -133,7 +137,8 @@ portfolios/av-event-db/
    - `ClaudeVenueNormalizer`: `ANTHROPIC_API_KEY` があるとき使う。モデルは環境変数 `VENUE_NORMALIZER_MODEL`（既定 `claude-opus-5-5`、`effort: low`）。構造化出力（JSON Schema）で、会場名・住所・都道府県を補完させる。JSONとして読めない・API例外のときは規則ベースにフォールバックする（REQ-4.3）。
    - `RuleVenueNormalizer`: 前処理後の文字列を `name` とし、文字列中の都道府県名を `prefecture` に入れる。
 4. `name`+`address` で `Venue` を get_or_create（REQ-4.2）し、`VenueAlias` を作る。
-5. 新規会場で座標がなく `GOOGLE_MAPS_GEOCODING_API_KEY` があれば Google Geocoding API で緯度経度を取得する（REQ-4.4）。失敗しても会場は保存する。
+5. 会場に座標がなく `GOOGLE_MAPS_GEOCODING_API_KEY` があれば Google Geocoding API で緯度経度を取得する（REQ-4.4）。失敗しても会場は保存し、次回のバッチ実行で再試行する（同じ実行内では1会場1回まで）。
+6. 会場の解決（AI・ジオコーディングの通信）はイベント保存のトランザクションの外で行い、SQLite のロックを長く持たない。
 
 ノーマライザとジオコーダはインターフェース（`normalize(text)`・`geocode(query)`）で差し替え可能にし、テストではフェイクを渡す。
 

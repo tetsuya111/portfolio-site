@@ -107,6 +107,26 @@ def test_different_day_creates_new_event():
     assert Event.objects.count() == 2
 
 
+def test_venue_is_resolved_outside_transaction():
+    from django.db import connection
+
+    class CheckingNormalizer(FakeNormalizer):
+        def normalize(self, text):
+            assert not connection.in_atomic_block or connection.savepoint_ids == []
+            return super().normalize(text)
+
+    # pytest-django のテスト用トランザクションの内側でも、取り込み処理の atomic() には入っていない
+    normalizer = CheckingNormalizer()
+    importer(normalizer).import_event(raw())
+    assert normalizer.calls == 1
+
+
+def test_too_long_source_url_is_skipped():
+    assert importer().import_event(raw(source_url="https://a.example.com/" + "x" * 600)) == (
+        "skipped"
+    )
+
+
 def test_unreadable_date_is_skipped():
     assert importer().import_event(raw(date_text="近日公開")) == "skipped"
     assert Event.objects.count() == 0

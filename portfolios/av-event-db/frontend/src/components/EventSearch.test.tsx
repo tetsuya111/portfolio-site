@@ -1,5 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
+
+import { buildQuery, type SearchQuery } from "@/lib/api";
 
 import { EventDetail } from "./EventDetail";
 import { EventSearch } from "./EventSearch";
@@ -24,11 +27,26 @@ function calledUrls(fetchMock: ReturnType<typeof vi.fn>) {
 
 afterEach(() => vi.unstubAllGlobals());
 
+/** ページ（URL）の代わりに検索条件を持ち、変わったら作り直す。 */
+function Harness({ initial, onChange }: { initial: SearchQuery; onChange?: (q: SearchQuery) => void }) {
+  const [query, setQuery] = useState(initial);
+  return (
+    <EventSearch
+      key={buildQuery(query).toString()}
+      query={query}
+      onQueryChange={(q) => {
+        onChange?.(q);
+        setQuery(q);
+      }}
+    />
+  );
+}
+
 describe("EventSearch", () => {
   it("初期条件で検索して一覧を表示する", async () => {
     const fetchMock = vi.fn().mockResolvedValue(page([item]));
     vi.stubGlobal("fetch", fetchMock);
-    render(<EventSearch initialQuery={{ q: "花子" }} />);
+    render(<Harness initial={{ q: "花子" }} />);
     // テスト環境では next.config の trailingSlash が読まれないため、末尾の / は問わない
     expect(await screen.findByRole("link", { name: "発売記念サイン会" })).toHaveAttribute(
       "href",
@@ -45,7 +63,7 @@ describe("EventSearch", () => {
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(page([item])));
     vi.stubGlobal("fetch", fetchMock);
     const onChange = vi.fn();
-    render(<EventSearch initialQuery={{}} onQueryChange={onChange} />);
+    render(<Harness initial={{}} onChange={onChange} />);
     await screen.findByText("全 1 件");
     await userEvent.type(screen.getByRole("searchbox"), "撮影会");
     await userEvent.selectOptions(screen.getByLabelText("都道府県"), "大阪府");
@@ -65,7 +83,7 @@ describe("EventSearch", () => {
 
   it("該当なしのメッセージを出す", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(page([])));
-    render(<EventSearch initialQuery={{}} />);
+    render(<Harness initial={{}} />);
     expect(await screen.findByText("条件に合うイベントはありません。")).toBeInTheDocument();
   });
 
@@ -75,13 +93,27 @@ describe("EventSearch", () => {
       .mockResolvedValueOnce(page([item], 25, "http://x/?page=2"))
       .mockResolvedValueOnce(page([{ ...item, id: 2, title: "2ページ目" }], 25));
     vi.stubGlobal("fetch", fetchMock);
-    render(<EventSearch initialQuery={{}} />);
+    render(<Harness initial={{}} />);
     expect(await screen.findByText("1 / 2")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "前へ" })).toBeDisabled();
     await userEvent.click(screen.getByRole("button", { name: "次へ" }));
     expect(await screen.findByText("2ページ目")).toBeInTheDocument();
     expect(calledUrls(fetchMock)[1]).toContain("page=2");
     expect(screen.getByRole("button", { name: "次へ" })).toBeDisabled();
+  });
+
+  it("条件（URL）が外から変わったらフォームと結果を合わせる", async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(page([item])));
+    vi.stubGlobal("fetch", fetchMock);
+    const { rerender } = render(
+      <EventSearch key="q=foo" query={{ q: "foo" }} onQueryChange={() => {}} />,
+    );
+    await screen.findByText("全 1 件");
+    expect(screen.getByRole("searchbox")).toHaveValue("foo");
+    rerender(<EventSearch key="" query={{}} onQueryChange={() => {}} />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("searchbox")).toHaveValue("");
+    expect(calledUrls(fetchMock)[1]).toMatch(/\/api\/events\/$/);
   });
 
   it("エラーを表示する", async () => {
@@ -93,7 +125,7 @@ describe("EventSearch", () => {
         }),
       ),
     );
-    render(<EventSearch initialQuery={{ from: "bad" }} />);
+    render(<Harness initial={{ from: "bad" }} />);
     expect(await screen.findByText("日付は YYYY-MM-DD で指定してください。")).toBeInTheDocument();
   });
 });

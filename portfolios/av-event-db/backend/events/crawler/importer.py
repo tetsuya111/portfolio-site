@@ -10,12 +10,12 @@ from typing import Literal, Protocol
 from django.db import transaction
 from django.utils import timezone
 
-from events.models import Actress, Event, EventSource
+from events.models import Actress, Event, EventSource, Venue
 
 from .dates import EventDates, parse_event_dates
 from .dedupe import find_duplicate
 from .fetcher import FetchResult, FetchStatus
-from .parser import RawEvent, extract_detail_links, parse_detail, parse_list
+from .parser import MAX_URL_LENGTH, RawEvent, extract_detail_links, parse_detail, parse_list
 from .sources import SourceConfig
 from .venues import VenueResolver
 
@@ -49,41 +49,45 @@ class EventImporter:
 
     def import_event(self, raw: RawEvent) -> ImportResult:
         dates = parse_event_dates(raw.date_text, today=self._today)
-        if dates is None:
+        if dates is None or not raw.source_url or len(raw.source_url) > MAX_URL_LENGTH:
             return "skipped"
         existing = find_duplicate(raw.title, dates.start_date, raw.source_url)
+        # AI・ジオコーディングの通信はトランザクションの外で行い、DB のロックを長く持たない
+        venue = None
+        if raw.venue_text and (existing is None or existing.venue_id is None):
+            venue = self._resolver.resolve(raw.venue_text)
         with transaction.atomic():
             if existing is None:
-                event = self._create(raw, dates)
+                event = self._create(raw, dates, venue)
                 result: ImportResult = "created"
             else:
                 event = existing
-                self._merge(event, raw, dates)
+                self._merge(event, raw, dates, venue)
                 result = "merged"
             EventSource.objects.get_or_create(
-                source_url=raw.source_url[:500],
+                source_url=raw.source_url,
                 defaults={"event": event, "source_name": raw.source_name},
             )
             self._add_actresses(event, raw.actresses)
         return result
 
-    def _create(self, raw: RawEvent, dates: EventDates) -> Event:
+    def _create(self, raw: RawEvent, dates: EventDates, venue: Venue | None) -> Event:
         return Event.objects.create(
             title=raw.title[:300],
             start_date=dates.start_date,
             end_date=dates.end_date,
             start_time=dates.start_time,
-            url=raw.link[:500],
-            venue=self._resolver.resolve(raw.venue_text),
+            url=raw.link[:MAX_URL_LENGTH],
+            venue=venue,
             raw_venue=raw.venue_text[:300],
             summary=raw.summary,
             note=raw.note,
         )
 
-    def _merge(self, event: Event, raw: RawEvent, dates: EventDates) -> None:
+    def _merge(self, event: Event, raw: RawEvent, dates: EventDates, venue: Venue | None) -> None:
         """空の項目だけを新しい情報で補う（先に取り込んだ値を優先する）。"""
         if not event.url and raw.link:
-            event.url = raw.link[:500]
+            event.url = raw.link[:MAX_URL_LENGTH]
         if not event.summary and raw.summary:
             event.summary = raw.summary
         if not event.note and raw.note:
@@ -92,8 +96,8 @@ class EventImporter:
             event.start_time = dates.start_time
         if event.end_date == event.start_date and dates.end_date > event.end_date:
             event.end_date = dates.end_date
-        if event.venue_id is None and raw.venue_text:
-            event.venue = self._resolver.resolve(raw.venue_text)
+        if event.venue_id is None and venue is not None:
+            event.venue = venue
             event.raw_venue = event.raw_venue or raw.venue_text[:300]
         event.save()
 

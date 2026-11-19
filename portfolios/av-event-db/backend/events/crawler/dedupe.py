@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 import unicodedata
 from typing import TYPE_CHECKING
 
@@ -11,6 +12,8 @@ if TYPE_CHECKING:
 
 # 正規化後のタイトルの類似度がこの値以上なら同一イベントとみなす（design.md 参照）
 SIMILARITY_THRESHOLD = 0.8
+# 「第1部」「2部」のような部番号。番号が違えば類似度にかかわらず別イベントとする
+_PART_RE = re.compile(r"(\d+)部")
 
 
 def levenshtein(a: str, b: str) -> int:
@@ -42,6 +45,10 @@ def normalize_title(title: str) -> str:
     )
 
 
+def part_numbers(normalized_title: str) -> set[str]:
+    return set(_PART_RE.findall(normalized_title))
+
+
 def find_duplicate(title: str, start_date: dt.date, source_url: str | None) -> Event | None:
     """取り込むイベントと同一とみなせる既存イベントを返す。"""
     from events.models import Event, EventSource
@@ -52,8 +59,12 @@ def find_duplicate(title: str, start_date: dt.date, source_url: str | None) -> E
             return src.event
 
     target = normalize_title(title)
+    target_parts = part_numbers(target)
     best: tuple[float, Event] | None = None
     for event in Event.objects.filter(start_date=start_date).order_by("id"):
+        parts = part_numbers(event.normalized_title)
+        if target_parts and parts and target_parts != parts:
+            continue
         score = similarity(target, event.normalized_title)
         if score >= SIMILARITY_THRESHOLD and (best is None or score > best[0]):
             best = (score, event)

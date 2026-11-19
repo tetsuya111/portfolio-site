@@ -35,7 +35,7 @@ def parse_event_dates(text: str, today: dt.date) -> EventDates | None:
         if len(matches) == 2:
             end = _to_date(matches[1], ref_year=start.year, today=today)
             if end < start and matches[1].group("y") is None:
-                end = end.replace(year=end.year + 1)
+                end = _first_valid(start.year + 1, end.month, end.day)
     except ValueError:
         return None
     if end < start:
@@ -50,8 +50,20 @@ def _to_date(m: re.Match[str], ref_year: int | None, today: dt.date) -> dt.date:
         return dt.date(int(m.group("y")), int(m.group("m")), int(m.group("d")))
     month, day = int(m.group("m2")), int(m.group("d2"))
     if ref_year is not None:
-        return dt.date(ref_year, month, day)
-    candidate = dt.date(today.year, month, day)
+        # 終了日は開始日の年を基準にし、存在しない日付（2/29 など）は翌年以降で探す
+        return _first_valid(ref_year, month, day)
+    candidate = _first_valid(today.year, month, day)
     if candidate < today - dt.timedelta(days=_ROLLOVER_DAYS):
-        candidate = candidate.replace(year=today.year + 1)
+        candidate = _first_valid(today.year + 1, month, day)
     return candidate
+
+
+def _first_valid(year: int, month: int, day: int) -> dt.date:
+    """year 以降で month/day が存在する最初の日付。うるう日以外で存在しなければ ValueError。"""
+    for y in range(year, year + 4):
+        try:
+            return dt.date(y, month, day)
+        except ValueError:
+            if (month, day) != (2, 29):
+                raise
+    raise ValueError(f"{month}/{day}")

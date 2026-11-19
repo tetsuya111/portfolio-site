@@ -100,10 +100,12 @@ def test_parse_list():
     """
     items = parse_list(html, "https://b.example.com/schedule", LIST_CONFIG)
     assert [i.title for i in items] == ["イベントA", "イベントB"]
-    assert items[0].source_url == "https://b.example.com/e/a"
+    assert items[0].link == "https://b.example.com/e/a"
     assert items[0].actresses == ["A子"]
-    # 詳細リンクのない項目は一覧URL＋内容のハッシュで取得元を識別する
+    # 取得元は一覧URL＋内容のハッシュで識別する
+    assert items[0].source_url.startswith("https://b.example.com/schedule#")
     assert items[1].source_url.startswith("https://b.example.com/schedule#")
+    assert items[0].source_url != items[1].source_url
     again = parse_list(html, "https://b.example.com/schedule", LIST_CONFIG)
     assert again[1].source_url == items[1].source_url
 
@@ -153,3 +155,21 @@ def test_duplicate_source_names_raise(tmp_path):
     path.write_text(json.dumps({"sources": [src, src]}), encoding="utf-8")
     with pytest.raises(SourceConfigError):
         load_sources(path)
+
+
+def test_parse_list_items_sharing_a_link_get_distinct_sources():
+    html = """
+    <li class="item"><span class="t">A</span><span class="d">12/3</span><a href="/shop">店</a></li>
+    <li class="item"><span class="t">B</span><span class="d">12/4</span><a href="/shop">店</a></li>
+    """
+    items = parse_list(html, "https://b.example.com/schedule", LIST_CONFIG)
+    assert items[0].link == items[1].link
+    assert items[0].source_url != items[1].source_url
+
+
+def test_too_long_url_is_dropped():
+    long_href = "/e/" + "x" * 600
+    html = f'<a class="event" href="{long_href}">x</a><a class="event" href="/ok">ok</a>'
+    assert extract_detail_links(html, "https://a.example.com/", "a.event") == [
+        "https://a.example.com/ok"
+    ]

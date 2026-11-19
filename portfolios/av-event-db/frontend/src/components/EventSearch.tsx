@@ -3,34 +3,40 @@
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 
-import { ApiError, PAGE_SIZE, buildQuery, fetchEvents, type SearchQuery } from "@/lib/api";
+import {
+  ApiError,
+  PAGE_SIZE,
+  buildQuery,
+  fetchEvents,
+  parseQuery,
+  type SearchQuery,
+} from "@/lib/api";
 import { formatPeriod } from "@/lib/format";
 import { PREFECTURES } from "@/lib/prefectures";
 import type { EventListItem, Page } from "@/lib/types";
 
 type Props = {
-  initialQuery: SearchQuery;
-  /** 検索条件が変わったとき（URL への反映に使う） */
-  onQueryChange?: (query: SearchQuery) => void;
+  /** 現在の検索条件（URL のクエリと同期させる。URL が変わったら key を変えて作り直す） */
+  query: SearchQuery;
+  onQueryChange: (query: SearchQuery) => void;
 };
 
 type Loaded = { key: string; data?: Page<EventListItem>; error?: string };
 
 /** イベントの検索フォームと結果一覧（REQ-5）。 */
-export function EventSearch({ initialQuery, onQueryChange }: Props) {
+export function EventSearch({ query, onQueryChange }: Props) {
   const [form, setForm] = useState({
-    q: initialQuery.q ?? "",
-    from: initialQuery.from ?? "",
-    to: initialQuery.to ?? "",
-    prefecture: initialQuery.prefecture ?? "",
+    q: query.q ?? "",
+    from: query.from ?? "",
+    to: query.to ?? "",
+    prefecture: query.prefecture ?? "",
   });
-  const [query, setQuery] = useState<SearchQuery>({ ...form, page: initialQuery.page ?? 1 });
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const key = buildQuery(query).toString();
 
   useEffect(() => {
     let cancelled = false;
-    fetchEvents(query)
+    fetchEvents(parseQuery(new URLSearchParams(key)))
       .then((data) => !cancelled && setLoaded({ key, data }))
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -39,12 +45,9 @@ export function EventSearch({ initialQuery, onQueryChange }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [key, query]);
+  }, [key]);
 
-  function apply(next: SearchQuery) {
-    setQuery(next);
-    onQueryChange?.(next);
-  }
+  const apply = onQueryChange;
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();

@@ -11,7 +11,7 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 from urllib.robotparser import RobotFileParser
 
 import httpx
@@ -21,7 +21,12 @@ from events.models import FetchedPage
 
 USER_AGENT = "av-event-db-crawler/0.1"
 TIMEOUT_SECONDS = 10.0
+MAX_REDIRECTS = 5
 _META_CHARSET = re.compile(rb"""<meta[^>]+charset=["']?([\w-]+)""", re.IGNORECASE)
+
+
+class _RedirectDisallowedError(Exception):
+    """リダイレクト先が robots.txt で禁止されている。"""
 
 
 class FetchStatus(enum.Enum):
@@ -82,6 +87,11 @@ class PageFetcher:
 
         try:
             response = self._get(url, cookies)
+        except _RedirectDisallowedError as exc:
+            self._record(
+                url, source_name, kind, result=FetchedPage.Result.DISALLOWED, error=str(exc)
+            )
+            return FetchResult(FetchStatus.DISALLOWED)
         except httpx.HTTPError as exc:
             self._record(url, source_name, kind, result=FetchedPage.Result.FAILED, error=str(exc))
             return FetchResult(FetchStatus.FAILED)
@@ -113,6 +123,27 @@ class PageFetcher:
         FetchedPage.objects.filter(url=url).update(result=FetchedPage.Result.FAILED, error=error)
 
     def _get(self, url: str, cookies: dict[str, str] | None) -> httpx.Response:
+        """リダイレクトを1回ずつ辿り、各リダイレクト先も robots.txt で確認する（REQ-1.6）。
+
+        Cookie は元のURLと同じホストにだけ送る（別ホストへのリダイレクトで漏らさない）。
+        """
+        origin_host = urlsplit(url).netloc
+        current = url
+        for _ in range(MAX_REDIRECTS + 1):
+            same_host = urlsplit(current).netloc == origin_host
+            response = self._request(current, cookies if same_host else None)
+            if not response.is_redirect:
+                return response
+            location = response.headers.get("location", "")
+            target = urljoin(current, location)
+            if urlsplit(target).scheme not in ("http", "https"):
+                raise httpx.TooManyRedirects(f"不正なリダイレクト先: {location}", request=None)
+            if not self._allowed(target):
+                raise _RedirectDisallowedError(f"リダイレクト先が robots.txt で禁止: {target}")
+            current = target
+        raise httpx.TooManyRedirects("リダイレクトが多すぎます", request=None)
+
+    def _request(self, url: str, cookies: dict[str, str] | None) -> httpx.Response:
         host = urlsplit(url).netloc
         last = self._last_request.get(host)
         if last is not None:
@@ -124,7 +155,7 @@ class PageFetcher:
             headers["Cookie"] = "; ".join(f"{k}={v}" for k, v in cookies.items())
         try:
             return self._client.get(
-                url, headers=headers, follow_redirects=True, timeout=TIMEOUT_SECONDS
+                url, headers=headers, follow_redirects=False, timeout=TIMEOUT_SECONDS
             )
         finally:
             self._last_request[host] = self._clock()
@@ -140,7 +171,7 @@ class PageFetcher:
     def _load_robots(self, origin: str) -> RobotFileParser | None:
         """robots.txt を読む。取得できなければ制限なし（None）とみなす。"""
         try:
-            response = self._get(f"{origin}/robots.txt", None)
+            response = self._request(f"{origin}/robots.txt", None)
         except httpx.HTTPError:
             return None
         if response.status_code != 200:

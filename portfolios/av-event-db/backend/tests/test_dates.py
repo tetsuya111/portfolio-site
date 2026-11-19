@@ -49,3 +49,13 @@ def test_time():
 def test_unreadable_returns_none():
     assert parse_event_dates("近日開催", today=TODAY) is None
     assert parse_event_dates("2026/13/40", today=TODAY) is None
+
+
+def test_leap_day_end_without_year():
+    r = parse_event_dates("2027/12/30〜2/29", today=dt.date(2027, 11, 1))
+    assert r.end_date == dt.date(2028, 2, 29)
+
+
+def test_leap_day_start_without_year():
+    r = parse_event_dates("2/29", today=dt.date(2027, 11, 1))
+    assert r.start_date == dt.date(2028, 2, 29)

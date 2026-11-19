@@ -159,3 +159,43 @@ def test_decodes_shift_jis_by_meta_charset():
 
     fetcher, _ = make_fetcher(handler)
     assert "サイン会" in fetcher.fetch("https://a.example.com/1", "site", "list").body
+
+
+def test_redirect_to_disallowed_path_is_not_followed():
+    def handler(request):
+        if request.url.path == "/event/1":
+            return httpx.Response(301, headers={"location": "/private/x"})
+        return ok(request)
+
+    fetcher, requests = make_fetcher(handler, robots="User-agent: *\nDisallow: /private/\n")
+    res = fetcher.fetch("https://a.example.com/event/1", "site", "detail")
+    assert res.status is FetchStatus.DISALLOWED
+    assert [r.url.path for r in page_requests(requests)] == ["/event/1"]
+    assert FetchedPage.objects.get().result == "disallowed"
+
+
+def test_redirect_follows_and_keeps_cookie_only_for_same_host():
+    seen = []
+
+    def handler(request):
+        seen.append((request.url.host, request.url.path, request.headers.get("cookie")))
+        if request.url.path == "/a":
+            return httpx.Response(302, headers={"location": "/b"})
+        if request.url.path == "/b":
+            return httpx.Response(302, headers={"location": "https://other.example.com/c"})
+        return ok(request)
+
+    fetcher, _ = make_fetcher(handler)
+    res = fetcher.fetch("https://a.example.com/a", "site", "list", cookies={"age": "1"})
+    assert res.status is FetchStatus.FETCHED
+    assert seen == [
+        ("a.example.com", "/a", "age=1"),
+        ("a.example.com", "/b", "age=1"),
+        ("other.example.com", "/c", None),
+    ]
+
+
+def test_too_many_redirects_fail():
+    fetcher, _ = make_fetcher(lambda r: httpx.Response(302, headers={"location": "/loop"}))
+    res = fetcher.fetch("https://a.example.com/loop", "site", "detail")
+    assert res.status is FetchStatus.FAILED

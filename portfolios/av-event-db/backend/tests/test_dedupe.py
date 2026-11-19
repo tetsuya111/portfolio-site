@@ -66,3 +66,11 @@ class TestFindDuplicate:
         best = self._event("サイン会 秋葉原 第2部")
         found = find_duplicate("サイン会 秋葉原 第2部!", dt.date(2026, 12, 1), None)
         assert found == best
+
+    def test_different_part_numbers_are_not_duplicates(self):
+        self._event("トークライブ 第1部")
+        assert find_duplicate("トークライブ 第2部", dt.date(2026, 12, 1), None) is None
+
+    def test_same_part_number_is_duplicate(self):
+        e = self._event("トークライブ 第1部")
+        assert find_duplicate("【トークライブ】第1部", dt.date(2026, 12, 1), None) == e
